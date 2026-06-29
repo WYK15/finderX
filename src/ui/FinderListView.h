@@ -4,6 +4,7 @@
 #include "ui/RenderContext.h"
 
 #include <d2d1.h>
+#include <windows.h>
 #include <vector>
 
 namespace finderx {
@@ -13,13 +14,24 @@ public:
     explicit FinderListView(FileTree* tree);
 
     void draw(RenderContext& render, const D2D1_RECT_F& bounds);
+    bool onMouseDown(float x, float y, const D2D1_RECT_F& bounds);
+    bool onWheel(int wheelDelta);
+    void onKeyDown(WPARAM key);
 
 private:
     void rebuildRows();
     void ensureSelection();
+    void ensureSelectionVisible();
+    void clampScroll();
+    float maxScroll() const;
+    int hitTestRow(float x, float y, const D2D1_RECT_F& bounds) const;
+    bool hitTestDisclosure(float x, const D2D1_RECT_F& bounds, const VisibleRow& row) const;
+    int selectedRowIndex() const;
 
     FileTree* tree_ = nullptr;
     NodeId selected_ = kInvalidNodeId;
+    float scrollY_ = 0.0f;
+    float viewportHeight_ = 0.0f;
     std::vector<VisibleRow> rows_;
 };
 

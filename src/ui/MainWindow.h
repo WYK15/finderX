@@ -17,6 +17,7 @@ public:
 private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam);
+    LayoutRects currentLayout() const;
     void paint();
 
     HWND hwnd_ = nullptr;

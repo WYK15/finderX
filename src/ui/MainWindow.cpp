@@ -1,5 +1,7 @@
 #include "ui/MainWindow.h"
 
+#include <windowsx.h>
+
 namespace finderx {
 
 namespace {
@@ -40,6 +42,7 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
     }
 
     ShowWindow(hwnd_, showCommand);
+    SetFocus(hwnd_);
     UpdateWindow(hwnd_);
     return true;
 }
@@ -69,6 +72,9 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPA
 
 LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
+    case WM_CREATE:
+        SetFocus(hwnd_);
+        return 0;
     case WM_PAINT:
         paint();
         return 0;
@@ -78,12 +84,49 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         render_.resize(LOWORD(lParam), HIWORD(lParam));
         InvalidateRect(hwnd_, nullptr, FALSE);
         return 0;
+    case WM_LBUTTONDOWN: {
+        SetFocus(hwnd_);
+        const LayoutRects rects = currentLayout();
+        const float x = static_cast<float>(GET_X_LPARAM(lParam));
+        const float y = static_cast<float>(GET_Y_LPARAM(lParam));
+        if (listView_.onMouseDown(x, y, rects.list)) {
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+        return 0;
+    }
+    case WM_MOUSEWHEEL: {
+        const LayoutRects rects = currentLayout();
+        POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        ScreenToClient(hwnd_, &point);
+        const float x = static_cast<float>(point.x);
+        const float y = static_cast<float>(point.y);
+        if (x >= rects.list.left && x <= rects.list.right && y >= rects.list.top && y <= rects.list.bottom
+            && listView_.onWheel(GET_WHEEL_DELTA_WPARAM(wParam))) {
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+        return 0;
+    }
+    case WM_KEYDOWN:
+        listView_.onKeyDown(wParam);
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return 0;
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
     default:
         return DefWindowProcW(hwnd_, message, wParam, lParam);
     }
+}
+
+LayoutRects MainWindow::currentLayout() const {
+    RECT client{};
+    if (!hwnd_ || !GetClientRect(hwnd_, &client)) {
+        return chrome_.layout(0.0f, 0.0f);
+    }
+
+    const float width = static_cast<float>(client.right - client.left);
+    const float height = static_cast<float>(client.bottom - client.top);
+    return chrome_.layout(width, height);
 }
 
 void MainWindow::paint() {
@@ -95,11 +138,7 @@ void MainWindow::paint() {
         return;
     }
 
-    RECT client{};
-    GetClientRect(hwnd_, &client);
-    const float width = static_cast<float>(client.right - client.left);
-    const float height = static_cast<float>(client.bottom - client.top);
-    const LayoutRects rects = chrome_.layout(width, height);
+    const LayoutRects rects = currentLayout();
 
     render_.beginDraw();
     render_.clear(D2D1::ColorF(1.0f, 1.0f, 1.0f));
