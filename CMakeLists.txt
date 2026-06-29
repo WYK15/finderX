@@ -12,6 +12,10 @@ function(finderx_enable_utf8 target)
     endif()
 endfunction()
 
+function(finderx_enable_windows_unicode target)
+    target_compile_definitions(${target} PRIVATE UNICODE _UNICODE)
+endfunction()
+
 add_library(finderx_model
     src/model/FileTree.cpp
 )
@@ -30,9 +34,6 @@ set(FINDERX_APP_SOURCES
     src/main.cpp
     src/app/App.cpp
     src/ui/MainWindow.cpp
-    src/ui/RenderContext.cpp
-    src/ui/FinderChrome.cpp
-    src/ui/FinderListView.cpp
 )
 
 set(FINDERX_APP_SOURCES_EXIST TRUE)
@@ -57,4 +58,5 @@ if(FINDERX_APP_SOURCES_EXIST)
         shell32
     )
     finderx_enable_utf8(FinderX)
+    finderx_enable_windows_unicode(FinderX)
 endif()
