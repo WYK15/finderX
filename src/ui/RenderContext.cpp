@@ -95,10 +95,18 @@ bool RenderContext::createDeviceResources(HWND hwnd) {
     return true;
 }
 
-void RenderContext::resize(UINT width, UINT height) {
-    if (target_) {
-        target_->Resize(D2D1::SizeU(width, height));
+bool RenderContext::resize(UINT width, UINT height) {
+    if (!target_) {
+        return true;
     }
+
+    const HRESULT result = target_->Resize(D2D1::SizeU(width, height));
+    if (result == D2DERR_RECREATE_TARGET || FAILED(result)) {
+        resetDeviceResources();
+        return false;
+    }
+
+    return true;
 }
 
 void RenderContext::beginDraw() {
@@ -107,7 +115,7 @@ void RenderContext::beginDraw() {
 
 bool RenderContext::endDraw() {
     const HRESULT result = target_->EndDraw();
-    if (result == D2DERR_RECREATE_TARGET) {
+    if (result == D2DERR_RECREATE_TARGET || FAILED(result)) {
         resetDeviceResources();
         return true;
     }
@@ -135,6 +143,10 @@ void RenderContext::drawText(
     const D2D1_RECT_F& rect,
     IDWriteTextFormat* format,
     D2D1_COLOR_F color) {
+    if (!target_ || !brush_ || !format || text.empty() || rect.left >= rect.right || rect.top >= rect.bottom) {
+        return;
+    }
+
     brush_->SetColor(color);
     target_->DrawTextW(
         text.data(),
@@ -146,16 +158,28 @@ void RenderContext::drawText(
 }
 
 void RenderContext::fillRoundedRect(const D2D1_ROUNDED_RECT& rect, D2D1_COLOR_F color) {
+    if (!target_ || !brush_ || rect.rect.left >= rect.rect.right || rect.rect.top >= rect.rect.bottom) {
+        return;
+    }
+
     brush_->SetColor(color);
     target_->FillRoundedRectangle(rect, brush_.Get());
 }
 
 void RenderContext::fillRect(const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
+    if (!target_ || !brush_ || rect.left >= rect.right || rect.top >= rect.bottom) {
+        return;
+    }
+
     brush_->SetColor(color);
     target_->FillRectangle(rect, brush_.Get());
 }
 
 void RenderContext::drawLine(D2D1_POINT_2F start, D2D1_POINT_2F end, D2D1_COLOR_F color, float width) {
+    if (!target_ || !brush_ || width <= 0.0f) {
+        return;
+    }
+
     brush_->SetColor(color);
     target_->DrawLine(start, end, brush_.Get(), width);
 }

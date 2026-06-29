@@ -14,7 +14,7 @@ class RenderContext {
 public:
     bool initialize(HWND hwnd);
     bool isReady() const;
-    void resize(UINT width, UINT height);
+    bool resize(UINT width, UINT height);
     void beginDraw();
     bool endDraw();
     void clear(D2D1_COLOR_F color);
