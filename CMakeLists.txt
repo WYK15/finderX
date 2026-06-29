@@ -33,6 +33,8 @@ finderx_enable_utf8(finderx_model_tests)
 set(FINDERX_APP_SOURCES
     src/main.cpp
     src/app/App.cpp
+    src/ui/FinderChrome.cpp
+    src/ui/FinderListView.cpp
     src/ui/MainWindow.cpp
     src/ui/RenderContext.cpp
 )

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "model/FileTree.h"
+#include "ui/FinderChrome.h"
+#include "ui/FinderListView.h"
 #include "ui/RenderContext.h"
 
 #include <windows.h>
@@ -18,6 +21,9 @@ private:
 
     HWND hwnd_ = nullptr;
     RenderContext render_;
+    FinderChrome chrome_;
+    FileTree tree_ = FileTree::sample();
+    FinderListView listView_{&tree_};
 };
 
 }

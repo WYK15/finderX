@@ -95,13 +95,16 @@ void MainWindow::paint() {
         return;
     }
 
+    RECT client{};
+    GetClientRect(hwnd_, &client);
+    const float width = static_cast<float>(client.right - client.left);
+    const float height = static_cast<float>(client.bottom - client.top);
+    const LayoutRects rects = chrome_.layout(width, height);
+
     render_.beginDraw();
-    render_.clear(D2D1::ColorF(0.98f, 0.98f, 0.98f));
-    render_.drawText(
-        L"FinderX",
-        D2D1::RectF(24.0f, 24.0f, 240.0f, 60.0f),
-        render_.textFormat(),
-        D2D1::ColorF(0.1f, 0.1f, 0.1f));
+    render_.clear(D2D1::ColorF(1.0f, 1.0f, 1.0f));
+    chrome_.draw(render_, rects);
+    listView_.draw(render_, rects.list);
     const bool targetLost = render_.endDraw();
 
     EndPaint(hwnd_, &paint);
