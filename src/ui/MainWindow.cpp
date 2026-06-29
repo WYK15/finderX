@@ -14,7 +14,7 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
     windowClass.lpfnWndProc = MainWindow::WndProc;
     windowClass.hInstance = instance;
     windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    windowClass.hbrBackground = static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH));
+    windowClass.hbrBackground = nullptr;
     windowClass.lpszClassName = kWindowClassName;
 
     if (!RegisterClassExW(&windowClass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
@@ -72,6 +72,8 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_PAINT:
         paint();
         return 0;
+    case WM_ERASEBKGND:
+        return 1;
     case WM_SIZE:
         render_.resize(LOWORD(lParam), HIWORD(lParam));
         InvalidateRect(hwnd_, nullptr, FALSE);
@@ -88,7 +90,7 @@ void MainWindow::paint() {
     PAINTSTRUCT paint{};
     BeginPaint(hwnd_, &paint);
 
-    if (!render_.target() && !render_.initialize(hwnd_)) {
+    if (!render_.isReady() && !render_.initialize(hwnd_)) {
         EndPaint(hwnd_, &paint);
         return;
     }
@@ -100,9 +102,13 @@ void MainWindow::paint() {
         D2D1::RectF(24.0f, 24.0f, 240.0f, 60.0f),
         render_.textFormat(),
         D2D1::ColorF(0.1f, 0.1f, 0.1f));
-    render_.endDraw();
+    const bool targetLost = render_.endDraw();
 
     EndPaint(hwnd_, &paint);
+
+    if (targetLost) {
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
 }
 
 }

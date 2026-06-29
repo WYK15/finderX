@@ -3,7 +3,20 @@
 namespace finderx {
 
 bool RenderContext::initialize(HWND hwnd) {
-    return createFactories() && createDeviceResources(hwnd);
+    if (isReady()) {
+        return true;
+    }
+
+    if (!createFactories() || !createDeviceResources(hwnd) || !isReady()) {
+        resetAllResources();
+        return false;
+    }
+
+    return true;
+}
+
+bool RenderContext::isReady() const {
+    return d2dFactory_ && dwriteFactory_ && target_ && textFormat_ && headerTextFormat_ && brush_;
 }
 
 bool RenderContext::createFactories() {
@@ -52,9 +65,11 @@ bool RenderContext::createFactories() {
 }
 
 bool RenderContext::createDeviceResources(HWND hwnd) {
-    if (target_) {
+    if (target_ && brush_) {
         return true;
     }
+
+    resetDeviceResources();
 
     RECT client{};
     GetClientRect(hwnd, &client);
@@ -66,12 +81,18 @@ bool RenderContext::createDeviceResources(HWND hwnd) {
             D2D1::RenderTargetProperties(),
             D2D1::HwndRenderTargetProperties(hwnd, size),
             target_.GetAddressOf()))) {
+        resetDeviceResources();
         return false;
     }
 
-    return SUCCEEDED(target_->CreateSolidColorBrush(
-        D2D1::ColorF(D2D1::ColorF::Black),
-        brush_.GetAddressOf()));
+    if (FAILED(target_->CreateSolidColorBrush(
+            D2D1::ColorF(D2D1::ColorF::Black),
+            brush_.GetAddressOf()))) {
+        resetDeviceResources();
+        return false;
+    }
+
+    return true;
 }
 
 void RenderContext::resize(UINT width, UINT height) {
@@ -84,12 +105,13 @@ void RenderContext::beginDraw() {
     target_->BeginDraw();
 }
 
-void RenderContext::endDraw() {
+bool RenderContext::endDraw() {
     const HRESULT result = target_->EndDraw();
     if (result == D2DERR_RECREATE_TARGET) {
-        brush_.Reset();
-        target_.Reset();
+        resetDeviceResources();
+        return true;
     }
+    return false;
 }
 
 void RenderContext::clear(D2D1_COLOR_F color) {
@@ -136,6 +158,19 @@ void RenderContext::fillRect(const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
 void RenderContext::drawLine(D2D1_POINT_2F start, D2D1_POINT_2F end, D2D1_COLOR_F color, float width) {
     brush_->SetColor(color);
     target_->DrawLine(start, end, brush_.Get(), width);
+}
+
+void RenderContext::resetAllResources() {
+    resetDeviceResources();
+    headerTextFormat_.Reset();
+    textFormat_.Reset();
+    dwriteFactory_.Reset();
+    d2dFactory_.Reset();
+}
+
+void RenderContext::resetDeviceResources() {
+    brush_.Reset();
+    target_.Reset();
 }
 
 }

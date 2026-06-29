@@ -13,9 +13,10 @@ namespace finderx {
 class RenderContext {
 public:
     bool initialize(HWND hwnd);
+    bool isReady() const;
     void resize(UINT width, UINT height);
     void beginDraw();
-    void endDraw();
+    bool endDraw();
     void clear(D2D1_COLOR_F color);
 
     ID2D1HwndRenderTarget* target() const;
@@ -30,6 +31,8 @@ public:
 private:
     bool createFactories();
     bool createDeviceResources(HWND hwnd);
+    void resetAllResources();
+    void resetDeviceResources();
 
     Microsoft::WRL::ComPtr<ID2D1Factory> d2dFactory_;
     Microsoft::WRL::ComPtr<IDWriteFactory> dwriteFactory_;
