@@ -153,6 +153,10 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
         : (sizeWidth > 0.0f ? sizeX : (kindWidth > 0.0f ? kindX : contentRight));
     const float nameRight = trailingLeft - 8.0f;
     float y = bounds.top + kTopPadding - scrollY_;
+    ID2D1HwndRenderTarget* target = render.target();
+    if (target) {
+        target->PushAxisAlignedClip(bounds, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    }
 
     for (std::size_t i = 0; i < rows_.size(); ++i) {
         const VisibleRow& visible = rows_[i];
@@ -201,6 +205,10 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
         }
 
         y += kRowHeight;
+    }
+
+    if (target) {
+        target->PopAxisAlignedClip();
     }
 }
 
