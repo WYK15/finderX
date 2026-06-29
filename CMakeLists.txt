@@ -34,6 +34,7 @@ set(FINDERX_APP_SOURCES
     src/main.cpp
     src/app/App.cpp
     src/ui/MainWindow.cpp
+    src/ui/RenderContext.cpp
 )
 
 set(FINDERX_APP_SOURCES_EXIST TRUE)

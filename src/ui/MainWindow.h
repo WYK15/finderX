@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui/RenderContext.h"
+
 #include <windows.h>
 
 namespace finderx {
@@ -12,8 +14,10 @@ public:
 private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam);
+    void paint();
 
     HWND hwnd_ = nullptr;
+    RenderContext render_;
 };
 
 }

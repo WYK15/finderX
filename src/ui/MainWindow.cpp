@@ -69,21 +69,40 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPA
 
 LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
-    case WM_PAINT: {
-        PAINTSTRUCT paint{};
-        HDC dc = BeginPaint(hwnd_, &paint);
-        RECT client{};
-        GetClientRect(hwnd_, &client);
-        FillRect(dc, &client, static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
-        EndPaint(hwnd_, &paint);
+    case WM_PAINT:
+        paint();
         return 0;
-    }
+    case WM_SIZE:
+        render_.resize(LOWORD(lParam), HIWORD(lParam));
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return 0;
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
     default:
         return DefWindowProcW(hwnd_, message, wParam, lParam);
     }
+}
+
+void MainWindow::paint() {
+    PAINTSTRUCT paint{};
+    BeginPaint(hwnd_, &paint);
+
+    if (!render_.target() && !render_.initialize(hwnd_)) {
+        EndPaint(hwnd_, &paint);
+        return;
+    }
+
+    render_.beginDraw();
+    render_.clear(D2D1::ColorF(0.98f, 0.98f, 0.98f));
+    render_.drawText(
+        L"FinderX",
+        D2D1::RectF(24.0f, 24.0f, 240.0f, 60.0f),
+        render_.textFormat(),
+        D2D1::ColorF(0.1f, 0.1f, 0.1f));
+    render_.endDraw();
+
+    EndPaint(hwnd_, &paint);
 }
 
 }
