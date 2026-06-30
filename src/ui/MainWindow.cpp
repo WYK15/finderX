@@ -1,8 +1,9 @@
 #include "ui/MainWindow.h"
 
+#include "shell/ShellActions.h"
+
 #include <utility>
 
-#include <shellapi.h>
 #include <windowsx.h>
 
 namespace finderx {
@@ -10,6 +11,15 @@ namespace finderx {
 namespace {
 
 constexpr wchar_t kWindowClassName[] = L"FinderXMainWindow";
+constexpr UINT kCommandOpen = 1001;
+constexpr UINT kCommandReveal = 1002;
+constexpr UINT kCommandCopyPath = 1003;
+constexpr UINT kCommandRefresh = 1004;
+
+bool containsPoint(const D2D1_RECT_F& rect, POINT point) {
+    return static_cast<float>(point.x) >= rect.left && static_cast<float>(point.x) <= rect.right
+        && static_cast<float>(point.y) >= rect.top && static_cast<float>(point.y) <= rect.bottom;
+}
 
 }
 
@@ -119,6 +129,14 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
         return 0;
     }
+    case WM_RBUTTONDOWN: {
+        SetFocus(hwnd_);
+        const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        POINT screenPoint = clientPoint;
+        ClientToScreen(hwnd_, &screenPoint);
+        showContextMenu(clientPoint, screenPoint);
+        return 0;
+    }
     case WM_MOUSEWHEEL: {
         const LayoutRects rects = currentLayout();
         POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
@@ -131,7 +149,15 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
         return 0;
     }
+    case WM_COMMAND:
+        handleCommand(wParam);
+        return 0;
     case WM_KEYDOWN: {
+        if (wParam == VK_F5 || (wParam == L'R' && (GetKeyState(VK_CONTROL) & 0x8000))) {
+            refreshCurrentDirectory();
+            return 0;
+        }
+
         if (wParam == VK_BACK) {
             goBack();
             return 0;
@@ -222,10 +248,139 @@ void MainWindow::activateNode(NodeId nodeId) {
 }
 
 void MainWindow::openFile(const std::wstring& path) {
-    const HINSTANCE result = ShellExecuteW(hwnd_, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-    if (reinterpret_cast<INT_PTR>(result) <= 32) {
+    if (!shell::openPath(hwnd_, path)) {
         setStatusText(L"Cannot open file");
     }
+}
+
+void MainWindow::showContextMenu(POINT clientPoint, POINT screenPoint) {
+    const LayoutRects rects = currentLayout();
+    if (!containsPoint(rects.list, clientPoint)) {
+        return;
+    }
+
+    contextNode_ = listView_.nodeAtPoint(
+        static_cast<float>(clientPoint.x),
+        static_cast<float>(clientPoint.y),
+        rects.list);
+
+    const bool hasTarget = contextNode_ != kInvalidNodeId;
+    if (hasTarget && listView_.selectNode(contextNode_)) {
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+
+    HMENU menu = CreatePopupMenu();
+    if (!menu) {
+        return;
+    }
+
+    if (hasTarget) {
+        AppendMenuW(menu, MF_STRING, kCommandOpen, L"Open");
+        AppendMenuW(menu, MF_STRING, kCommandReveal, L"Show in Explorer");
+        AppendMenuW(menu, MF_STRING, kCommandCopyPath, L"Copy Path");
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    }
+    AppendMenuW(menu, MF_STRING, kCommandRefresh, L"Refresh");
+
+    TrackPopupMenu(menu, TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, 0, hwnd_, nullptr);
+    DestroyMenu(menu);
+}
+
+void MainWindow::handleCommand(WPARAM wParam) {
+    switch (LOWORD(wParam)) {
+    case kCommandOpen:
+        openContextNode();
+        break;
+    case kCommandReveal:
+        revealContextNode();
+        break;
+    case kCommandCopyPath:
+        copyContextNodePath();
+        break;
+    case kCommandRefresh:
+        refreshCurrentDirectory();
+        break;
+    default:
+        break;
+    }
+}
+
+void MainWindow::openContextNode() {
+    if (contextNode_ == kInvalidNodeId) {
+        return;
+    }
+    activateNode(contextNode_);
+}
+
+void MainWindow::revealContextNode() {
+    if (contextNode_ == kInvalidNodeId || contextNode_ >= tree_.nodes().size()) {
+        return;
+    }
+
+    if (!shell::revealInExplorer(hwnd_, tree_.node(contextNode_).path)) {
+        setStatusText(L"Cannot show in Explorer");
+    }
+}
+
+void MainWindow::copyContextNodePath() {
+    if (contextNode_ == kInvalidNodeId || contextNode_ >= tree_.nodes().size()) {
+        return;
+    }
+
+    if (!shell::copyPathToClipboard(hwnd_, tree_.node(contextNode_).path)) {
+        setStatusText(L"Cannot copy path");
+    }
+}
+
+bool MainWindow::refreshCurrentDirectory() {
+    const std::wstring currentPath = history_.currentPath();
+    if (currentPath.empty()) {
+        setStatusText(L"Cannot refresh folder");
+        return false;
+    }
+
+    const std::wstring previousSelection = selectedNodePath();
+    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(currentPath);
+    if (!result.ok()) {
+        setStatusText(L"Cannot refresh folder");
+        return false;
+    }
+
+    std::wstring rootName = fileNameFromPath(currentPath);
+    if (rootName.empty()) {
+        rootName = currentPath;
+    }
+
+    tree_ = FileTree(currentPath, std::move(rootName));
+    tree_.replaceChildren(tree_.rootId(), std::move(result.children));
+    listView_ = FinderListView(&tree_);
+    selectNodeByPath(previousSelection);
+    contextNode_ = kInvalidNodeId;
+    chromeState_.statusText.clear();
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+    return true;
+}
+
+std::wstring MainWindow::selectedNodePath() const {
+    const NodeId selected = listView_.selectedNode();
+    if (selected == kInvalidNodeId || selected >= tree_.nodes().size()) {
+        return {};
+    }
+    return tree_.node(selected).path;
+}
+
+bool MainWindow::selectNodeByPath(const std::wstring& path) {
+    if (path.empty()) {
+        return false;
+    }
+
+    for (const FileNode& node : tree_.nodes()) {
+        if (node.path == path) {
+            return listView_.selectNode(node.id);
+        }
+    }
+    return false;
 }
 
 void MainWindow::refreshChromeState() {

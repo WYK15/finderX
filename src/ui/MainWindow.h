@@ -32,6 +32,14 @@ private:
     bool navigateToDirectory(std::wstring path, HistoryMode mode);
     void activateNode(NodeId nodeId);
     void openFile(const std::wstring& path);
+    void showContextMenu(POINT clientPoint, POINT screenPoint);
+    void handleCommand(WPARAM wParam);
+    void openContextNode();
+    void revealContextNode();
+    void copyContextNodePath();
+    bool refreshCurrentDirectory();
+    std::wstring selectedNodePath() const;
+    bool selectNodeByPath(const std::wstring& path);
     void refreshChromeState();
     void goBack();
     void goForward();
@@ -49,6 +57,7 @@ private:
     SidebarModel sidebar_;
     ChromeState chromeState_;
     std::wstring homePath_;
+    NodeId contextNode_ = kInvalidNodeId;
 };
 
 }
