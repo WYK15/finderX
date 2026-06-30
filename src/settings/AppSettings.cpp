@@ -234,31 +234,61 @@ SortDirection parseSortDirection(const std::wstring& value) {
     return value == L"descending" ? SortDirection::Descending : SortDirection::Ascending;
 }
 
-std::vector<FavoriteLocation> parseFavorites(const std::string& text) {
+struct FavoritesParseResult {
+    bool present = false;
     std::vector<FavoriteLocation> favorites;
+};
+
+std::size_t findStructuralChar(const std::string& text, char target, std::size_t start) {
+    bool inString = false;
+    bool escaping = false;
+    for (std::size_t index = start; index < text.size(); ++index) {
+        const char ch = text[index];
+        if (escaping) {
+            escaping = false;
+            continue;
+        }
+        if (inString && ch == '\\') {
+            escaping = true;
+            continue;
+        }
+        if (ch == '"') {
+            inString = !inString;
+            continue;
+        }
+        if (!inString && ch == target) {
+            return index;
+        }
+    }
+    return std::string::npos;
+}
+
+FavoritesParseResult parseFavorites(const std::string& text) {
+    FavoritesParseResult result;
     const std::size_t favoritesKey = text.find("\"favorites\"");
     if (favoritesKey == std::string::npos) {
-        return favorites;
+        return result;
     }
+    result.present = true;
 
-    const std::size_t arrayStart = text.find('[', favoritesKey);
+    const std::size_t arrayStart = findStructuralChar(text, '[', favoritesKey);
     if (arrayStart == std::string::npos) {
-        return favorites;
+        return result;
     }
 
-    const std::size_t arrayEnd = text.find(']', arrayStart + 1);
+    const std::size_t arrayEnd = findStructuralChar(text, ']', arrayStart + 1);
     if (arrayEnd == std::string::npos || arrayEnd <= arrayStart) {
-        return favorites;
+        return result;
     }
 
     std::size_t cursor = arrayStart + 1;
     while (cursor < arrayEnd) {
-        const std::size_t objectStart = text.find('{', cursor);
+        const std::size_t objectStart = findStructuralChar(text, '{', cursor);
         if (objectStart == std::string::npos || objectStart >= arrayEnd) {
             break;
         }
 
-        const std::size_t objectEnd = text.find('}', objectStart + 1);
+        const std::size_t objectEnd = findStructuralChar(text, '}', objectStart + 1);
         if (objectEnd == std::string::npos || objectEnd > arrayEnd) {
             break;
         }
@@ -266,12 +296,12 @@ std::vector<FavoriteLocation> parseFavorites(const std::string& text) {
         const std::string object = text.substr(objectStart, objectEnd - objectStart + 1);
         FavoriteLocation favorite;
         if (extractString(object, "label", favorite.label) && extractString(object, "path", favorite.path) && !favorite.path.empty()) {
-            favorites.push_back(std::move(favorite));
+            result.favorites.push_back(std::move(favorite));
         }
         cursor = objectEnd + 1;
     }
 
-    return favorites;
+    return result;
 }
 
 } // namespace
@@ -356,9 +386,9 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
         loaded.sortDirection = parseSortDirection(stringValue);
     }
 
-    std::vector<FavoriteLocation> favorites = parseFavorites(text);
-    if (!favorites.empty()) {
-        loaded.favorites = std::move(favorites);
+    FavoritesParseResult favorites = parseFavorites(text);
+    if (favorites.present) {
+        loaded.favorites = std::move(favorites.favorites);
     }
 
     clampSettings(loaded);

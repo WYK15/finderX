@@ -92,6 +92,34 @@ void testSaveLoadRoundTrip() {
     std::filesystem::remove(path);
 }
 
+void testEmptyFavoritesRoundTrip() {
+    const std::filesystem::path path = tempSettingsPath(L"finderx-settings-empty-favorites-");
+    AppSettings settings = makeDefaultSettings(L"C:\\Users\\Example");
+    settings.favorites.clear();
+
+    require(saveSettings(settings, path), "settings with empty favorites should save");
+    const SettingsLoadResult loaded = loadSettings(L"C:\\Users\\Example", path);
+    require(loaded.loadedFromDisk, "empty favorites load should report disk load");
+    require(loaded.settings.favorites.empty(), "persisted empty favorites should load as empty");
+
+    std::filesystem::remove(path);
+}
+
+void testFavoritesWithStructuralCharactersRoundTrip() {
+    const std::filesystem::path path = tempSettingsPath(L"finderx-settings-structural-favorites-");
+    AppSettings settings;
+    require(addFavorite(settings, L"Proj]ects", L"D:\\A}B"), "favorite with structural characters should be added");
+
+    require(saveSettings(settings, path), "settings with structural characters should save");
+    const SettingsLoadResult loaded = loadSettings(L"C:\\Users\\Example", path);
+    require(loaded.loadedFromDisk, "structural character settings should report disk load");
+    require(loaded.settings.favorites.size() == 1, "structural character favorite should round trip");
+    require(loaded.settings.favorites[0].label == L"Proj]ects", "favorite label with bracket should round trip");
+    require(loaded.settings.favorites[0].path == L"D:\\A}B", "favorite path with brace should round trip");
+
+    std::filesystem::remove(path);
+}
+
 void testMalformedSettingsFallback() {
     const std::filesystem::path path = tempSettingsPath(L"finderx-settings-bad-");
     {
@@ -126,7 +154,24 @@ void testInvalidFieldsFallbackToDefaults() {
     require(loaded.settings.iconSize == kDefaultIconSize, "invalid icon field should keep default");
     require(loaded.settings.sortColumn == SortColumn::Name, "invalid sort column should keep default");
     require(loaded.settings.sortDirection == SortDirection::Ascending, "invalid sort direction should keep default");
-    require(loaded.settings.favorites.size() == 4, "empty favorites array should keep defaults");
+    require(loaded.settings.favorites.empty(), "present empty favorites array should load as empty");
+
+    std::filesystem::remove(path);
+}
+
+void testAbsentFavoritesFallbackToDefaults() {
+    const std::filesystem::path path = tempSettingsPath(L"finderx-settings-absent-favorites-");
+    {
+        std::ofstream stream(path, std::ios::binary);
+        stream << "{\n";
+        stream << "  \"fontSize\": 16,\n";
+        stream << "  \"iconSize\": 20\n";
+        stream << "}\n";
+    }
+
+    const SettingsLoadResult loaded = loadSettings(L"C:\\Users\\Example", path);
+    require(loaded.loadedFromDisk, "settings without favorites should report disk load");
+    require(loaded.settings.favorites.size() == 4, "absent favorites should keep defaults");
 
     std::filesystem::remove(path);
 }
@@ -138,7 +183,10 @@ int main() {
     testClamping();
     testFavoriteOperations();
     testSaveLoadRoundTrip();
+    testEmptyFavoritesRoundTrip();
+    testFavoritesWithStructuralCharactersRoundTrip();
     testMalformedSettingsFallback();
     testInvalidFieldsFallbackToDefaults();
+    testAbsentFavoritesFallbackToDefaults();
     std::cout << "AppSettingsTests passed\n";
 }
