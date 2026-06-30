@@ -96,11 +96,25 @@ void drawNodeIcon(RenderContext& render, const FileNode& node, float x, float y,
 
 FinderListView::FinderListView(FileTree* tree) : tree_(tree) {
     rebuildRows();
-    ensureSelection();
+    if (!rows_.empty()) {
+        setSingleSelection(rows_.size() > 3 ? rows_[3].nodeId : rows_.front().nodeId);
+    }
 }
 
 NodeId FinderListView::selectedNode() const {
     return selected_;
+}
+
+std::vector<NodeId> FinderListView::selectedNodes() const {
+    return selectedNodes_;
+}
+
+bool FinderListView::hasSelection() const {
+    return !selectedNodes_.empty();
+}
+
+bool FinderListView::isSelected(NodeId id) const {
+    return containsSelected(id);
 }
 
 NodeId FinderListView::nodeAtPoint(float x, float y, const D2D1_RECT_F& bounds) {
@@ -127,20 +141,90 @@ bool FinderListView::selectNode(NodeId id) {
     }
 
     rebuildRows();
-    const auto selected = std::find_if(rows_.begin(), rows_.end(), [id](const VisibleRow& row) {
-        return row.nodeId == id;
-    });
-    if (selected == rows_.end()) {
+    ensureSelection();
+    if (rowIndex(id) < 0) {
         return false;
     }
 
-    if (selected_ == id) {
-        return false;
-    }
-
-    selected_ = id;
+    const bool changed = selected_ != id || selectedNodes_.size() != 1 || selectedNodes_.front() != id || anchor_ != id;
+    setSingleSelection(id);
     ensureSelectionVisible();
-    return true;
+    return changed;
+}
+
+bool FinderListView::selectNodes(std::span<const NodeId> ids) {
+    if (!tree_) {
+        return false;
+    }
+
+    rebuildRows();
+    ensureSelection();
+
+    std::vector<NodeId> next;
+    next.reserve(ids.size());
+    for (const VisibleRow& row : rows_) {
+        if (std::find(ids.begin(), ids.end(), row.nodeId) != ids.end()
+            && std::find(next.begin(), next.end(), row.nodeId) == next.end()) {
+            next.push_back(row.nodeId);
+        }
+    }
+
+    const bool changed = next != selectedNodes_;
+    selectedNodes_ = std::move(next);
+    if (selectedNodes_.empty()) {
+        selected_ = kInvalidNodeId;
+        anchor_ = kInvalidNodeId;
+        return changed;
+    }
+
+    if (!containsSelected(selected_)) {
+        selected_ = selectedNodes_.front();
+    }
+    if (rowIndex(anchor_) < 0) {
+        anchor_ = selected_;
+    }
+    ensureSelectionVisible();
+    return changed;
+}
+
+bool FinderListView::selectAllVisible() {
+    if (!tree_) {
+        return false;
+    }
+
+    rebuildRows();
+    ensureSelection();
+
+    std::vector<NodeId> next;
+    next.reserve(rows_.size());
+    for (const VisibleRow& row : rows_) {
+        next.push_back(row.nodeId);
+    }
+
+    const bool changed = next != selectedNodes_;
+    selectedNodes_ = std::move(next);
+    if (selectedNodes_.empty()) {
+        selected_ = kInvalidNodeId;
+        anchor_ = kInvalidNodeId;
+        return changed;
+    }
+
+    if (!containsSelected(selected_)) {
+        selected_ = selectedNodes_.front();
+    }
+    if (rowIndex(anchor_) < 0) {
+        anchor_ = selected_;
+    }
+    ensureSelectionVisible();
+    return changed;
+}
+
+bool FinderListView::clearSelection() {
+    const bool changed = selected_ != kInvalidNodeId || anchor_ != kInvalidNodeId || !selectedNodes_.empty();
+    selected_ = kInvalidNodeId;
+    anchor_ = kInvalidNodeId;
+    selectedNodes_.clear();
+    return changed;
 }
 
 void FinderListView::rebuildRows() {
@@ -150,19 +234,13 @@ void FinderListView::rebuildRows() {
 void FinderListView::ensureSelection() {
     if (rows_.empty()) {
         selected_ = kInvalidNodeId;
+        anchor_ = kInvalidNodeId;
+        selectedNodes_.clear();
         return;
     }
 
-    if (selected_ != kInvalidNodeId) {
-        const auto selected = std::find_if(rows_.begin(), rows_.end(), [this](const VisibleRow& row) {
-            return row.nodeId == selected_;
-        });
-        if (selected != rows_.end()) {
-            return;
-        }
-    }
-
-    selected_ = rows_.size() > 3 ? rows_[3].nodeId : rows_.front().nodeId;
+    pruneSelectionToVisible();
+    normalizeFocus();
 }
 
 float FinderListView::maxScroll() const {
@@ -175,13 +253,94 @@ void FinderListView::clampScroll() {
 }
 
 int FinderListView::selectedRowIndex() const {
+    return rowIndex(selected_);
+}
+
+int FinderListView::rowIndex(NodeId id) const {
     for (std::size_t i = 0; i < rows_.size(); ++i) {
-        if (rows_[i].nodeId == selected_) {
+        if (rows_[i].nodeId == id) {
             return static_cast<int>(i);
         }
     }
 
     return -1;
+}
+
+bool FinderListView::containsSelected(NodeId id) const {
+    return std::find(selectedNodes_.begin(), selectedNodes_.end(), id) != selectedNodes_.end();
+}
+
+bool FinderListView::setSingleSelection(NodeId id) {
+    if (id == kInvalidNodeId || rowIndex(id) < 0) {
+        return clearSelection();
+    }
+
+    const bool changed = selected_ != id || anchor_ != id || selectedNodes_.size() != 1 || selectedNodes_.front() != id;
+    selected_ = id;
+    anchor_ = id;
+    selectedNodes_.assign(1, id);
+    return changed;
+}
+
+bool FinderListView::setRangeSelection(NodeId from, NodeId to) {
+    const int fromIndex = rowIndex(from);
+    const int toIndex = rowIndex(to);
+    if (fromIndex < 0 || toIndex < 0) {
+        return setSingleSelection(to);
+    }
+
+    const int start = (std::min)(fromIndex, toIndex);
+    const int end = (std::max)(fromIndex, toIndex);
+    std::vector<NodeId> next;
+    next.reserve(static_cast<std::size_t>(end - start + 1));
+    for (int i = start; i <= end; ++i) {
+        next.push_back(rows_[static_cast<std::size_t>(i)].nodeId);
+    }
+
+    const bool changed = selectedNodes_ != next || selected_ != to;
+    selectedNodes_ = std::move(next);
+    selected_ = to;
+    return changed;
+}
+
+void FinderListView::pruneSelectionToVisible() {
+    std::vector<NodeId> pruned;
+    pruned.reserve(selectedNodes_.size());
+    for (const VisibleRow& row : rows_) {
+        if (containsSelected(row.nodeId)) {
+            pruned.push_back(row.nodeId);
+        }
+    }
+    selectedNodes_ = std::move(pruned);
+
+    if (rowIndex(anchor_) < 0) {
+        anchor_ = kInvalidNodeId;
+    }
+}
+
+NodeId FinderListView::firstSelectedVisible() const {
+    for (const VisibleRow& row : rows_) {
+        if (containsSelected(row.nodeId)) {
+            return row.nodeId;
+        }
+    }
+
+    return kInvalidNodeId;
+}
+
+void FinderListView::normalizeFocus() {
+    if (selectedNodes_.empty()) {
+        selected_ = kInvalidNodeId;
+        anchor_ = kInvalidNodeId;
+        return;
+    }
+
+    if (!containsSelected(selected_)) {
+        selected_ = firstSelectedVisible();
+    }
+    if (rowIndex(anchor_) < 0) {
+        anchor_ = selected_;
+    }
 }
 
 void FinderListView::ensureSelectionVisible() {
@@ -273,7 +432,7 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
         }
 
         const FileNode& node = tree_->node(visible.nodeId);
-        const bool selected = node.id == selected_;
+        const bool selected = containsSelected(node.id);
         const D2D1_RECT_F rowRect = D2D1::RectF(contentLeft, y, contentRight, y + kRowHeight);
 
         if (selected) {
@@ -322,7 +481,7 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
     }
 }
 
-ListInteractionResult FinderListView::onMouseDown(float x, float y, const D2D1_RECT_F& bounds) {
+ListInteractionResult FinderListView::onMouseDown(float x, float y, const D2D1_RECT_F& bounds, bool controlDown, bool shiftDown) {
     ListInteractionResult result;
     if (!tree_) {
         return result;
@@ -339,13 +498,15 @@ ListInteractionResult FinderListView::onMouseDown(float x, float y, const D2D1_R
     }
 
     const VisibleRow row = rows_[static_cast<std::size_t>(index)];
-    if (selected_ != row.nodeId) {
-        selected_ = row.nodeId;
-        result.changed = true;
-    }
-
     FileNode& node = tree_->node(row.nodeId);
-    if (node.kind == FileKind::Folder && hitTestDisclosure(x, bounds, row)) {
+    const bool disclosureClick = node.kind == FileKind::Folder && hitTestDisclosure(x, bounds, row);
+    if (disclosureClick) {
+        if (!containsSelected(row.nodeId) || (!controlDown && !shiftDown)) {
+            if (setSingleSelection(row.nodeId)) {
+                ensureSelectionVisible();
+                result.changed = true;
+            }
+        }
         tree_->toggleExpanded(row.nodeId);
         if (node.expanded) {
             result.expandedFolder = row.nodeId;
@@ -353,10 +514,44 @@ ListInteractionResult FinderListView::onMouseDown(float x, float y, const D2D1_R
         rebuildRows();
         ensureSelection();
         clampScroll();
+        ensureSelectionVisible();
         result.changed = true;
         lastClickedNode_ = kInvalidNodeId;
         lastClickTime_ = 0;
         return result;
+    }
+
+    bool selectionChanged = false;
+    if (shiftDown && !controlDown && anchor_ != kInvalidNodeId) {
+        selectionChanged = setRangeSelection(anchor_, row.nodeId);
+    } else if (controlDown) {
+        if (containsSelected(row.nodeId)) {
+            selectedNodes_.erase(std::remove(selectedNodes_.begin(), selectedNodes_.end(), row.nodeId), selectedNodes_.end());
+            if (selectedNodes_.empty()) {
+                selected_ = kInvalidNodeId;
+                anchor_ = kInvalidNodeId;
+            } else {
+                selected_ = firstSelectedVisible();
+                if (rowIndex(anchor_) < 0 || anchor_ == row.nodeId) {
+                    anchor_ = selected_;
+                }
+            }
+            selectionChanged = true;
+        } else {
+            selectedNodes_.push_back(row.nodeId);
+            std::sort(selectedNodes_.begin(), selectedNodes_.end(), [this](NodeId lhs, NodeId rhs) {
+                return rowIndex(lhs) < rowIndex(rhs);
+            });
+            selected_ = row.nodeId;
+            anchor_ = row.nodeId;
+            selectionChanged = true;
+        }
+    } else {
+        selectionChanged = setSingleSelection(row.nodeId);
+    }
+    if (selectionChanged) {
+        ensureSelectionVisible();
+        result.changed = true;
     }
 
     const DWORD clickTime = GetTickCount();
@@ -386,7 +581,7 @@ bool FinderListView::onWheel(int wheelDelta) {
     return oldScroll != scrollY_;
 }
 
-ListInteractionResult FinderListView::onKeyDown(WPARAM key) {
+ListInteractionResult FinderListView::onKeyDown(WPARAM key, bool controlDown, bool shiftDown) {
     ListInteractionResult result;
     if (!tree_) {
         return result;
@@ -394,6 +589,11 @@ ListInteractionResult FinderListView::onKeyDown(WPARAM key) {
 
     rebuildRows();
     ensureSelection();
+    if (controlDown && key == 'A') {
+        result.changed = selectAllVisible();
+        return result;
+    }
+
     const int index = selectedRowIndex();
     if (index < 0) {
         return result;
@@ -402,16 +602,30 @@ ListInteractionResult FinderListView::onKeyDown(WPARAM key) {
     switch (key) {
     case VK_UP:
         if (index > 0) {
-            selected_ = rows_[static_cast<std::size_t>(index - 1)].nodeId;
+            const NodeId next = rows_[static_cast<std::size_t>(index - 1)].nodeId;
+            if (shiftDown) {
+                if (anchor_ == kInvalidNodeId) {
+                    anchor_ = selected_;
+                }
+                result.changed = setRangeSelection(anchor_, next);
+            } else {
+                result.changed = setSingleSelection(next);
+            }
             ensureSelectionVisible();
-            result.changed = true;
         }
         break;
     case VK_DOWN:
         if (index + 1 < static_cast<int>(rows_.size())) {
-            selected_ = rows_[static_cast<std::size_t>(index + 1)].nodeId;
+            const NodeId next = rows_[static_cast<std::size_t>(index + 1)].nodeId;
+            if (shiftDown) {
+                if (anchor_ == kInvalidNodeId) {
+                    anchor_ = selected_;
+                }
+                result.changed = setRangeSelection(anchor_, next);
+            } else {
+                result.changed = setSingleSelection(next);
+            }
             ensureSelectionVisible();
-            result.changed = true;
         }
         break;
     case VK_LEFT: {

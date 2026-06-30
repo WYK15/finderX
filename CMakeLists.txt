@@ -91,6 +91,18 @@ finderx_enable_utf8(finderx_file_operation_state_tests)
 finderx_enable_windows_unicode(finderx_file_operation_state_tests)
 add_test(NAME finderx_file_operation_state_tests COMMAND finderx_file_operation_state_tests)
 
+add_executable(finderx_list_view_tests
+    src/ui/FinderListViewTests.cpp
+    src/ui/FinderListView.cpp
+    src/ui/RenderContext.cpp
+)
+
+target_include_directories(finderx_list_view_tests PRIVATE src)
+target_link_libraries(finderx_list_view_tests PRIVATE finderx_model d2d1 dwrite windowscodecs)
+finderx_enable_utf8(finderx_list_view_tests)
+finderx_enable_windows_unicode(finderx_list_view_tests)
+add_test(NAME finderx_list_view_tests COMMAND finderx_list_view_tests)
+
 set(FINDERX_APP_SOURCES
     src/main.cpp
     src/app/App.cpp
