@@ -45,6 +45,15 @@ SidebarItem makeItem(const std::wstring& label, const std::wstring& path, const 
     return item;
 }
 
+SidebarItem makeThisPcItem(const std::wstring& currentPath) {
+    SidebarItem item;
+    item.label = L"This PC";
+    item.path = thisPcPath();
+    item.available = true;
+    item.selected = pathsEqual(item.path, currentPath);
+    return item;
+}
+
 } // namespace
 
 std::wstring joinPathForNavigation(const std::wstring& base, const std::wstring& child) {
@@ -60,6 +69,10 @@ std::wstring joinPathForNavigation(const std::wstring& base, const std::wstring&
     return base + L"\\" + child;
 }
 
+std::wstring thisPcPath() {
+    return L"finderx://this-pc";
+}
+
 std::wstring userProgramsDirectory() {
     const std::wstring appData = environmentVariable(L"APPDATA");
     if (appData.empty()) {
@@ -71,11 +84,12 @@ std::wstring userProgramsDirectory() {
 
 void SidebarModel::refresh(const std::wstring& homePath, const std::wstring& currentPath) {
     items_.clear();
-    items_.reserve(5);
+    items_.reserve(6);
     items_.push_back(makeItem(L"Home", homePath, currentPath));
     items_.push_back(makeItem(L"Desktop", joinPathForNavigation(homePath, L"Desktop"), currentPath));
     items_.push_back(makeItem(L"Documents", joinPathForNavigation(homePath, L"Documents"), currentPath));
     items_.push_back(makeItem(L"Downloads", joinPathForNavigation(homePath, L"Downloads"), currentPath));
+    items_.push_back(makeThisPcItem(currentPath));
     items_.push_back(makeItem(L"Applications", userProgramsDirectory(), currentPath));
 }
 

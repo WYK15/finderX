@@ -29,6 +29,7 @@ add_library(finderx_fs
     src/fs/FileMetadata.cpp
     src/fs/DirectoryLoader.cpp
     src/fs/FileCreation.cpp
+    src/fs/DriveEnumerator.cpp
 )
 
 target_include_directories(finderx_fs PUBLIC src)
@@ -62,6 +63,15 @@ target_link_libraries(finderx_fs_tests PRIVATE finderx_fs)
 finderx_enable_utf8(finderx_fs_tests)
 finderx_enable_windows_unicode(finderx_fs_tests)
 add_test(NAME finderx_fs_tests COMMAND finderx_fs_tests)
+
+add_executable(finderx_drive_enumerator_tests
+    src/fs/DriveEnumeratorTests.cpp
+)
+
+target_link_libraries(finderx_drive_enumerator_tests PRIVATE finderx_fs)
+finderx_enable_utf8(finderx_drive_enumerator_tests)
+finderx_enable_windows_unicode(finderx_drive_enumerator_tests)
+add_test(NAME finderx_drive_enumerator_tests COMMAND finderx_drive_enumerator_tests)
 
 add_executable(finderx_navigation_tests
     src/navigation/NavigationHistoryTests.cpp

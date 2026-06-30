@@ -28,11 +28,16 @@ static void testSidebarModel() {
     SidebarModel model;
     model.refresh(L"C:\\Users\\leo", L"C:\\Users\\leo");
 
-    require(model.items().size() == 5, "sidebar should include five items");
+    require(model.items().size() == 6, "sidebar should include six items");
     require(findItem(model, L"Home").path == L"C:\\Users\\leo", "Home path should use home path");
     require(findItem(model, L"Desktop").path == L"C:\\Users\\leo\\Desktop", "Desktop path should derive from home path");
     require(findItem(model, L"Documents").path == L"C:\\Users\\leo\\Documents", "Documents path should derive from home path");
     require(findItem(model, L"Downloads").path == L"C:\\Users\\leo\\Downloads", "Downloads path should derive from home path");
+    require(findItem(model, L"This PC").path == thisPcPath(), "This PC path should use virtual path");
+    require(findItem(model, L"This PC").available, "This PC should always be available");
+
+    model.refresh(L"C:\\Users\\leo", thisPcPath());
+    require(findItem(model, L"This PC").selected, "This PC should be selected for virtual path");
 
     model.setAvailabilityForTests(L"Home", true);
     require(findItem(model, L"Home").available, "availability override should enable matching item");

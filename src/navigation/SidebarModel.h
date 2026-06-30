@@ -37,6 +37,7 @@ private:
 };
 
 std::wstring joinPathForNavigation(const std::wstring& base, const std::wstring& child);
+std::wstring thisPcPath();
 std::wstring userProgramsDirectory();
 
 } // namespace finderx
