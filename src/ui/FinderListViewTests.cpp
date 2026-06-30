@@ -14,7 +14,7 @@ using namespace finderx;
 
 namespace {
 
-constexpr float kRowHeight = 20.0f;
+constexpr float kDefaultRowHeight = 21.0f;
 constexpr float kTopPadding = 4.0f;
 
 void require(bool condition, const char* message) {
@@ -25,7 +25,7 @@ void require(bool condition, const char* message) {
 }
 
 float rowY(int index) {
-    return kTopPadding + static_cast<float>(index) * kRowHeight + 1.0f;
+    return kTopPadding + static_cast<float>(index) * kDefaultRowHeight + 1.0f;
 }
 
 float rowY(int index, float rowHeight) {
