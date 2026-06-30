@@ -248,6 +248,8 @@ ListInteractionResult FinderListView::onMouseDown(float x, float y, const D2D1_R
         ensureSelection();
         clampScroll();
         result.changed = true;
+        lastClickedNode_ = kInvalidNodeId;
+        lastClickTime_ = 0;
         return result;
     }
 
