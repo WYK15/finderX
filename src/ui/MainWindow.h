@@ -53,6 +53,8 @@ private:
     bool hasActiveTab() const;
     std::vector<std::wstring> tabTitles() const;
     void initializeFileTree();
+    bool createTabAtPath(const std::wstring& path);
+    void activateTab(std::size_t index);
     bool navigateToDirectory(std::wstring path, HistoryMode mode);
     void activateNode(NodeId nodeId);
     void openFile(const std::wstring& path);

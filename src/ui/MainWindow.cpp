@@ -168,7 +168,10 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             }
             return 0;
         case ChromeHitKind::Tab:
+            activateTab(chromeHit.tabIndex);
+            return 0;
         case ChromeHitKind::NewTab:
+            createTabAtPath(hasActiveTab() ? activeTab().history.currentPath() : homePath_);
             return 0;
         case ChromeHitKind::None:
             break;
@@ -239,6 +242,11 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         contextNode_ = kInvalidNodeId;
         const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         const bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+
+        if (controlDown && wParam == L'T') {
+            createTabAtPath(hasActiveTab() ? activeTab().history.currentPath() : homePath_);
+            return 0;
+        }
 
         if (!hasActiveTab()) {
             return DefWindowProcW(hwnd_, message, wParam, lParam);
@@ -325,7 +333,47 @@ LayoutRects MainWindow::currentLayout() const {
 
 void MainWindow::initializeFileTree() {
     homePath_ = defaultHomeDirectory();
-    navigateToDirectory(homePath_, HistoryMode::Initial);
+    createTabAtPath(homePath_);
+}
+
+bool MainWindow::createTabAtPath(const std::wstring& path) {
+    const std::wstring target = path.empty() ? homePath_ : path;
+    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(target);
+    if (!result.ok()) {
+        setStatusText(L"Cannot open folder");
+        return false;
+    }
+
+    std::wstring rootName = fileNameFromPath(target);
+    if (rootName.empty()) {
+        rootName = target;
+    }
+
+    auto tab = std::make_unique<TabState>(target, std::move(rootName));
+    tab->tree.replaceChildren(tab->tree.rootId(), std::move(result.children));
+    tab->history.setInitialPath(target);
+
+    tabs_.push_back(std::move(tab));
+    activeTabIndex_ = tabs_.size() - 1;
+    startDirectoryWatcher(target);
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+    return true;
+}
+
+void MainWindow::activateTab(std::size_t index) {
+    if (index >= tabs_.size() || index == activeTabIndex_) {
+        return;
+    }
+
+    if (hasActiveTab()) {
+        activeTab().searchFocused = false;
+    }
+
+    activeTabIndex_ = index;
+    startDirectoryWatcher(activeTab().history.currentPath());
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
