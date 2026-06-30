@@ -82,8 +82,13 @@ void FileTree::replaceChildren(NodeId parent, std::vector<FileNode> children) {
 
     node(parent).children.clear();
     for (FileNode child : children) {
-        addNode(parent, std::move(child.name), std::move(child.path), child.kind,
-                std::move(child.modified), std::move(child.size), std::move(child.kindText));
+        const unsigned long long modifiedTicks = child.modifiedTicks;
+        const unsigned long long sizeBytes = child.sizeBytes;
+        const NodeId id = addNode(parent, std::move(child.name), std::move(child.path), child.kind,
+                                  std::move(child.modified), std::move(child.size), std::move(child.kindText));
+        FileNode& added = node(id);
+        added.modifiedTicks = modifiedTicks;
+        added.sizeBytes = sizeBytes;
     }
     node(parent).childrenLoaded = true;
 }

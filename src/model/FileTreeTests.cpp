@@ -48,6 +48,8 @@ int main() {
     child.kind = FileKind::Folder;
     child.size = L"--";
     child.kindText = L"Folder";
+    child.modifiedTicks = 123456789;
+    child.sizeBytes = 4096;
     children.push_back(std::move(child));
 
     realTree.replaceChildren(realTree.rootId(), std::move(children));
@@ -56,6 +58,8 @@ int main() {
     require(realRows.size() == 1, "real tree should flatten replaced child");
     const NodeId oldChild = realRows.front().nodeId;
     require(realTree.node(oldChild).path == L"C:\\Users\\Example\\Documents", "child path should be stored");
+    require(realTree.node(oldChild).modifiedTicks == 123456789, "child modified ticks should be preserved");
+    require(realTree.node(oldChild).sizeBytes == 4096, "child size bytes should be preserved");
 
     const NodeId oldGrandchild = realTree.addNode(oldChild, L"Nested", L"C:\\Users\\Example\\Documents\\Nested",
                                                   FileKind::Folder, L"", L"--", L"Folder");
