@@ -1,5 +1,7 @@
 #include "ui/MainWindow.h"
 
+#include <utility>
+
 #include <windowsx.h>
 
 namespace finderx {
@@ -41,6 +43,7 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
         return false;
     }
 
+    initializeFileTree();
     ShowWindow(hwnd_, showCommand);
     SetFocus(hwnd_);
     UpdateWindow(hwnd_);
@@ -89,7 +92,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         const LayoutRects rects = currentLayout();
         const float x = static_cast<float>(GET_X_LPARAM(lParam));
         const float y = static_cast<float>(GET_Y_LPARAM(lParam));
-        if (listView_.onMouseDown(x, y, rects.list)) {
+        const ListInteractionResult result = listView_.onMouseDown(x, y, rects.list);
+        loadChildrenIfNeeded(result.expandedFolder);
+        if (result.changed) {
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
         return 0;
@@ -107,7 +112,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case WM_KEYDOWN:
-        listView_.onKeyDown(wParam);
+        loadChildrenIfNeeded(listView_.onKeyDown(wParam));
         InvalidateRect(hwnd_, nullptr, FALSE);
         return 0;
     case WM_DESTROY:
@@ -127,6 +132,36 @@ LayoutRects MainWindow::currentLayout() const {
     const float width = static_cast<float>(client.right - client.left);
     const float height = static_cast<float>(client.bottom - client.top);
     return chrome_.layout(width, height);
+}
+
+void MainWindow::initializeFileTree() {
+    const std::wstring homePath = defaultHomeDirectory();
+    std::wstring homeName = fileNameFromPath(homePath);
+    if (homeName.empty()) {
+        homeName = homePath;
+    }
+
+    tree_ = FileTree(homePath, std::move(homeName));
+    loadChildrenIfNeeded(tree_.rootId());
+}
+
+void MainWindow::loadChildrenIfNeeded(NodeId folder) {
+    if (folder == kInvalidNodeId || folder >= tree_.nodes().size()) {
+        return;
+    }
+
+    const FileNode& node = tree_.node(folder);
+    if (node.kind != FileKind::Folder || node.childrenLoaded) {
+        return;
+    }
+
+    const DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(node.path);
+    if (!result.ok()) {
+        tree_.setExpanded(folder, false);
+        return;
+    }
+
+    tree_.replaceChildren(folder, result.children);
 }
 
 void MainWindow::paint() {

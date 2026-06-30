@@ -39,6 +39,10 @@ FinderListView::FinderListView(FileTree* tree) : tree_(tree) {
     ensureSelection();
 }
 
+NodeId FinderListView::selectedNode() const {
+    return selected_;
+}
+
 void FinderListView::rebuildRows() {
     rows_ = tree_ ? tree_->flatten() : std::vector<VisibleRow>{};
 }
@@ -212,9 +216,10 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
     }
 }
 
-bool FinderListView::onMouseDown(float x, float y, const D2D1_RECT_F& bounds) {
+ListInteractionResult FinderListView::onMouseDown(float x, float y, const D2D1_RECT_F& bounds) {
+    ListInteractionResult result;
     if (!tree_) {
-        return false;
+        return result;
     }
 
     rebuildRows();
@@ -224,26 +229,28 @@ bool FinderListView::onMouseDown(float x, float y, const D2D1_RECT_F& bounds) {
 
     const int index = hitTestRow(x, y, bounds);
     if (index < 0) {
-        return false;
+        return result;
     }
 
-    bool changed = false;
     const VisibleRow row = rows_[static_cast<std::size_t>(index)];
     if (selected_ != row.nodeId) {
         selected_ = row.nodeId;
-        changed = true;
+        result.changed = true;
     }
 
     FileNode& node = tree_->node(row.nodeId);
     if (node.kind == FileKind::Folder && hitTestDisclosure(x, bounds, row)) {
         tree_->toggleExpanded(row.nodeId);
+        if (node.expanded) {
+            result.expandedFolder = row.nodeId;
+        }
         rebuildRows();
         ensureSelection();
         clampScroll();
-        changed = true;
+        result.changed = true;
     }
 
-    return changed;
+    return result;
 }
 
 bool FinderListView::onWheel(int wheelDelta) {
@@ -259,18 +266,19 @@ bool FinderListView::onWheel(int wheelDelta) {
     return oldScroll != scrollY_;
 }
 
-void FinderListView::onKeyDown(WPARAM key) {
+NodeId FinderListView::onKeyDown(WPARAM key) {
     if (!tree_) {
-        return;
+        return kInvalidNodeId;
     }
 
     rebuildRows();
     ensureSelection();
     const int index = selectedRowIndex();
     if (index < 0) {
-        return;
+        return kInvalidNodeId;
     }
 
+    NodeId expandedFolder = kInvalidNodeId;
     switch (key) {
     case VK_UP:
         if (index > 0) {
@@ -298,6 +306,7 @@ void FinderListView::onKeyDown(WPARAM key) {
         const FileNode& node = tree_->node(selected_);
         if (node.kind == FileKind::Folder && !node.expanded) {
             tree_->setExpanded(selected_, true);
+            expandedFolder = selected_;
             rebuildRows();
             ensureSelection();
             ensureSelectionVisible();
@@ -307,6 +316,8 @@ void FinderListView::onKeyDown(WPARAM key) {
     default:
         break;
     }
+
+    return expandedFolder;
 }
 
 }
