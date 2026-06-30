@@ -275,22 +275,22 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
-        if (wParam == VK_F2) {
+        if (wParam == VK_F2 && isActiveDirectoryLocation()) {
             renameContextNode();
             return 0;
         }
 
-        if (wParam == VK_DELETE) {
+        if (wParam == VK_DELETE && isActiveDirectoryLocation()) {
             moveContextNodeToTrash();
             return 0;
         }
 
-        if (wParam == L'C' && controlDown) {
+        if (wParam == L'C' && controlDown && isActiveDirectoryLocation()) {
             copyContextNode();
             return 0;
         }
 
-        if (wParam == L'X' && controlDown) {
+        if (wParam == L'X' && controlDown && isActiveDirectoryLocation()) {
             cutContextNode();
             return 0;
         }
@@ -534,22 +534,26 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
     const bool directoryLocation = isActiveDirectoryLocation();
     if (hasTarget) {
         AppendMenuW(menu, MF_STRING, kCommandOpen, L"Open");
-        if (singleTarget) {
-            AppendMenuW(menu, MF_STRING, kCommandRename, L"Rename");
-        }
-        AppendMenuW(menu, MF_STRING, kCommandCopy, L"Copy");
-        AppendMenuW(menu, MF_STRING, kCommandCut, L"Cut");
-        if (directoryLocation && fileOperationState_.hasPendingOperation()) {
-            AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
-        }
-        if (singleTarget && directoryLocation && targets.front() < tab.tree.nodes().size()
-            && tab.tree.node(targets.front()).kind == FileKind::Folder) {
-            AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
+        if (directoryLocation) {
+            if (singleTarget) {
+                AppendMenuW(menu, MF_STRING, kCommandRename, L"Rename");
+            }
+            AppendMenuW(menu, MF_STRING, kCommandCopy, L"Copy");
+            AppendMenuW(menu, MF_STRING, kCommandCut, L"Cut");
+            if (fileOperationState_.hasPendingOperation()) {
+                AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
+            }
+            if (singleTarget && targets.front() < tab.tree.nodes().size()
+                && tab.tree.node(targets.front()).kind == FileKind::Folder) {
+                AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
+            }
         }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING, kCommandReveal, L"Show in Explorer");
         AppendMenuW(menu, MF_STRING, kCommandCopyPath, L"Copy Path");
-        AppendMenuW(menu, MF_STRING, kCommandMoveToTrash, L"Move to Trash");
+        if (directoryLocation) {
+            AppendMenuW(menu, MF_STRING, kCommandMoveToTrash, L"Move to Trash");
+        }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     } else if (directoryLocation) {
         AppendMenuW(menu, MF_STRING, kCommandNewFolder, L"New Folder");
@@ -660,6 +664,10 @@ void MainWindow::openContextNode() {
 }
 
 void MainWindow::renameContextNode() {
+    if (!isActiveDirectoryLocation()) {
+        return;
+    }
+
     TabState& tab = activeTab();
     const std::vector<NodeId> targets = commandTargetNodes(true);
     if (targets.size() != 1 || targets.front() >= tab.tree.nodes().size()) {
@@ -683,6 +691,10 @@ void MainWindow::renameContextNode() {
 }
 
 void MainWindow::moveContextNodeToTrash() {
+    if (!isActiveDirectoryLocation()) {
+        return;
+    }
+
     const std::vector<NodeId> targets = commandTargetNodes(true);
     const std::vector<std::wstring> paths = pathsForNodes(targets);
     if (paths.empty()) {
@@ -699,6 +711,10 @@ void MainWindow::moveContextNodeToTrash() {
 }
 
 void MainWindow::copyContextNode() {
+    if (!isActiveDirectoryLocation()) {
+        return;
+    }
+
     const std::vector<NodeId> targets = commandTargetNodes(true);
     std::vector<std::wstring> paths = pathsForNodes(targets);
     if (paths.empty()) {
@@ -709,6 +725,10 @@ void MainWindow::copyContextNode() {
 }
 
 void MainWindow::cutContextNode() {
+    if (!isActiveDirectoryLocation()) {
+        return;
+    }
+
     const std::vector<NodeId> targets = commandTargetNodes(true);
     std::vector<std::wstring> paths = pathsForNodes(targets);
     if (paths.empty()) {
@@ -797,10 +817,9 @@ std::wstring MainWindow::powerShellTargetDirectory() const {
         return {};
     }
 
-    const NodeId target = commandTargetNode();
     const TabState& tab = activeTab();
-    if (target != kInvalidNodeId && target < tab.tree.nodes().size()) {
-        const FileNode& node = tab.tree.node(target);
+    if (contextNode_ != kInvalidNodeId && contextNode_ < tab.tree.nodes().size()) {
+        const FileNode& node = tab.tree.node(contextNode_);
         if (node.kind == FileKind::Folder) {
             return node.path;
         }
@@ -865,7 +884,7 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
     }
 
     if (activeTab().locationKind == TabState::LocationKind::ThisPc) {
-        return navigateToThisPc(HistoryMode::Replace);
+        return navigateToThisPc(HistoryMode::BackForward);
     }
 
     if (!isActiveDirectoryLocation()) {
