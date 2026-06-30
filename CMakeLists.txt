@@ -25,6 +25,14 @@ add_library(finderx_model
 target_include_directories(finderx_model PUBLIC src)
 finderx_enable_utf8(finderx_model)
 
+add_library(finderx_settings
+    src/settings/AppSettings.cpp
+)
+
+target_include_directories(finderx_settings PUBLIC src)
+finderx_enable_utf8(finderx_settings)
+finderx_enable_windows_unicode(finderx_settings)
+
 add_library(finderx_fs
     src/fs/FileMetadata.cpp
     src/fs/DirectoryLoader.cpp
@@ -81,6 +89,15 @@ target_link_libraries(finderx_navigation_tests PRIVATE finderx_navigation)
 finderx_enable_utf8(finderx_navigation_tests)
 finderx_enable_windows_unicode(finderx_navigation_tests)
 add_test(NAME finderx_navigation_tests COMMAND finderx_navigation_tests)
+
+add_executable(finderx_settings_tests
+    src/settings/AppSettingsTests.cpp
+)
+
+target_link_libraries(finderx_settings_tests PRIVATE finderx_settings)
+finderx_enable_utf8(finderx_settings_tests)
+finderx_enable_windows_unicode(finderx_settings_tests)
+add_test(NAME finderx_settings_tests COMMAND finderx_settings_tests)
 
 add_executable(finderx_rename_dialog_tests
     src/ui/RenameDialogTests.cpp
