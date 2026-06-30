@@ -48,6 +48,29 @@ std::wstring environmentVariable(const wchar_t* name) {
     return std::wstring(buffer, length);
 }
 
+std::wstring currentDirectoryDrive() {
+    wchar_t buffer[MAX_PATH]{};
+    const DWORD length = GetCurrentDirectoryW(MAX_PATH, buffer);
+    if (length >= 2 && length < MAX_PATH && buffer[1] == L':') {
+        return std::wstring(buffer, 2);
+    }
+    return L"";
+}
+
+std::wstring driveRootForHomePath() {
+    std::wstring systemDrive = environmentVariable(L"SystemDrive");
+    if (!systemDrive.empty()) {
+        return systemDrive;
+    }
+
+    std::wstring currentDrive = currentDirectoryDrive();
+    if (!currentDrive.empty()) {
+        return currentDrive;
+    }
+
+    return L"C:";
+}
+
 } // namespace
 
 bool DirectoryLoadResult::ok() const {
@@ -86,6 +109,11 @@ DirectoryLoadResult DirectoryLoader::loadChildrenWithStatus(const std::wstring& 
         result.children.push_back(std::move(node));
     } while (FindNextFileW(find, &data));
 
+    const DWORD enumerationError = GetLastError();
+    if (enumerationError != ERROR_NO_MORE_FILES) {
+        result.error = enumerationError;
+    }
+
     FindClose(find);
 
     std::stable_sort(result.children.begin(), result.children.end(), [](const FileNode& left, const FileNode& right) {
@@ -111,7 +139,7 @@ std::wstring defaultHomeDirectory() {
     }
 
     if (!homePath.empty() && (homePath.starts_with(L"\\") || homePath.starts_with(L"/"))) {
-        return homePath;
+        return driveRootForHomePath() + homePath;
     }
 
     return L"C:\\";

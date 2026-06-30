@@ -80,9 +80,24 @@ static void runTests() {
         require(defaultHomeDirectory() == L"D:\\Users\\Fallback", "HOMEDRIVE should combine with HOMEPATH");
     }
 
+    {
+        EnvironmentVariableGuard userProfile(L"USERPROFILE");
+        EnvironmentVariableGuard homeDrive(L"HOMEDRIVE");
+        EnvironmentVariableGuard homePath(L"HOMEPATH");
+        EnvironmentVariableGuard systemDrive(L"SystemDrive");
+        userProfile.set(nullptr);
+        homeDrive.set(nullptr);
+        homePath.set(L"\\Users\\Fallback");
+        systemDrive.set(L"E:");
+        require(defaultHomeDirectory() == L"E:\\Users\\Fallback",
+                "HOMEPATH without HOMEDRIVE should use SystemDrive");
+    }
+
     const auto tempRoot = std::filesystem::temp_directory_path() /
-                          (L"finderx_loader_test_" + std::to_wstring(GetCurrentProcessId()));
+                          (L"finderx_loader_test_" + std::to_wstring(GetCurrentProcessId()) +
+                           L"_" + std::to_wstring(GetTickCount64()));
     TempDirectoryCleanup cleanup(tempRoot);
+    std::filesystem::remove_all(tempRoot);
     std::filesystem::create_directories(tempRoot / "FolderA");
     std::filesystem::create_directories(tempRoot / "folderb");
     {
