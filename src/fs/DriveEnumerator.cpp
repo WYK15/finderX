@@ -28,6 +28,8 @@ FileNode driveNode(const std::wstring& root) {
     node.modified = L"--";
     node.size = L"--";
     node.kindText = L"Drive";
+    node.modifiedTicks = 0;
+    node.sizeBytes = 0;
     node.kind = FileKind::Folder;
     node.expanded = false;
     node.childrenLoaded = false;

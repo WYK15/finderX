@@ -15,6 +15,11 @@ unsigned long long fileSizeFromFindData(const WIN32_FIND_DATAW& data) {
     return value.QuadPart;
 }
 
+unsigned long long fileTimeTicks(const FILETIME& fileTime) {
+    return (static_cast<unsigned long long>(fileTime.dwHighDateTime) << 32) |
+           static_cast<unsigned long long>(fileTime.dwLowDateTime);
+}
+
 std::wstring joinSearchPattern(const std::wstring& directoryPath) {
     if (directoryPath.empty()) {
         return L"*";
@@ -98,13 +103,16 @@ DirectoryLoadResult DirectoryLoader::loadChildrenWithStatus(const std::wstring& 
         }
 
         const bool isDirectory = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        const unsigned long long sizeBytes = fileSizeFromFindData(data);
         FileNode node;
         node.name = name;
         node.path = joinPath(directoryPath, name);
         node.kind = isDirectory ? FileKind::Folder : FileKind::File;
         node.modified = formatFileTime(data.ftLastWriteTime);
-        node.size = formatFileSize(fileSizeFromFindData(data), isDirectory);
+        node.size = formatFileSize(sizeBytes, isDirectory);
         node.kindText = kindTextForAttributes(data.dwFileAttributes);
+        node.modifiedTicks = fileTimeTicks(data.ftLastWriteTime);
+        node.sizeBytes = isDirectory ? 0 : sizeBytes;
         node.childrenLoaded = false;
         result.children.push_back(std::move(node));
     } while (FindNextFileW(find, &data));

@@ -176,11 +176,15 @@ static void runTests() {
     require(loaded[0].kind == FileKind::Folder, "folders should sort before files");
     require(loaded[0].name == L"FolderA", "folder name should match");
     require(loaded[0].path == (tempRoot / "FolderA").wstring(), "folder path should match");
+    require(loaded[0].modifiedTicks > 0, "folder should expose raw modified ticks");
+    require(loaded[0].sizeBytes == 0, "folder raw size should be zero");
     require(!loaded[0].childrenLoaded, "folder children should not be marked loaded");
     require(loaded[1].name == L"folderb", "folder names should sort case-insensitively");
     require(loaded[2].name == L"File-A.txt", "file names should sort case-insensitively");
     require(loaded[3].name == L"file-b.txt", "file name should match");
     require(loaded[3].path == (tempRoot / "file-b.txt").wstring(), "file path should match");
+    require(loaded[3].modifiedTicks > 0, "file should expose raw modified ticks");
+    require(loaded[3].sizeBytes > 0, "file should expose raw size bytes");
 
     const auto wrapperLoaded = loader.loadChildren(tempRoot.wstring());
     require(wrapperLoaded.size() == loaded.size(), "loadChildren should return status result children");

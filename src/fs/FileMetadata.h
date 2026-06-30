@@ -16,6 +16,8 @@ struct FileMetadata {
     std::wstring modified;
     std::wstring size;
     std::wstring kindText;
+    unsigned long long modifiedTicks = 0;
+    unsigned long long sizeBytes = 0;
 };
 
 std::wstring formatFileSize(unsigned long long bytes, bool isDirectory);

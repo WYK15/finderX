@@ -36,12 +36,13 @@ finderx_enable_windows_unicode(finderx_settings)
 add_library(finderx_fs
     src/fs/FileMetadata.cpp
     src/fs/DirectoryLoader.cpp
+    src/fs/FileSorter.cpp
     src/fs/FileCreation.cpp
     src/fs/DriveEnumerator.cpp
 )
 
 target_include_directories(finderx_fs PUBLIC src)
-target_link_libraries(finderx_fs PUBLIC finderx_model)
+target_link_libraries(finderx_fs PUBLIC finderx_model finderx_settings)
 finderx_enable_utf8(finderx_fs)
 finderx_enable_windows_unicode(finderx_fs)
 
@@ -80,6 +81,15 @@ target_link_libraries(finderx_drive_enumerator_tests PRIVATE finderx_fs)
 finderx_enable_utf8(finderx_drive_enumerator_tests)
 finderx_enable_windows_unicode(finderx_drive_enumerator_tests)
 add_test(NAME finderx_drive_enumerator_tests COMMAND finderx_drive_enumerator_tests)
+
+add_executable(finderx_file_sorter_tests
+    src/fs/FileSorterTests.cpp
+)
+
+target_link_libraries(finderx_file_sorter_tests PRIVATE finderx_fs finderx_settings)
+finderx_enable_utf8(finderx_file_sorter_tests)
+finderx_enable_windows_unicode(finderx_file_sorter_tests)
+add_test(NAME finderx_file_sorter_tests COMMAND finderx_file_sorter_tests)
 
 add_executable(finderx_navigation_tests
     src/navigation/NavigationHistoryTests.cpp
