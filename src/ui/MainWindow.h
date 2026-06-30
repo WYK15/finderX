@@ -10,8 +10,10 @@
 #include "ui/FinderListView.h"
 #include "ui/RenderContext.h"
 
+#include <memory>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 #include <windows.h>
 
@@ -30,9 +32,26 @@ private:
         BackForward
     };
 
+    struct TabState {
+        FileTree tree;
+        FinderListView listView;
+        NavigationHistory history;
+        std::wstring searchText;
+        bool searchFocused = false;
+        std::wstring statusText;
+
+        TabState(std::wstring rootPath, std::wstring rootName)
+            : tree(std::move(rootPath), std::move(rootName)),
+              listView(&tree) {}
+    };
+
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam);
     LayoutRects currentLayout() const;
+    TabState& activeTab();
+    const TabState& activeTab() const;
+    bool hasActiveTab() const;
+    std::vector<std::wstring> tabTitles() const;
     void initializeFileTree();
     bool navigateToDirectory(std::wstring path, HistoryMode mode);
     void activateNode(NodeId nodeId);
@@ -77,17 +96,14 @@ private:
     RenderContext render_;
     FinderChrome chrome_;
     DirectoryLoader directoryLoader_;
-    FileTree tree_;
-    FinderListView listView_{&tree_};
-    NavigationHistory history_;
     SidebarModel sidebar_;
     ChromeState chromeState_;
     ui::FileOperationState fileOperationState_;
     std::wstring homePath_;
-    std::wstring searchText_;
+    std::vector<std::unique_ptr<TabState>> tabs_;
+    std::size_t activeTabIndex_ = 0;
     ui::DirectoryRefreshDebouncer directoryRefreshDebouncer_{ui::kDefaultDirectoryRefreshDebounceMs};
     HANDLE directoryChangeHandle_ = INVALID_HANDLE_VALUE;
-    bool searchFocused_ = false;
     NodeId contextNode_ = kInvalidNodeId;
 };
 

@@ -79,6 +79,37 @@ HWND MainWindow::hwnd() const {
     return hwnd_;
 }
 
+MainWindow::TabState& MainWindow::activeTab() {
+    return *tabs_.at(activeTabIndex_);
+}
+
+const MainWindow::TabState& MainWindow::activeTab() const {
+    return *tabs_.at(activeTabIndex_);
+}
+
+bool MainWindow::hasActiveTab() const {
+    return activeTabIndex_ < tabs_.size() && tabs_[activeTabIndex_] != nullptr;
+}
+
+std::vector<std::wstring> MainWindow::tabTitles() const {
+    std::vector<std::wstring> titles;
+    titles.reserve(tabs_.size());
+    for (const std::unique_ptr<TabState>& tab : tabs_) {
+        if (!tab) {
+            titles.push_back({});
+            continue;
+        }
+
+        const std::wstring& path = tab->history.currentPath();
+        std::wstring title = fileNameFromPath(path);
+        if (title.empty()) {
+            title = path;
+        }
+        titles.push_back(std::move(title));
+    }
+    return titles;
+}
+
 LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     MainWindow* window = nullptr;
 
@@ -136,14 +167,20 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
                 navigateToDirectory(chromeState_.sidebarItems[chromeHit.sidebarIndex].path, HistoryMode::Push);
             }
             return 0;
+        case ChromeHitKind::Tab:
+        case ChromeHitKind::NewTab:
+            return 0;
         case ChromeHitKind::None:
             break;
         }
 
         const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         const bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        if (!hasActiveTab()) {
+            return 0;
+        }
         blurSearch();
-        const ListInteractionResult result = listView_.onMouseDown(x, y, rects.list, controlDown, shiftDown);
+        const ListInteractionResult result = activeTab().listView.onMouseDown(x, y, rects.list, controlDown, shiftDown);
         loadChildrenIfNeeded(result.expandedFolder);
         activateNode(result.activatedNode);
         if (result.changed) {
@@ -153,6 +190,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     }
     case WM_RBUTTONDOWN: {
         SetFocus(hwnd_);
+        if (!hasActiveTab()) {
+            return 0;
+        }
         const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         const D2D1_POINT_2F dipPoint = render_.clientPointToDips(clientPoint);
         POINT screenPoint = clientPoint;
@@ -168,7 +208,8 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         const float x = dipPoint.x;
         const float y = dipPoint.y;
         if (x >= rects.list.left && x <= rects.list.right && y >= rects.list.top && y <= rects.list.bottom
-            && listView_.onWheel(GET_WHEEL_DELTA_WPARAM(wParam))) {
+            && hasActiveTab()
+            && activeTab().listView.onWheel(GET_WHEEL_DELTA_WPARAM(wParam))) {
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
         return 0;
@@ -187,6 +228,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
         return 0;
     case WM_CHAR:
+        if (!hasActiveTab()) {
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
+        }
         if (handleSearchChar(wParam)) {
             return 0;
         }
@@ -195,6 +239,10 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         contextNode_ = kInvalidNodeId;
         const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         const bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+
+        if (!hasActiveTab()) {
+            return DefWindowProcW(hwnd_, message, wParam, lParam);
+        }
 
         if (wParam == L'F' && controlDown) {
             focusSearch();
@@ -240,7 +288,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
-        const ListInteractionResult result = listView_.onKeyDown(wParam, controlDown, shiftDown);
+        const ListInteractionResult result = activeTab().listView.onKeyDown(wParam, controlDown, shiftDown);
         loadChildrenIfNeeded(result.expandedFolder);
         activateNode(result.activatedNode);
         if (result.changed) {
@@ -298,26 +346,32 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
         rootName = path;
     }
 
-    tree_ = FileTree(path, std::move(rootName));
-    tree_.replaceChildren(tree_.rootId(), std::move(result.children));
-    listView_ = FinderListView(&tree_);
-    searchText_.clear();
-    searchFocused_ = false;
-    listView_.setFilterText(L"");
+    if (!hasActiveTab()) {
+        tabs_.push_back(std::make_unique<TabState>(path, rootName));
+        activeTabIndex_ = tabs_.size() - 1;
+    }
+
+    TabState& tab = activeTab();
+    tab.tree = FileTree(path, std::move(rootName));
+    tab.tree.replaceChildren(tab.tree.rootId(), std::move(result.children));
+    tab.listView = FinderListView(&tab.tree);
+    tab.searchText.clear();
+    tab.searchFocused = false;
+    tab.listView.setFilterText(L"");
 
     switch (mode) {
     case HistoryMode::Initial:
     case HistoryMode::Replace:
-        history_.setInitialPath(std::move(path));
+        tab.history.setInitialPath(std::move(path));
         break;
     case HistoryMode::Push:
-        history_.navigateTo(std::move(path));
+        tab.history.navigateTo(std::move(path));
         break;
     case HistoryMode::BackForward:
         break;
     }
 
-    chromeState_.statusText.clear();
+    tab.statusText.clear();
     startDirectoryWatcher(watchedPath);
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -325,11 +379,12 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
 }
 
 void MainWindow::activateNode(NodeId nodeId) {
-    if (nodeId == kInvalidNodeId || nodeId >= tree_.nodes().size()) {
+    TabState& tab = activeTab();
+    if (nodeId == kInvalidNodeId || nodeId >= tab.tree.nodes().size()) {
         return;
     }
 
-    const FileNode& node = tree_.node(nodeId);
+    const FileNode& node = tab.tree.node(nodeId);
     if (node.kind == FileKind::Folder) {
         navigateToDirectory(node.path, HistoryMode::Push);
     } else {
@@ -349,13 +404,14 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
         return;
     }
 
-    contextNode_ = listView_.nodeAtPoint(
+    TabState& tab = activeTab();
+    contextNode_ = tab.listView.nodeAtPoint(
         clientPoint.x,
         clientPoint.y,
         rects.list);
 
     const bool hasTarget = contextNode_ != kInvalidNodeId;
-    if (hasTarget && !listView_.isSelected(contextNode_) && listView_.selectNode(contextNode_)) {
+    if (hasTarget && !tab.listView.isSelected(contextNode_) && tab.listView.selectNode(contextNode_)) {
         InvalidateRect(hwnd_, nullptr, FALSE);
     }
 
@@ -426,27 +482,29 @@ void MainWindow::handleCommand(WPARAM wParam) {
 }
 
 NodeId MainWindow::commandTargetNode() const {
-    if (contextNode_ != kInvalidNodeId && contextNode_ < tree_.nodes().size()) {
+    const TabState& tab = activeTab();
+    if (contextNode_ != kInvalidNodeId && contextNode_ < tab.tree.nodes().size()) {
         return contextNode_;
     }
 
-    return listView_.selectedNode();
+    return tab.listView.selectedNode();
 }
 
 std::vector<NodeId> MainWindow::commandTargetNodes(bool includeSelection) const {
-    if (contextNode_ != kInvalidNodeId && contextNode_ < tree_.nodes().size()) {
-        if (includeSelection && listView_.isSelected(contextNode_)) {
-            return listView_.selectedNodes();
+    const TabState& tab = activeTab();
+    if (contextNode_ != kInvalidNodeId && contextNode_ < tab.tree.nodes().size()) {
+        if (includeSelection && tab.listView.isSelected(contextNode_)) {
+            return tab.listView.selectedNodes();
         }
         return {contextNode_};
     }
 
     if (includeSelection) {
-        return listView_.selectedNodes();
+        return tab.listView.selectedNodes();
     }
 
     const NodeId target = commandTargetNode();
-    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+    if (target == kInvalidNodeId || target >= tab.tree.nodes().size()) {
         return {};
     }
     return {target};
@@ -455,9 +513,10 @@ std::vector<NodeId> MainWindow::commandTargetNodes(bool includeSelection) const 
 std::vector<std::wstring> MainWindow::pathsForNodes(std::span<const NodeId> nodes) const {
     std::vector<std::wstring> paths;
     paths.reserve(nodes.size());
+    const TabState& tab = activeTab();
     for (const NodeId node : nodes) {
-        if (node != kInvalidNodeId && node < tree_.nodes().size()) {
-            paths.push_back(tree_.node(node).path);
+        if (node != kInvalidNodeId && node < tab.tree.nodes().size()) {
+            paths.push_back(tab.tree.node(node).path);
         }
     }
     return paths;
@@ -465,20 +524,21 @@ std::vector<std::wstring> MainWindow::pathsForNodes(std::span<const NodeId> node
 
 void MainWindow::openContextNode() {
     const NodeId target = commandTargetNode();
-    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+    if (target == kInvalidNodeId || target >= activeTab().tree.nodes().size()) {
         return;
     }
     activateNode(target);
 }
 
 void MainWindow::renameContextNode() {
+    TabState& tab = activeTab();
     const std::vector<NodeId> targets = commandTargetNodes(true);
-    if (targets.size() != 1 || targets.front() >= tree_.nodes().size()) {
+    if (targets.size() != 1 || targets.front() >= tab.tree.nodes().size()) {
         return;
     }
 
     const NodeId target = targets.front();
-    const FileNode& node = tree_.node(target);
+    const FileNode& node = tab.tree.node(target);
     std::wstring newName;
     if (!ui::promptForRename(hwnd_, node.name, newName)) {
         return;
@@ -534,7 +594,7 @@ void MainWindow::pasteIntoCurrentDirectory() {
         return;
     }
 
-    const std::wstring currentPath = history_.currentPath();
+    const std::wstring currentPath = activeTab().history.currentPath();
     if (currentPath.empty()) {
         setStatusText(L"Cannot paste here");
         return;
@@ -570,28 +630,35 @@ void MainWindow::pasteIntoCurrentDirectory() {
 
 void MainWindow::revealContextNode() {
     const NodeId target = commandTargetNode();
-    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+    const TabState& tab = activeTab();
+    if (target == kInvalidNodeId || target >= tab.tree.nodes().size()) {
         return;
     }
 
-    if (!shell::revealInExplorer(hwnd_, tree_.node(target).path)) {
+    if (!shell::revealInExplorer(hwnd_, tab.tree.node(target).path)) {
         setStatusText(L"Cannot show in Explorer");
     }
 }
 
 void MainWindow::copyContextNodePath() {
     const NodeId target = commandTargetNode();
-    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+    const TabState& tab = activeTab();
+    if (target == kInvalidNodeId || target >= tab.tree.nodes().size()) {
         return;
     }
 
-    if (!shell::copyPathToClipboard(hwnd_, tree_.node(target).path)) {
+    if (!shell::copyPathToClipboard(hwnd_, tab.tree.node(target).path)) {
         setStatusText(L"Cannot copy path");
     }
 }
 
 bool MainWindow::refreshCurrentDirectory() {
-    const std::vector<NodeId> selectedNodes = listView_.selectedNodes();
+    if (!hasActiveTab()) {
+        setStatusText(L"Cannot refresh folder");
+        return false;
+    }
+
+    const std::vector<NodeId> selectedNodes = activeTab().listView.selectedNodes();
     const std::vector<std::wstring> selectedPaths = pathsForNodes(selectedNodes);
     return refreshCurrentDirectorySelecting(selectedPaths);
 }
@@ -604,7 +671,8 @@ bool MainWindow::refreshCurrentDirectorySelecting(const std::wstring& selectedPa
 }
 
 bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> selectedPaths) {
-    const std::wstring currentPath = history_.currentPath();
+    TabState& tab = activeTab();
+    const std::wstring currentPath = tab.history.currentPath();
     if (currentPath.empty()) {
         setStatusText(L"Cannot refresh folder");
         return false;
@@ -621,37 +689,38 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
         rootName = currentPath;
     }
 
-    tree_ = FileTree(currentPath, std::move(rootName));
-    tree_.replaceChildren(tree_.rootId(), std::move(result.children));
-    listView_ = FinderListView(&tree_);
-    listView_.setFilterText(searchText_);
+    tab.tree = FileTree(currentPath, std::move(rootName));
+    tab.tree.replaceChildren(tab.tree.rootId(), std::move(result.children));
+    tab.listView = FinderListView(&tab.tree);
+    tab.listView.setFilterText(tab.searchText);
     std::vector<NodeId> restored;
     restored.reserve(selectedPaths.size());
     for (const std::wstring& selectedPath : selectedPaths) {
         if (selectedPath.empty()) {
             continue;
         }
-        for (const FileNode& node : tree_.nodes()) {
+        for (const FileNode& node : tab.tree.nodes()) {
             if (node.path == selectedPath) {
                 restored.push_back(node.id);
                 break;
             }
         }
     }
-    listView_.selectNodes(restored);
+    tab.listView.selectNodes(restored);
     contextNode_ = kInvalidNodeId;
-    chromeState_.statusText.clear();
+    tab.statusText.clear();
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
     return true;
 }
 
 std::wstring MainWindow::selectedNodePath() const {
-    const NodeId selected = listView_.selectedNode();
-    if (selected == kInvalidNodeId || selected >= tree_.nodes().size()) {
+    const TabState& tab = activeTab();
+    const NodeId selected = tab.listView.selectedNode();
+    if (selected == kInvalidNodeId || selected >= tab.tree.nodes().size()) {
         return {};
     }
-    return tree_.node(selected).path;
+    return tab.tree.node(selected).path;
 }
 
 bool MainWindow::selectNodeByPath(const std::wstring& path) {
@@ -659,43 +728,71 @@ bool MainWindow::selectNodeByPath(const std::wstring& path) {
         return false;
     }
 
-    for (const FileNode& node : tree_.nodes()) {
+    TabState& tab = activeTab();
+    for (const FileNode& node : tab.tree.nodes()) {
         if (node.path == path) {
-            return listView_.selectNode(node.id);
+            return tab.listView.selectNode(node.id);
         }
     }
     return false;
 }
 
 void MainWindow::refreshChromeState() {
-    std::wstring title = fileNameFromPath(history_.currentPath());
+    if (!hasActiveTab()) {
+        chromeState_.title.clear();
+        chromeState_.pathText.clear();
+        chromeState_.canGoBack = false;
+        chromeState_.canGoForward = false;
+        sidebar_.refresh(homePath_, L"");
+        chromeState_.sidebarItems = sidebar_.items();
+        chromeState_.searchText.clear();
+        chromeState_.searchFocused = false;
+        chromeState_.tabTitles = tabTitles();
+        chromeState_.activeTabIndex = activeTabIndex_;
+        return;
+    }
+
+    const TabState& tab = activeTab();
+    std::wstring title = fileNameFromPath(tab.history.currentPath());
     if (title.empty()) {
-        title = history_.currentPath();
+        title = tab.history.currentPath();
     }
 
     chromeState_.title = std::move(title);
-    chromeState_.pathText = history_.currentPath();
-    chromeState_.canGoBack = history_.canGoBack();
-    chromeState_.canGoForward = history_.canGoForward();
+    chromeState_.pathText = tab.history.currentPath();
+    chromeState_.canGoBack = tab.history.canGoBack();
+    chromeState_.canGoForward = tab.history.canGoForward();
 
-    sidebar_.refresh(homePath_, history_.currentPath());
+    sidebar_.refresh(homePath_, tab.history.currentPath());
     chromeState_.sidebarItems = sidebar_.items();
-    chromeState_.searchText = searchText_;
-    chromeState_.searchFocused = searchFocused_;
+    chromeState_.searchText = tab.searchText;
+    chromeState_.searchFocused = tab.searchFocused;
+    chromeState_.statusText = tab.statusText;
+    chromeState_.tabTitles = tabTitles();
+    chromeState_.activeTabIndex = activeTabIndex_;
 }
 
 void MainWindow::focusSearch() {
-    searchFocused_ = true;
+    if (!hasActiveTab()) {
+        return;
+    }
+
+    activeTab().searchFocused = true;
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void MainWindow::blurSearch() {
-    if (!searchFocused_) {
+    if (!hasActiveTab()) {
         return;
     }
 
-    searchFocused_ = false;
+    TabState& tab = activeTab();
+    if (!tab.searchFocused) {
+        return;
+    }
+
+    tab.searchFocused = false;
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -705,31 +802,41 @@ void MainWindow::clearSearch() {
 }
 
 void MainWindow::setSearchText(std::wstring text) {
-    if (searchText_ == text) {
+    if (!hasActiveTab()) {
         return;
     }
 
-    searchText_ = std::move(text);
-    listView_.setFilterText(searchText_);
+    TabState& tab = activeTab();
+    if (tab.searchText == text) {
+        return;
+    }
+
+    tab.searchText = std::move(text);
+    tab.listView.setFilterText(tab.searchText);
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 bool MainWindow::handleSearchKeyDown(WPARAM key) {
-    if (!searchFocused_) {
+    if (!hasActiveTab()) {
+        return false;
+    }
+
+    TabState& tab = activeTab();
+    if (!tab.searchFocused) {
         return false;
     }
 
     switch (key) {
     case VK_BACK:
-        if (!searchText_.empty()) {
-            std::wstring next = searchText_;
+        if (!tab.searchText.empty()) {
+            std::wstring next = tab.searchText;
             next.pop_back();
             setSearchText(std::move(next));
         }
         return true;
     case VK_ESCAPE:
-        if (!searchText_.empty()) {
+        if (!tab.searchText.empty()) {
             clearSearch();
         } else {
             blurSearch();
@@ -744,12 +851,17 @@ bool MainWindow::handleSearchKeyDown(WPARAM key) {
 }
 
 bool MainWindow::handleSearchChar(WPARAM character) {
-    if (!searchFocused_) {
+    if (!hasActiveTab()) {
+        return false;
+    }
+
+    TabState& tab = activeTab();
+    if (!tab.searchFocused) {
         return false;
     }
 
     if (character >= 32 && character != 127) {
-        std::wstring next = searchText_;
+        std::wstring next = tab.searchText;
         next.push_back(static_cast<wchar_t>(character));
         setSearchText(std::move(next));
     }
@@ -822,58 +934,73 @@ void MainWindow::consumeDirectoryRefresh() {
 }
 
 void MainWindow::goBack() {
-    if (!history_.canGoBack()) {
+    if (!hasActiveTab()) {
         return;
     }
 
-    const std::wstring target = history_.backTarget();
+    TabState& tab = activeTab();
+    if (!tab.history.canGoBack()) {
+        return;
+    }
+
+    const std::wstring target = tab.history.backTarget();
     if (!navigateToDirectory(target, HistoryMode::BackForward)) {
         return;
     }
 
-    history_.goBack();
+    activeTab().history.goBack();
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void MainWindow::goForward() {
-    if (!history_.canGoForward()) {
+    if (!hasActiveTab()) {
         return;
     }
 
-    const std::wstring target = history_.forwardTarget();
+    TabState& tab = activeTab();
+    if (!tab.history.canGoForward()) {
+        return;
+    }
+
+    const std::wstring target = tab.history.forwardTarget();
     if (!navigateToDirectory(target, HistoryMode::BackForward)) {
         return;
     }
 
-    history_.goForward();
+    activeTab().history.goForward();
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void MainWindow::setStatusText(std::wstring text) {
-    chromeState_.statusText = std::move(text);
+    if (hasActiveTab()) {
+        activeTab().statusText = std::move(text);
+    } else {
+        chromeState_.statusText = std::move(text);
+    }
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void MainWindow::loadChildrenIfNeeded(NodeId folder) {
-    if (folder == kInvalidNodeId || folder >= tree_.nodes().size()) {
+    TabState& tab = activeTab();
+    if (folder == kInvalidNodeId || folder >= tab.tree.nodes().size()) {
         return;
     }
 
-    const FileNode& node = tree_.node(folder);
+    const FileNode& node = tab.tree.node(folder);
     if (node.kind != FileKind::Folder || node.childrenLoaded) {
         return;
     }
 
     const DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(node.path);
     if (!result.ok()) {
-        tree_.setExpanded(folder, false);
+        tab.tree.setExpanded(folder, false);
         return;
     }
 
-    tree_.replaceChildren(folder, result.children);
+    tab.tree.replaceChildren(folder, result.children);
 }
 
 void MainWindow::paint() {
@@ -890,7 +1017,9 @@ void MainWindow::paint() {
     render_.beginDraw();
     render_.clear(D2D1::ColorF(1.0f, 1.0f, 1.0f));
     chrome_.draw(render_, rects, chromeState_);
-    listView_.draw(render_, rects.list);
+    if (hasActiveTab()) {
+        activeTab().listView.draw(render_, rects.list);
+    }
     const bool targetLost = render_.endDraw();
 
     EndPaint(hwnd_, &paint);
