@@ -6,6 +6,7 @@ out/
 *.VC.db
 *.VC.VC.opendb
 .superpowers/
+.worktrees/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
