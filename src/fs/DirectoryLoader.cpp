@@ -50,13 +50,22 @@ std::wstring environmentVariable(const wchar_t* name) {
 
 } // namespace
 
+bool DirectoryLoadResult::ok() const {
+    return error == ERROR_SUCCESS;
+}
+
 std::vector<FileNode> DirectoryLoader::loadChildren(const std::wstring& directoryPath) const {
-    std::vector<FileNode> nodes;
+    return loadChildrenWithStatus(directoryPath).children;
+}
+
+DirectoryLoadResult DirectoryLoader::loadChildrenWithStatus(const std::wstring& directoryPath) const {
+    DirectoryLoadResult result;
     WIN32_FIND_DATAW data{};
     const std::wstring pattern = joinSearchPattern(directoryPath);
     HANDLE find = FindFirstFileW(pattern.c_str(), &data);
     if (find == INVALID_HANDLE_VALUE) {
-        return nodes;
+        result.error = GetLastError();
+        return result;
     }
 
     do {
@@ -74,19 +83,19 @@ std::vector<FileNode> DirectoryLoader::loadChildren(const std::wstring& director
         node.size = formatFileSize(fileSizeFromFindData(data), isDirectory);
         node.kindText = kindTextForAttributes(data.dwFileAttributes);
         node.childrenLoaded = false;
-        nodes.push_back(std::move(node));
+        result.children.push_back(std::move(node));
     } while (FindNextFileW(find, &data));
 
     FindClose(find);
 
-    std::stable_sort(nodes.begin(), nodes.end(), [](const FileNode& left, const FileNode& right) {
+    std::stable_sort(result.children.begin(), result.children.end(), [](const FileNode& left, const FileNode& right) {
         if (left.kind != right.kind) {
             return left.kind == FileKind::Folder;
         }
         return _wcsicmp(left.name.c_str(), right.name.c_str()) < 0;
     });
 
-    return nodes;
+    return result;
 }
 
 std::wstring defaultHomeDirectory() {
@@ -95,9 +104,14 @@ std::wstring defaultHomeDirectory() {
         return home;
     }
 
-    home = environmentVariable(L"HOMEPATH");
-    if (!home.empty()) {
-        return home;
+    const std::wstring homeDrive = environmentVariable(L"HOMEDRIVE");
+    const std::wstring homePath = environmentVariable(L"HOMEPATH");
+    if (!homeDrive.empty() && !homePath.empty()) {
+        return homeDrive + homePath;
+    }
+
+    if (!homePath.empty() && (homePath.starts_with(L"\\") || homePath.starts_with(L"/"))) {
+        return homePath;
     }
 
     return L"C:\\";
