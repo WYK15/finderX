@@ -78,6 +78,23 @@ D2D1_COLOR_F navigationColor(bool enabled) {
     return enabled ? D2D1::ColorF(0.20f, 0.20f, 0.20f) : D2D1::ColorF(0.68f, 0.68f, 0.68f);
 }
 
+const ChromeState& defaultChromeState() {
+    static const ChromeState state{
+        L"home",
+        L"Macintosh HD > Users > leo > home > environments > androidEnv > platform-tools",
+        L"",
+        false,
+        false,
+        {
+            {L"Applications", L"", true, false},
+            {L"Documents", L"", true, false},
+            {L"Desktop", L"", true, false},
+            {L"Home", L"", true, true},
+            {L"Downloads", L"", true, false},
+        }};
+    return state;
+}
+
 }
 
 LayoutRects FinderChrome::layout(float width, float height) const {
@@ -98,7 +115,7 @@ LayoutRects FinderChrome::layout(float width, float height) const {
 }
 
 void FinderChrome::draw(RenderContext& render, const LayoutRects& rects) {
-    draw(render, rects, ChromeState{});
+    draw(render, rects, defaultChromeState());
 }
 
 void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const ChromeState& state) {
@@ -265,7 +282,7 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
     for (std::size_t index = 0; index < state.sidebarItems.size(); ++index) {
         const SidebarItem& item = state.sidebarItems[index];
         const float rowY = kSidebarRowStartY + (static_cast<float>(index) * kSidebarRowStep);
-        const D2D1_RECT_F rowRect = D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, kSidebarRowRight, rowY + 22.0f);
+        const D2D1_RECT_F rowRect = D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, kSidebarRowRight, rowY + 24.0f);
         if (item.available && containsPoint(rowRect, x, y)) {
             return {ChromeHitKind::SidebarItem, index};
         }
