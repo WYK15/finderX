@@ -75,6 +75,11 @@ void FileTree::replaceChildren(NodeId parent, std::vector<FileNode> children) {
         throw std::invalid_argument("parent must be a folder");
     }
 
+    const std::vector<NodeId> oldChildren = node(parent).children;
+    for (NodeId child : oldChildren) {
+        detachSubtree(child);
+    }
+
     node(parent).children.clear();
     for (FileNode child : children) {
         addNode(parent, std::move(child.name), std::move(child.path), child.kind,
@@ -91,7 +96,10 @@ void FileTree::setExpanded(NodeId id, bool expanded) {
 }
 
 void FileTree::setChildrenLoaded(NodeId id, bool loaded) {
-    node(id).childrenLoaded = loaded;
+    FileNode& item = node(id);
+    if (item.kind == FileKind::Folder) {
+        item.childrenLoaded = loaded;
+    }
 }
 
 void FileTree::toggleExpanded(NodeId id) {
@@ -107,6 +115,19 @@ std::vector<VisibleRow> FileTree::flatten() const {
         flattenFrom(child, 0, rows);
     }
     return rows;
+}
+
+void FileTree::detachSubtree(NodeId id) {
+    FileNode& item = node(id);
+    const std::vector<NodeId> children = item.children;
+    for (NodeId child : children) {
+        detachSubtree(child);
+    }
+
+    item.children.clear();
+    item.parent = kInvalidNodeId;
+    item.expanded = false;
+    item.childrenLoaded = false;
 }
 
 void FileTree::flattenFrom(NodeId id, int depth, std::vector<VisibleRow>& rows) const {

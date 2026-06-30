@@ -30,6 +30,7 @@ public:
     static FileTree sample();
 
 private:
+    void detachSubtree(NodeId id);
     void flattenFrom(NodeId id, int depth, std::vector<VisibleRow>& rows) const;
 
     std::vector<FileNode> nodes_;

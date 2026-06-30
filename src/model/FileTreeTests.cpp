@@ -54,13 +54,41 @@ int main() {
     require(realTree.node(realTree.rootId()).childrenLoaded, "replaceChildren should mark loaded");
     auto realRows = realTree.flatten();
     require(realRows.size() == 1, "real tree should flatten replaced child");
-    require(realTree.node(realRows.front().nodeId).path == L"C:\\Users\\Example\\Documents", "child path should be stored");
+    const NodeId oldChild = realRows.front().nodeId;
+    require(realTree.node(oldChild).path == L"C:\\Users\\Example\\Documents", "child path should be stored");
+
+    const NodeId oldGrandchild = realTree.addNode(oldChild, L"Nested", L"C:\\Users\\Example\\Documents\\Nested",
+                                                  FileKind::Folder, L"", L"--", L"Folder");
+    realTree.setExpanded(oldChild, true);
+    realTree.setChildrenLoaded(oldChild, true);
+
+    std::vector<FileNode> replacementChildren;
+    FileNode replacementChild;
+    replacementChild.name = L"Desktop";
+    replacementChild.path = L"C:\\Users\\Example\\Desktop";
+    replacementChild.kind = FileKind::Folder;
+    replacementChild.size = L"--";
+    replacementChild.kindText = L"Folder";
+    replacementChildren.push_back(std::move(replacementChild));
+
+    realTree.replaceChildren(realTree.rootId(), std::move(replacementChildren));
+    require(realTree.node(oldChild).parent == kInvalidNodeId, "replaced child should be detached from parent");
+    require(realTree.node(oldChild).children.empty(), "detached child should not retain children");
+    require(!realTree.node(oldChild).expanded, "detached child should be collapsed");
+    require(!realTree.node(oldChild).childrenLoaded, "detached child should not remain loaded");
+    require(realTree.node(oldGrandchild).parent == kInvalidNodeId, "detached grandchild should be detached");
+    realRows = realTree.flatten();
+    require(realRows.size() == 1, "real tree should only flatten replacement child");
+    require(realTree.node(realRows.front().nodeId).name == L"Desktop", "replacement child should be visible");
 
     realTree.setChildrenLoaded(realTree.rootId(), false);
     require(!realTree.node(realTree.rootId()).childrenLoaded, "setChildrenLoaded should update loaded state");
 
     const NodeId realFile = realTree.addNode(realTree.rootId(), L"file.txt", L"C:\\Users\\Example\\file.txt",
                                              FileKind::File, L"", L"0 bytes", L"Text");
+    realTree.setChildrenLoaded(realFile, true);
+    require(!realTree.node(realFile).childrenLoaded, "setChildrenLoaded should ignore file nodes");
+
     bool rejectedReplaceOnFile = false;
     try {
         realTree.replaceChildren(realFile, {});
