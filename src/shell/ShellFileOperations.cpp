@@ -86,7 +86,7 @@ FileOperationResult renamePath(HWND, const std::wstring& oldPath, const std::wst
 FileOperationResult moveToTrash(HWND owner, const std::wstring& path) {
     constexpr wchar_t failureMessage[] = L"Cannot move item to trash";
 
-    if (path.empty()) {
+    if (path.empty() || !std::filesystem::path(path).is_absolute()) {
         return failed(failureMessage);
     }
 
