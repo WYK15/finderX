@@ -11,6 +11,18 @@ constexpr float kToolbarHeight = 53.0f;
 constexpr float kHeaderBottom = 81.0f;
 constexpr float kPathbarHeight = 28.0f;
 constexpr float kMinTextWidth = 20.0f;
+constexpr float kSidebarHeaderTop = 70.0f;
+constexpr float kSidebarRowStartY = 94.0f;
+constexpr float kSidebarRowStep = 28.0f;
+constexpr float kSidebarRowLeft = 24.0f;
+constexpr float kSidebarRowRight = 164.0f;
+constexpr float kSidebarTextLeft = 34.0f;
+constexpr float kBackLeftOffset = 18.0f;
+constexpr float kBackRightOffset = 48.0f;
+constexpr float kForwardLeftOffset = 52.0f;
+constexpr float kForwardRightOffset = 86.0f;
+constexpr float kToolbarButtonTop = 12.0f;
+constexpr float kToolbarButtonBottom = 44.0f;
 
 D2D1_COLOR_F rgb(float value) {
     return D2D1::ColorF(value, value, value);
@@ -22,6 +34,10 @@ float clampNonNegative(float value) {
 
 bool hasArea(const D2D1_RECT_F& rect) {
     return rect.left < rect.right && rect.top < rect.bottom;
+}
+
+bool containsPoint(const D2D1_RECT_F& rect, float x, float y) {
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 }
 
 D2D1_RECT_F clampRect(const D2D1_RECT_F& rect, const D2D1_RECT_F& bounds) {
@@ -58,6 +74,10 @@ void drawSeparator(RenderContext& render, float x, float top, float bottom) {
         D2D1::ColorF(0.82f, 0.82f, 0.82f));
 }
 
+D2D1_COLOR_F navigationColor(bool enabled) {
+    return enabled ? D2D1::ColorF(0.20f, 0.20f, 0.20f) : D2D1::ColorF(0.68f, 0.68f, 0.68f);
+}
+
 }
 
 LayoutRects FinderChrome::layout(float width, float height) const {
@@ -78,7 +98,12 @@ LayoutRects FinderChrome::layout(float width, float height) const {
 }
 
 void FinderChrome::draw(RenderContext& render, const LayoutRects& rects) {
+    draw(render, rects, ChromeState{});
+}
+
+void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const ChromeState& state) {
     const D2D1_RECT_F window = D2D1::RectF(0.0f, 0.0f, rects.pathbar.right, rects.sidebar.bottom);
+    const std::wstring_view title = state.title.empty() ? std::wstring_view(L"FinderX") : std::wstring_view(state.title);
 
     render.fillRect(rects.sidebar, D2D1::ColorF(0.92f, 0.93f, 0.94f));
     render.fillRect(rects.toolbar, D2D1::ColorF(0.97f, 0.97f, 0.965f));
@@ -104,38 +129,50 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects) {
     drawTextClipped(
         render,
         L"FAVORITES",
-        D2D1::RectF(18.0f, 70.0f, 150.0f, 91.0f),
+        D2D1::RectF(18.0f, kSidebarHeaderTop, 150.0f, 91.0f),
         rects.sidebar,
         render.headerTextFormat(),
         D2D1::ColorF(0.50f, 0.50f, 0.50f));
-    drawTextClipped(
-        render,
-        L"Applications\nDocuments\nDesktop\nHome\nDownloads",
-        D2D1::RectF(34.0f, 94.0f, 160.0f, 220.0f),
-        rects.sidebar,
-        render.textFormat(),
-        D2D1::ColorF(0.16f, 0.16f, 0.16f));
-    render.fillRoundedRect(
-        D2D1::RoundedRect(clampRect(D2D1::RectF(24.0f, 174.0f, 164.0f, 200.0f), rects.sidebar), 6.0f, 6.0f),
-        D2D1::ColorF(0.80f, 0.82f, 0.84f));
-    drawTextClipped(
-        render,
-        L"Home",
-        D2D1::RectF(54.0f, 178.0f, 150.0f, 198.0f),
-        rects.sidebar,
-        render.textFormat(),
-        D2D1::ColorF(0.10f, 0.10f, 0.10f));
+
+    for (std::size_t index = 0; index < state.sidebarItems.size(); ++index) {
+        const SidebarItem& item = state.sidebarItems[index];
+        const float rowY = kSidebarRowStartY + (static_cast<float>(index) * kSidebarRowStep);
+
+        if (item.selected) {
+            render.fillRoundedRect(
+                D2D1::RoundedRect(
+                    clampRect(D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, kSidebarRowRight, rowY + 24.0f), rects.sidebar),
+                    6.0f,
+                    6.0f),
+                D2D1::ColorF(0.80f, 0.82f, 0.84f));
+        }
+
+        drawTextClipped(
+            render,
+            item.label,
+            D2D1::RectF(kSidebarTextLeft, rowY + 2.0f, 160.0f, rowY + 22.0f),
+            rects.sidebar,
+            render.textFormat(),
+            item.available ? D2D1::ColorF(0.16f, 0.16f, 0.16f) : D2D1::ColorF(0.58f, 0.58f, 0.58f));
+    }
 
     drawTextClipped(
         render,
-        L"\u2039   \u203a",
-        D2D1::RectF(rects.toolbar.left + 22.0f, 15.0f, rects.toolbar.left + 92.0f, 43.0f),
+        L"\u2039",
+        D2D1::RectF(rects.toolbar.left + 22.0f, 15.0f, rects.toolbar.left + 44.0f, 43.0f),
         rects.toolbar,
         render.textFormat(),
-        D2D1::ColorF(0.56f, 0.56f, 0.56f));
+        navigationColor(state.canGoBack));
     drawTextClipped(
         render,
-        L"home",
+        L"\u203a",
+        D2D1::RectF(rects.toolbar.left + 56.0f, 15.0f, rects.toolbar.left + 82.0f, 43.0f),
+        rects.toolbar,
+        render.textFormat(),
+        navigationColor(state.canGoForward));
+    drawTextClipped(
+        render,
+        title,
         D2D1::RectF(rects.toolbar.left + 106.0f, 16.0f, rects.toolbar.left + 240.0f, 45.0f),
         rects.toolbar,
         render.headerTextFormat(),
@@ -199,11 +236,42 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects) {
 
     drawTextClipped(
         render,
-        L"Macintosh HD > Users > leo > home > environments > androidEnv > platform-tools",
+        state.statusText.empty() ? std::wstring_view(state.pathText) : std::wstring_view(state.statusText),
         D2D1::RectF(rects.pathbar.left + 14.0f, rects.pathbar.top + 5.0f, rects.pathbar.right - 12.0f, rects.pathbar.bottom),
         window,
         render.textFormat(),
-        D2D1::ColorF(0.34f, 0.34f, 0.34f));
+        state.statusText.empty() ? D2D1::ColorF(0.34f, 0.34f, 0.34f) : D2D1::ColorF(0.72f, 0.18f, 0.16f));
+}
+
+ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects, const ChromeState& state) const {
+    const D2D1_RECT_F backRect = D2D1::RectF(
+        rects.toolbar.left + kBackLeftOffset,
+        kToolbarButtonTop,
+        rects.toolbar.left + kBackRightOffset,
+        kToolbarButtonBottom);
+    if (state.canGoBack && containsPoint(backRect, x, y)) {
+        return {ChromeHitKind::Back, 0};
+    }
+
+    const D2D1_RECT_F forwardRect = D2D1::RectF(
+        rects.toolbar.left + kForwardLeftOffset,
+        kToolbarButtonTop,
+        rects.toolbar.left + kForwardRightOffset,
+        kToolbarButtonBottom);
+    if (state.canGoForward && containsPoint(forwardRect, x, y)) {
+        return {ChromeHitKind::Forward, 0};
+    }
+
+    for (std::size_t index = 0; index < state.sidebarItems.size(); ++index) {
+        const SidebarItem& item = state.sidebarItems[index];
+        const float rowY = kSidebarRowStartY + (static_cast<float>(index) * kSidebarRowStep);
+        const D2D1_RECT_F rowRect = D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, kSidebarRowRight, rowY + 22.0f);
+        if (item.available && containsPoint(rowRect, x, y)) {
+            return {ChromeHitKind::SidebarItem, index};
+        }
+    }
+
+    return {};
 }
 
 }

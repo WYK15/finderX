@@ -1,6 +1,9 @@
 #pragma once
 
+#include "navigation/SidebarModel.h"
 #include "ui/RenderContext.h"
+
+#include <cstddef>
 
 #include <d2d1.h>
 
@@ -14,10 +17,24 @@ struct LayoutRects {
     D2D1_RECT_F pathbar{};
 };
 
+enum class ChromeHitKind {
+    None,
+    Back,
+    Forward,
+    SidebarItem
+};
+
+struct ChromeHitResult {
+    ChromeHitKind kind = ChromeHitKind::None;
+    std::size_t sidebarIndex = 0;
+};
+
 class FinderChrome {
 public:
     LayoutRects layout(float width, float height) const;
     void draw(RenderContext& render, const LayoutRects& rects);
+    void draw(RenderContext& render, const LayoutRects& rects, const ChromeState& state);
+    ChromeHitResult hitTest(float x, float y, const LayoutRects& rects, const ChromeState& state) const;
 };
 
 }
