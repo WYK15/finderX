@@ -28,8 +28,10 @@ FileOperationResult failed(std::wstring message) {
     return result;
 }
 
-bool isAbsolutePath(const std::wstring& path) {
-    return std::filesystem::path(path).is_absolute();
+bool isSafeAbsolutePath(const std::wstring& path) {
+    return !path.empty()
+        && path.find(L'\0') == std::wstring::npos
+        && std::filesystem::path(path).is_absolute();
 }
 
 bool allAbsolute(std::span<const std::wstring> paths) {
@@ -38,7 +40,7 @@ bool allAbsolute(std::span<const std::wstring> paths) {
     }
 
     for (const std::wstring& path : paths) {
-        if (path.empty() || !isAbsolutePath(path)) {
+        if (!isSafeAbsolutePath(path)) {
             return false;
         }
     }
@@ -97,7 +99,7 @@ FileOperationResult runShellOperation(
 FileOperationResult renamePath(HWND, const std::wstring& oldPath, const std::wstring& newName) {
     constexpr wchar_t failureMessage[] = L"Cannot rename item";
 
-    if (oldPath.empty() || !isAbsolutePath(oldPath) || !ui::isValidRenameName(newName)) {
+    if (!isSafeAbsolutePath(oldPath) || !ui::isValidRenameName(newName)) {
         return failed(failureMessage);
     }
 
@@ -149,7 +151,7 @@ FileOperationResult copyToDirectory(
         return failed(L"Cannot paste here");
     }
 
-    if (!isAbsolutePath(destinationDirectory)) {
+    if (!isSafeAbsolutePath(destinationDirectory)) {
         return failed(L"Cannot copy items");
     }
 
@@ -177,7 +179,7 @@ FileOperationResult moveToDirectory(
         return failed(L"Cannot paste here");
     }
 
-    if (!isAbsolutePath(destinationDirectory)) {
+    if (!isSafeAbsolutePath(destinationDirectory)) {
         return failed(L"Cannot move items");
     }
 
