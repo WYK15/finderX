@@ -11,6 +11,15 @@ bool shellExecuteOk(HINSTANCE result) {
     return reinterpret_cast<INT_PTR>(result) > 32;
 }
 
+bool directoryExists(const std::wstring& path) {
+    if (path.empty()) {
+        return false;
+    }
+
+    const DWORD attributes = GetFileAttributesW(path.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
 }
 
 bool openPath(HWND owner, const std::wstring& path) {
@@ -29,6 +38,15 @@ bool revealInExplorer(HWND owner, const std::wstring& path) {
 
     const std::wstring args = L"/select,\"" + path + L"\"";
     const HINSTANCE result = ShellExecuteW(owner, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
+    return shellExecuteOk(result);
+}
+
+bool openPowerShellAt(HWND owner, const std::wstring& directory) {
+    if (!directoryExists(directory)) {
+        return false;
+    }
+
+    const HINSTANCE result = ShellExecuteW(owner, L"open", L"powershell.exe", nullptr, directory.c_str(), SW_SHOWNORMAL);
     return shellExecuteOk(result);
 }
 
