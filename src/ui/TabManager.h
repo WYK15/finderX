@@ -42,12 +42,16 @@ public:
         return activeIndex_;
     }
 
+    bool hasActive() const {
+        return activeIndex_ < tabs_.size();
+    }
+
     TabInfo& active() {
-        return tabs_[activeIndex_];
+        return tabs_.at(activeIndex_);
     }
 
     const TabInfo& active() const {
-        return tabs_[activeIndex_];
+        return tabs_.at(activeIndex_);
     }
 
     const std::vector<TabInfo>& tabs() const {

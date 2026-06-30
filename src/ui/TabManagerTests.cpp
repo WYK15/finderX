@@ -20,9 +20,17 @@ void require(bool condition, const char* message) {
 int main() {
     {
         TabManager tabs;
+
+        require(tabs.count() == 0, "default constructed tab manager should start empty");
+        require(!tabs.hasActive(), "default constructed tab manager should not have an active tab");
+    }
+
+    {
+        TabManager tabs;
         tabs.initialize(L"C:\\Users\\Example");
 
         require(tabs.count() == 1, "initialize should create one tab");
+        require(tabs.hasActive(), "initialize should create an active tab");
         require(tabs.activeIndex() == 0, "initial tab should be active");
         require(tabs.active().path == L"C:\\Users\\Example", "initial tab path should be stored");
         require(tabs.active().title == L"Example", "initial tab title should use final path component");
