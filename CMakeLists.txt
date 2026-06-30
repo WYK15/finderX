@@ -23,12 +23,29 @@ add_library(finderx_model
 target_include_directories(finderx_model PUBLIC src)
 finderx_enable_utf8(finderx_model)
 
+add_library(finderx_fs
+    src/fs/FileMetadata.cpp
+)
+
+target_include_directories(finderx_fs PUBLIC src)
+target_link_libraries(finderx_fs PUBLIC finderx_model)
+finderx_enable_utf8(finderx_fs)
+finderx_enable_windows_unicode(finderx_fs)
+
 add_executable(finderx_model_tests
     src/model/FileTreeTests.cpp
 )
 
 target_link_libraries(finderx_model_tests PRIVATE finderx_model)
 finderx_enable_utf8(finderx_model_tests)
+
+add_executable(finderx_fs_tests
+    src/fs/DirectoryLoaderTests.cpp
+)
+
+target_link_libraries(finderx_fs_tests PRIVATE finderx_fs)
+finderx_enable_utf8(finderx_fs_tests)
+finderx_enable_windows_unicode(finderx_fs_tests)
 
 set(FINDERX_APP_SOURCES
     src/main.cpp
@@ -54,6 +71,7 @@ if(FINDERX_APP_SOURCES_EXIST)
     target_include_directories(FinderX PRIVATE src)
     target_link_libraries(FinderX PRIVATE
         finderx_model
+        finderx_fs
         d2d1
         dwrite
         windowscodecs
