@@ -7,6 +7,7 @@
 #include "shell/ShellActions.h"
 #include "shell/ShellFileOperations.h"
 #include "ui/RenameDialog.h"
+#include "ui/SettingsDialog.h"
 
 #include <utility>
 
@@ -196,6 +197,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             showSortMenu(screenPoint);
             return 0;
         case ChromeHitKind::Settings:
+            openSettingsDialog();
             return 0;
         case ChromeHitKind::HeaderName:
             changeSort(SortColumn::Name);
@@ -1013,6 +1015,20 @@ void MainWindow::applyVisualSettings() {
             applyListStyle(*tab);
         }
     }
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::openSettingsDialog() {
+    AppSettings next = settings_;
+    if (!ui::promptForSettings(hwnd_, next)) {
+        return;
+    }
+
+    settings_ = std::move(next);
+    clampSettings(settings_);
+    saveSettingsOrStatus();
+    applyVisualSettings();
+    refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 

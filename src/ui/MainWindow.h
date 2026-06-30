@@ -10,6 +10,7 @@
 #include "ui/FinderChrome.h"
 #include "ui/FinderListView.h"
 #include "ui/RenderContext.h"
+#include "ui/SettingsDialog.h"
 
 #include <memory>
 #include <span>
@@ -92,6 +93,7 @@ private:
     ListViewStyle currentListViewStyle() const;
     void applyListStyle(TabState& tab) const;
     void applyVisualSettings();
+    void openSettingsDialog();
     void changeSort(SortColumn column);
     void setSortDirection(SortDirection direction);
     void showSortMenu(POINT screenPoint);
