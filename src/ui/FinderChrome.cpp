@@ -25,8 +25,10 @@ constexpr float kForwardLeftOffset = 52.0f;
 constexpr float kForwardRightOffset = 86.0f;
 constexpr float kToolbarButtonTop = 12.0f;
 constexpr float kToolbarButtonBottom = 44.0f;
+constexpr float kPathMinDrawWidth = 20.0f;
+constexpr float kPathMinSegmentWidth = 24.0f;
 constexpr float kPathTextApproxWidth = 7.2f;
-constexpr float kPathChevronWidth = 12.0f;
+constexpr float kPathChevronWidth = 20.0f;
 
 D2D1_COLOR_F rgb(float value) {
     return D2D1::ColorF(value, value, value);
@@ -164,13 +166,24 @@ void drawPathSegments(RenderContext& render, const D2D1_RECT_F& rect, std::wstri
     const D2D1_COLOR_F textColor = D2D1::ColorF(0.34f, 0.34f, 0.34f);
     const D2D1_COLOR_F chevronColor = D2D1::ColorF(0.56f, 0.56f, 0.56f);
 
-    if (cursor >= maxRight) {
+    if (segments.empty() || maxRight - cursor < kPathMinSegmentWidth) {
+        drawTextClipped(render, path, rect, rect, render.textFormat(), textColor);
         return;
     }
 
     for (std::size_t index = 0; index < segments.size(); ++index) {
-        const float segmentWidth = (std::max)(14.0f, approximateTextWidth(segments[index]));
-        if (cursor + segmentWidth > maxRight) {
+        const float remaining = maxRight - cursor;
+        if (remaining < kPathMinDrawWidth) {
+            if (index == 0) {
+                drawTextClipped(render, path, rect, rect, render.textFormat(), textColor);
+            }
+            break;
+        }
+
+        const float preferredSegmentWidth = (std::max)(kPathMinSegmentWidth, approximateTextWidth(segments[index]));
+        const float segmentWidth = (std::min)(preferredSegmentWidth, remaining);
+        if (index == 0 && segmentWidth < kPathMinSegmentWidth) {
+            drawTextClipped(render, path, rect, rect, render.textFormat(), textColor);
             break;
         }
 
@@ -184,13 +197,13 @@ void drawPathSegments(RenderContext& render, const D2D1_RECT_F& rect, std::wstri
         cursor += segmentWidth;
 
         if (index + 1 < segments.size()) {
-            if (cursor + kPathChevronWidth > maxRight) {
+            if (maxRight - cursor < kPathChevronWidth) {
                 break;
             }
             drawTextClipped(
                 render,
                 L"\u203a",
-                D2D1::RectF(cursor + 1.0f, rect.top, cursor + kPathChevronWidth, rect.bottom),
+                D2D1::RectF(cursor, rect.top, cursor + kPathChevronWidth, rect.bottom),
                 rect,
                 render.textFormat(),
                 chevronColor);
