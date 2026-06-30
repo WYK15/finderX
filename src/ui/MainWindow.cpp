@@ -1,6 +1,8 @@
 #include "ui/MainWindow.h"
 
 #include "shell/ShellActions.h"
+#include "shell/ShellFileOperations.h"
+#include "ui/RenameDialog.h"
 
 #include <utility>
 
@@ -15,6 +17,11 @@ constexpr UINT kCommandOpen = 1001;
 constexpr UINT kCommandReveal = 1002;
 constexpr UINT kCommandCopyPath = 1003;
 constexpr UINT kCommandRefresh = 1004;
+constexpr UINT kCommandRename = 1005;
+constexpr UINT kCommandCopy = 1006;
+constexpr UINT kCommandCut = 1007;
+constexpr UINT kCommandPaste = 1008;
+constexpr UINT kCommandMoveToTrash = 1009;
 
 bool containsPoint(const D2D1_RECT_F& rect, POINT point) {
     return static_cast<float>(point.x) >= rect.left && static_cast<float>(point.x) <= rect.right
@@ -153,8 +160,36 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         handleCommand(wParam);
         return 0;
     case WM_KEYDOWN: {
-        if (wParam == VK_F5 || (wParam == L'R' && (GetKeyState(VK_CONTROL) & 0x8000))) {
+        contextNode_ = kInvalidNodeId;
+        const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+
+        if (wParam == VK_F5 || (wParam == L'R' && controlDown)) {
             refreshCurrentDirectory();
+            return 0;
+        }
+
+        if (wParam == VK_F2) {
+            renameContextNode();
+            return 0;
+        }
+
+        if (wParam == VK_DELETE) {
+            moveContextNodeToTrash();
+            return 0;
+        }
+
+        if (wParam == L'C' && controlDown) {
+            copyContextNode();
+            return 0;
+        }
+
+        if (wParam == L'X' && controlDown) {
+            cutContextNode();
+            return 0;
+        }
+
+        if (wParam == L'V' && controlDown) {
+            pasteIntoCurrentDirectory();
             return 0;
         }
 
@@ -276,8 +311,19 @@ void MainWindow::showContextMenu(POINT clientPoint, POINT screenPoint) {
 
     if (hasTarget) {
         AppendMenuW(menu, MF_STRING, kCommandOpen, L"Open");
+        AppendMenuW(menu, MF_STRING, kCommandRename, L"Rename");
+        AppendMenuW(menu, MF_STRING, kCommandCopy, L"Copy");
+        AppendMenuW(menu, MF_STRING, kCommandCut, L"Cut");
+        if (fileOperationState_.hasPendingOperation()) {
+            AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
+        }
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING, kCommandReveal, L"Show in Explorer");
         AppendMenuW(menu, MF_STRING, kCommandCopyPath, L"Copy Path");
+        AppendMenuW(menu, MF_STRING, kCommandMoveToTrash, L"Move to Trash");
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    } else if (fileOperationState_.hasPendingOperation()) {
+        AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     }
     AppendMenuW(menu, MF_STRING, kCommandRefresh, L"Refresh");
@@ -290,6 +336,21 @@ void MainWindow::handleCommand(WPARAM wParam) {
     switch (LOWORD(wParam)) {
     case kCommandOpen:
         openContextNode();
+        break;
+    case kCommandRename:
+        renameContextNode();
+        break;
+    case kCommandCopy:
+        copyContextNode();
+        break;
+    case kCommandCut:
+        cutContextNode();
+        break;
+    case kCommandPaste:
+        pasteIntoCurrentDirectory();
+        break;
+    case kCommandMoveToTrash:
+        moveContextNodeToTrash();
         break;
     case kCommandReveal:
         revealContextNode();
@@ -305,11 +366,100 @@ void MainWindow::handleCommand(WPARAM wParam) {
     }
 }
 
+NodeId MainWindow::commandTargetNode() const {
+    if (contextNode_ != kInvalidNodeId && contextNode_ < tree_.nodes().size()) {
+        return contextNode_;
+    }
+
+    return listView_.selectedNode();
+}
+
 void MainWindow::openContextNode() {
     if (contextNode_ == kInvalidNodeId) {
         return;
     }
     activateNode(contextNode_);
+}
+
+void MainWindow::renameContextNode() {
+    const NodeId target = commandTargetNode();
+    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+        return;
+    }
+
+    const FileNode& node = tree_.node(target);
+    std::wstring newName;
+    if (!ui::promptForRename(hwnd_, node.name, newName)) {
+        return;
+    }
+
+    const shell::FileOperationResult result = shell::renamePath(hwnd_, node.path, newName);
+    if (!result.success) {
+        setStatusText(result.message.empty() ? L"Cannot rename item" : result.message);
+        return;
+    }
+
+    refreshCurrentDirectorySelecting(result.resultingPath);
+}
+
+void MainWindow::moveContextNodeToTrash() {
+    const NodeId target = commandTargetNode();
+    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+        return;
+    }
+
+    const shell::FileOperationResult result = shell::moveToTrash(hwnd_, tree_.node(target).path);
+    if (!result.success) {
+        setStatusText(result.message.empty() ? L"Cannot move item to trash" : result.message);
+        return;
+    }
+
+    refreshCurrentDirectorySelecting({});
+}
+
+void MainWindow::copyContextNode() {
+    const NodeId target = commandTargetNode();
+    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+        return;
+    }
+
+    fileOperationState_.setCopy(tree_.node(target).path);
+}
+
+void MainWindow::cutContextNode() {
+    const NodeId target = commandTargetNode();
+    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+        return;
+    }
+
+    fileOperationState_.setCut(tree_.node(target).path);
+}
+
+void MainWindow::pasteIntoCurrentDirectory() {
+    if (!fileOperationState_.hasPendingOperation()) {
+        return;
+    }
+
+    const std::wstring currentPath = history_.currentPath();
+    if (currentPath.empty()) {
+        setStatusText(L"Cannot paste here");
+        return;
+    }
+
+    shell::FileOperationResult result;
+    if (fileOperationState_.kind() == ui::PendingFileOperationKind::Copy) {
+        result = shell::copyToDirectory(hwnd_, fileOperationState_.sourcePath(), currentPath);
+    } else {
+        result = shell::moveToDirectory(hwnd_, fileOperationState_.sourcePath(), currentPath);
+    }
+
+    if (!result.success) {
+        setStatusText(result.message.empty() ? L"Cannot paste here" : result.message);
+        return;
+    }
+
+    fileOperationState_.markPasteSucceeded();
+    refreshCurrentDirectory();
 }
 
 void MainWindow::revealContextNode() {
@@ -333,13 +483,16 @@ void MainWindow::copyContextNodePath() {
 }
 
 bool MainWindow::refreshCurrentDirectory() {
+    return refreshCurrentDirectorySelecting(selectedNodePath());
+}
+
+bool MainWindow::refreshCurrentDirectorySelecting(const std::wstring& selectedPath) {
     const std::wstring currentPath = history_.currentPath();
     if (currentPath.empty()) {
         setStatusText(L"Cannot refresh folder");
         return false;
     }
 
-    const std::wstring previousSelection = selectedNodePath();
     DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(currentPath);
     if (!result.ok()) {
         setStatusText(L"Cannot refresh folder");
@@ -354,7 +507,7 @@ bool MainWindow::refreshCurrentDirectory() {
     tree_ = FileTree(currentPath, std::move(rootName));
     tree_.replaceChildren(tree_.rootId(), std::move(result.children));
     listView_ = FinderListView(&tree_);
-    selectNodeByPath(previousSelection);
+    selectNodeByPath(selectedPath);
     contextNode_ = kInvalidNodeId;
     chromeState_.statusText.clear();
     refreshChromeState();

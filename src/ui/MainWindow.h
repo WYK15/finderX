@@ -4,6 +4,7 @@
 #include "model/FileTree.h"
 #include "navigation/NavigationHistory.h"
 #include "navigation/SidebarModel.h"
+#include "ui/FileOperationState.h"
 #include "ui/FinderChrome.h"
 #include "ui/FinderListView.h"
 #include "ui/RenderContext.h"
@@ -34,10 +35,17 @@ private:
     void openFile(const std::wstring& path);
     void showContextMenu(POINT clientPoint, POINT screenPoint);
     void handleCommand(WPARAM wParam);
+    NodeId commandTargetNode() const;
     void openContextNode();
+    void renameContextNode();
+    void moveContextNodeToTrash();
+    void copyContextNode();
+    void cutContextNode();
+    void pasteIntoCurrentDirectory();
     void revealContextNode();
     void copyContextNodePath();
     bool refreshCurrentDirectory();
+    bool refreshCurrentDirectorySelecting(const std::wstring& selectedPath);
     std::wstring selectedNodePath() const;
     bool selectNodeByPath(const std::wstring& path);
     void refreshChromeState();
@@ -56,6 +64,7 @@ private:
     NavigationHistory history_;
     SidebarModel sidebar_;
     ChromeState chromeState_;
+    ui::FileOperationState fileOperationState_;
     std::wstring homePath_;
     NodeId contextNode_ = kInvalidNodeId;
 };
