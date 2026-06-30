@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include <shellapi.h>
 #include <windowsx.h>
 
 namespace finderx {
@@ -92,8 +93,27 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         const LayoutRects rects = currentLayout();
         const float x = static_cast<float>(GET_X_LPARAM(lParam));
         const float y = static_cast<float>(GET_Y_LPARAM(lParam));
+
+        const ChromeHitResult chromeHit = chrome_.hitTest(x, y, rects, chromeState_);
+        switch (chromeHit.kind) {
+        case ChromeHitKind::Back:
+            goBack();
+            return 0;
+        case ChromeHitKind::Forward:
+            goForward();
+            return 0;
+        case ChromeHitKind::SidebarItem:
+            if (chromeHit.sidebarIndex < chromeState_.sidebarItems.size()) {
+                navigateToDirectory(chromeState_.sidebarItems[chromeHit.sidebarIndex].path, HistoryMode::Push);
+            }
+            return 0;
+        case ChromeHitKind::None:
+            break;
+        }
+
         const ListInteractionResult result = listView_.onMouseDown(x, y, rects.list);
         loadChildrenIfNeeded(result.expandedFolder);
+        activateNode(result.activatedNode);
         if (result.changed) {
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
@@ -112,8 +132,14 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case WM_KEYDOWN: {
+        if (wParam == VK_BACK) {
+            goBack();
+            return 0;
+        }
+
         const ListInteractionResult result = listView_.onKeyDown(wParam);
         loadChildrenIfNeeded(result.expandedFolder);
+        activateNode(result.activatedNode);
         if (result.changed) {
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
@@ -139,14 +165,118 @@ LayoutRects MainWindow::currentLayout() const {
 }
 
 void MainWindow::initializeFileTree() {
-    const std::wstring homePath = defaultHomeDirectory();
-    std::wstring homeName = fileNameFromPath(homePath);
-    if (homeName.empty()) {
-        homeName = homePath;
+    homePath_ = defaultHomeDirectory();
+    navigateToDirectory(homePath_, HistoryMode::Initial);
+}
+
+bool MainWindow::navigateToDirectory(const std::wstring& path, HistoryMode mode) {
+    if (path.empty()) {
+        setStatusText(L"Cannot open folder");
+        return false;
     }
 
-    tree_ = FileTree(homePath, std::move(homeName));
-    loadChildrenIfNeeded(tree_.rootId());
+    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(path);
+    if (!result.ok()) {
+        setStatusText(L"Cannot open folder");
+        return false;
+    }
+
+    std::wstring rootName = fileNameFromPath(path);
+    if (rootName.empty()) {
+        rootName = path;
+    }
+
+    tree_ = FileTree(path, std::move(rootName));
+    tree_.replaceChildren(tree_.rootId(), std::move(result.children));
+    listView_ = FinderListView(&tree_);
+
+    switch (mode) {
+    case HistoryMode::Initial:
+    case HistoryMode::Replace:
+        history_.setInitialPath(path);
+        break;
+    case HistoryMode::Push:
+        history_.navigateTo(path);
+        break;
+    case HistoryMode::BackForward:
+        break;
+    }
+
+    chromeState_.statusText.clear();
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+    return true;
+}
+
+void MainWindow::activateNode(NodeId nodeId) {
+    if (nodeId == kInvalidNodeId || nodeId >= tree_.nodes().size()) {
+        return;
+    }
+
+    const FileNode& node = tree_.node(nodeId);
+    if (node.kind == FileKind::Folder) {
+        navigateToDirectory(node.path, HistoryMode::Push);
+    } else {
+        openFile(node.path);
+    }
+}
+
+void MainWindow::openFile(const std::wstring& path) {
+    const HINSTANCE result = ShellExecuteW(hwnd_, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    if (reinterpret_cast<INT_PTR>(result) <= 32) {
+        setStatusText(L"Cannot open file");
+    }
+}
+
+void MainWindow::refreshChromeState() {
+    std::wstring title = fileNameFromPath(history_.currentPath());
+    if (title.empty()) {
+        title = history_.currentPath();
+    }
+
+    chromeState_.title = std::move(title);
+    chromeState_.pathText = history_.currentPath();
+    chromeState_.canGoBack = history_.canGoBack();
+    chromeState_.canGoForward = history_.canGoForward();
+
+    sidebar_.refresh(homePath_, history_.currentPath());
+    chromeState_.sidebarItems = sidebar_.items();
+}
+
+void MainWindow::goBack() {
+    if (!history_.canGoBack()) {
+        return;
+    }
+
+    const std::wstring target = history_.backTarget();
+    if (!navigateToDirectory(target, HistoryMode::BackForward)) {
+        return;
+    }
+
+    history_.goBack();
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::goForward() {
+    if (!history_.canGoForward()) {
+        return;
+    }
+
+    const std::wstring target = history_.forwardTarget();
+    if (!navigateToDirectory(target, HistoryMode::BackForward)) {
+        return;
+    }
+
+    history_.goForward();
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::setStatusText(std::wstring text) {
+    chromeState_.statusText = std::move(text);
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void MainWindow::loadChildrenIfNeeded(NodeId folder) {
@@ -181,7 +311,7 @@ void MainWindow::paint() {
 
     render_.beginDraw();
     render_.clear(D2D1::ColorF(1.0f, 1.0f, 1.0f));
-    chrome_.draw(render_, rects);
+    chrome_.draw(render_, rects, chromeState_);
     listView_.draw(render_, rects.list);
     const bool targetLost = render_.endDraw();
 
