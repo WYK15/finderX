@@ -238,12 +238,6 @@ ListInteractionResult FinderListView::onMouseDown(float x, float y, const D2D1_R
         result.changed = true;
     }
 
-    const DWORD clickTime = GetTickCount();
-    const bool doubleClick = lastClickedNode_ == row.nodeId
-        && clickTime - lastClickTime_ <= GetDoubleClickTime();
-    lastClickedNode_ = row.nodeId;
-    lastClickTime_ = clickTime;
-
     FileNode& node = tree_->node(row.nodeId);
     if (node.kind == FileKind::Folder && hitTestDisclosure(x, bounds, row)) {
         tree_->toggleExpanded(row.nodeId);
@@ -254,7 +248,16 @@ ListInteractionResult FinderListView::onMouseDown(float x, float y, const D2D1_R
         ensureSelection();
         clampScroll();
         result.changed = true;
-    } else if (doubleClick) {
+        return result;
+    }
+
+    const DWORD clickTime = GetTickCount();
+    const bool doubleClick = lastClickedNode_ == row.nodeId
+        && clickTime - lastClickTime_ <= GetDoubleClickTime();
+    lastClickedNode_ = row.nodeId;
+    lastClickTime_ = clickTime;
+
+    if (doubleClick) {
         result.activatedNode = row.nodeId;
         result.changed = true;
     }
