@@ -71,6 +71,26 @@ finderx_enable_utf8(finderx_navigation_tests)
 finderx_enable_windows_unicode(finderx_navigation_tests)
 add_test(NAME finderx_navigation_tests COMMAND finderx_navigation_tests)
 
+add_executable(finderx_rename_dialog_tests
+    src/ui/RenameDialogTests.cpp
+    src/ui/RenameDialog.cpp
+)
+
+target_include_directories(finderx_rename_dialog_tests PRIVATE src)
+finderx_enable_utf8(finderx_rename_dialog_tests)
+finderx_enable_windows_unicode(finderx_rename_dialog_tests)
+add_test(NAME finderx_rename_dialog_tests COMMAND finderx_rename_dialog_tests)
+
+add_executable(finderx_file_operation_state_tests
+    src/ui/FileOperationStateTests.cpp
+    src/ui/FileOperationState.cpp
+)
+
+target_include_directories(finderx_file_operation_state_tests PRIVATE src)
+finderx_enable_utf8(finderx_file_operation_state_tests)
+finderx_enable_windows_unicode(finderx_file_operation_state_tests)
+add_test(NAME finderx_file_operation_state_tests COMMAND finderx_file_operation_state_tests)
+
 set(FINDERX_APP_SOURCES
     src/main.cpp
     src/app/App.cpp
