@@ -238,6 +238,12 @@ ListInteractionResult FinderListView::onMouseDown(float x, float y, const D2D1_R
         result.changed = true;
     }
 
+    const DWORD clickTime = GetTickCount();
+    const bool doubleClick = lastClickedNode_ == row.nodeId
+        && clickTime - lastClickTime_ <= GetDoubleClickTime();
+    lastClickedNode_ = row.nodeId;
+    lastClickTime_ = clickTime;
+
     FileNode& node = tree_->node(row.nodeId);
     if (node.kind == FileKind::Folder && hitTestDisclosure(x, bounds, row)) {
         tree_->toggleExpanded(row.nodeId);
@@ -247,6 +253,9 @@ ListInteractionResult FinderListView::onMouseDown(float x, float y, const D2D1_R
         rebuildRows();
         ensureSelection();
         clampScroll();
+        result.changed = true;
+    } else if (doubleClick) {
+        result.activatedNode = row.nodeId;
         result.changed = true;
     }
 
@@ -266,30 +275,32 @@ bool FinderListView::onWheel(int wheelDelta) {
     return oldScroll != scrollY_;
 }
 
-NodeId FinderListView::onKeyDown(WPARAM key) {
+ListInteractionResult FinderListView::onKeyDown(WPARAM key) {
+    ListInteractionResult result;
     if (!tree_) {
-        return kInvalidNodeId;
+        return result;
     }
 
     rebuildRows();
     ensureSelection();
     const int index = selectedRowIndex();
     if (index < 0) {
-        return kInvalidNodeId;
+        return result;
     }
 
-    NodeId expandedFolder = kInvalidNodeId;
     switch (key) {
     case VK_UP:
         if (index > 0) {
             selected_ = rows_[static_cast<std::size_t>(index - 1)].nodeId;
             ensureSelectionVisible();
+            result.changed = true;
         }
         break;
     case VK_DOWN:
         if (index + 1 < static_cast<int>(rows_.size())) {
             selected_ = rows_[static_cast<std::size_t>(index + 1)].nodeId;
             ensureSelectionVisible();
+            result.changed = true;
         }
         break;
     case VK_LEFT: {
@@ -299,6 +310,7 @@ NodeId FinderListView::onKeyDown(WPARAM key) {
             rebuildRows();
             ensureSelection();
             ensureSelectionVisible();
+            result.changed = true;
         }
         break;
     }
@@ -306,18 +318,25 @@ NodeId FinderListView::onKeyDown(WPARAM key) {
         const FileNode& node = tree_->node(selected_);
         if (node.kind == FileKind::Folder && !node.expanded) {
             tree_->setExpanded(selected_, true);
-            expandedFolder = selected_;
+            result.expandedFolder = selected_;
             rebuildRows();
             ensureSelection();
             ensureSelectionVisible();
+            result.changed = true;
         }
         break;
     }
+    case VK_RETURN:
+        if (selected_ != kInvalidNodeId) {
+            result.activatedNode = selected_;
+            result.changed = true;
+        }
+        break;
     default:
         break;
     }
 
-    return expandedFolder;
+    return result;
 }
 
 }

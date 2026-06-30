@@ -111,10 +111,14 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
         return 0;
     }
-    case WM_KEYDOWN:
-        loadChildrenIfNeeded(listView_.onKeyDown(wParam));
-        InvalidateRect(hwnd_, nullptr, FALSE);
+    case WM_KEYDOWN: {
+        const ListInteractionResult result = listView_.onKeyDown(wParam);
+        loadChildrenIfNeeded(result.expandedFolder);
+        if (result.changed) {
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
         return 0;
+    }
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;

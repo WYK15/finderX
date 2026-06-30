@@ -12,6 +12,7 @@ namespace finderx {
 struct ListInteractionResult {
     bool changed = false;
     NodeId expandedFolder = kInvalidNodeId;
+    NodeId activatedNode = kInvalidNodeId;
 };
 
 class FinderListView {
@@ -21,7 +22,7 @@ public:
     void draw(RenderContext& render, const D2D1_RECT_F& bounds);
     ListInteractionResult onMouseDown(float x, float y, const D2D1_RECT_F& bounds);
     bool onWheel(int wheelDelta);
-    NodeId onKeyDown(WPARAM key);
+    ListInteractionResult onKeyDown(WPARAM key);
     NodeId selectedNode() const;
 
 private:
@@ -36,6 +37,8 @@ private:
 
     FileTree* tree_ = nullptr;
     NodeId selected_ = kInvalidNodeId;
+    NodeId lastClickedNode_ = kInvalidNodeId;
+    DWORD lastClickTime_ = 0;
     float scrollY_ = 0.0f;
     float viewportHeight_ = 0.0f;
     std::vector<VisibleRow> rows_;
