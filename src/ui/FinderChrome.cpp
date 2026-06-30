@@ -179,6 +179,17 @@ void drawSidebarIcon(RenderContext& render, std::wstring_view label, float x, fl
         return;
     }
 
+    if (label == L"This PC") {
+        render.drawRoundedRect(
+            D2D1::RoundedRect(D2D1::RectF(x + 2.0f, y + 3.0f, x + 14.0f, y + 11.0f), 1.4f, 1.4f),
+            color,
+            1.3f);
+        render.drawLine(D2D1::Point2F(x + 6.0f, y + 12.0f), D2D1::Point2F(x + 10.0f, y + 12.0f), color, 1.3f);
+        render.drawLine(D2D1::Point2F(x + 8.0f, y + 11.0f), D2D1::Point2F(x + 8.0f, y + 14.0f), color, 1.3f);
+        render.drawLine(D2D1::Point2F(x + 4.5f, y + 14.0f), D2D1::Point2F(x + 11.5f, y + 14.0f), color, 1.3f);
+        return;
+    }
+
     drawFolderGlyph(render, x, y, color);
 }
 

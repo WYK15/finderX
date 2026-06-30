@@ -33,12 +33,18 @@ private:
     };
 
     struct TabState {
+        enum class LocationKind {
+            Directory,
+            ThisPc
+        };
+
         FileTree tree;
         FinderListView listView;
         NavigationHistory history;
         std::wstring searchText;
         bool searchFocused = false;
         std::wstring statusText;
+        LocationKind locationKind = LocationKind::Directory;
 
         TabState(std::wstring rootPath, std::wstring rootName)
             : tree(std::move(rootPath), std::move(rootName)),
@@ -55,7 +61,10 @@ private:
     void initializeFileTree();
     bool createTabAtPath(const std::wstring& path);
     void activateTab(std::size_t index);
+    bool navigateToThisPc(HistoryMode mode);
+    bool navigateToLocation(std::wstring path, HistoryMode mode);
     bool navigateToDirectory(std::wstring path, HistoryMode mode);
+    bool isActiveDirectoryLocation() const;
     void activateNode(NodeId nodeId);
     void openFile(const std::wstring& path);
     void showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint);
@@ -69,6 +78,10 @@ private:
     void copyContextNode();
     void cutContextNode();
     void pasteIntoCurrentDirectory();
+    void createFolderInCurrentDirectory();
+    void createFileInCurrentDirectory();
+    void openPowerShellForContext();
+    std::wstring powerShellTargetDirectory() const;
     void revealContextNode();
     void copyContextNodePath();
     bool refreshCurrentDirectory();

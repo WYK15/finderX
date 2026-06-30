@@ -1,5 +1,7 @@
 #include "ui/MainWindow.h"
 
+#include "fs/DriveEnumerator.h"
+#include "fs/FileCreation.h"
 #include "shell/ShellActions.h"
 #include "shell/ShellFileOperations.h"
 #include "ui/RenameDialog.h"
@@ -22,6 +24,9 @@ constexpr UINT kCommandCopy = 1006;
 constexpr UINT kCommandCut = 1007;
 constexpr UINT kCommandPaste = 1008;
 constexpr UINT kCommandMoveToTrash = 1009;
+constexpr UINT kCommandNewFolder = 1010;
+constexpr UINT kCommandNewFile = 1011;
+constexpr UINT kCommandOpenPowerShell = 1012;
 constexpr UINT_PTR kDirectoryWatcherTimerId = 2001;
 constexpr UINT_PTR kDirectoryRefreshTimerId = 2002;
 constexpr UINT kDirectoryWatcherPollMs = 500;
@@ -101,7 +106,7 @@ std::vector<std::wstring> MainWindow::tabTitles() const {
         }
 
         const std::wstring& path = tab->history.currentPath();
-        std::wstring title = fileNameFromPath(path);
+        std::wstring title = path == thisPcPath() ? L"This PC" : fileNameFromPath(path);
         if (title.empty()) {
             title = path;
         }
@@ -164,14 +169,16 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         case ChromeHitKind::SidebarItem:
             if (chromeHit.sidebarIndex < chromeState_.sidebarItems.size()) {
-                navigateToDirectory(chromeState_.sidebarItems[chromeHit.sidebarIndex].path, HistoryMode::Push);
+                navigateToLocation(chromeState_.sidebarItems[chromeHit.sidebarIndex].path, HistoryMode::Push);
             }
             return 0;
         case ChromeHitKind::Tab:
             activateTab(chromeHit.tabIndex);
             return 0;
         case ChromeHitKind::NewTab:
-            createTabAtPath(hasActiveTab() ? activeTab().history.currentPath() : homePath_);
+            createTabAtPath(hasActiveTab() && activeTab().locationKind != TabState::LocationKind::ThisPc
+                ? activeTab().history.currentPath()
+                : homePath_);
             return 0;
         case ChromeHitKind::None:
             break;
@@ -244,7 +251,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         const bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
 
         if (controlDown && wParam == L'T') {
-            createTabAtPath(hasActiveTab() ? activeTab().history.currentPath() : homePath_);
+            createTabAtPath(hasActiveTab() && activeTab().locationKind != TabState::LocationKind::ThisPc
+                ? activeTab().history.currentPath()
+                : homePath_);
             return 0;
         }
 
@@ -371,9 +380,56 @@ void MainWindow::activateTab(std::size_t index) {
     }
 
     activeTabIndex_ = index;
-    startDirectoryWatcher(activeTab().history.currentPath());
+    if (activeTab().locationKind == TabState::LocationKind::Directory) {
+        startDirectoryWatcher(activeTab().history.currentPath());
+    } else {
+        stopDirectoryWatcher();
+    }
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+bool MainWindow::navigateToThisPc(HistoryMode mode) {
+    const std::wstring path = thisPcPath();
+    if (!hasActiveTab()) {
+        tabs_.push_back(std::make_unique<TabState>(path, L"This PC"));
+        activeTabIndex_ = tabs_.size() - 1;
+    }
+
+    TabState& tab = activeTab();
+    tab.locationKind = TabState::LocationKind::ThisPc;
+    tab.tree = FileTree(path, L"This PC");
+    tab.tree.replaceChildren(tab.tree.rootId(), enumerateDriveNodes());
+    tab.listView = FinderListView(&tab.tree);
+    tab.searchText.clear();
+    tab.searchFocused = false;
+    tab.listView.setFilterText(L"");
+
+    switch (mode) {
+    case HistoryMode::Initial:
+    case HistoryMode::Replace:
+        tab.history.setInitialPath(path);
+        break;
+    case HistoryMode::Push:
+        tab.history.navigateTo(path);
+        break;
+    case HistoryMode::BackForward:
+        break;
+    }
+
+    tab.statusText.clear();
+    contextNode_ = kInvalidNodeId;
+    stopDirectoryWatcher();
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+    return true;
+}
+
+bool MainWindow::navigateToLocation(std::wstring path, HistoryMode mode) {
+    if (path == thisPcPath()) {
+        return navigateToThisPc(mode);
+    }
+    return navigateToDirectory(std::move(path), mode);
 }
 
 bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
@@ -400,6 +456,7 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     }
 
     TabState& tab = activeTab();
+    tab.locationKind = TabState::LocationKind::Directory;
     tab.tree = FileTree(path, std::move(rootName));
     tab.tree.replaceChildren(tab.tree.rootId(), std::move(result.children));
     tab.listView = FinderListView(&tab.tree);
@@ -424,6 +481,10 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
     return true;
+}
+
+bool MainWindow::isActiveDirectoryLocation() const {
+    return hasActiveTab() && activeTab().locationKind == TabState::LocationKind::Directory;
 }
 
 void MainWindow::activateNode(NodeId nodeId) {
@@ -470,6 +531,7 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
 
     const std::vector<NodeId> targets = commandTargetNodes(true);
     const bool singleTarget = targets.size() == 1;
+    const bool directoryLocation = isActiveDirectoryLocation();
     if (hasTarget) {
         AppendMenuW(menu, MF_STRING, kCommandOpen, L"Open");
         if (singleTarget) {
@@ -477,17 +539,27 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
         }
         AppendMenuW(menu, MF_STRING, kCommandCopy, L"Copy");
         AppendMenuW(menu, MF_STRING, kCommandCut, L"Cut");
-        if (fileOperationState_.hasPendingOperation()) {
+        if (directoryLocation && fileOperationState_.hasPendingOperation()) {
             AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
+        }
+        if (singleTarget && directoryLocation && targets.front() < tab.tree.nodes().size()
+            && tab.tree.node(targets.front()).kind == FileKind::Folder) {
+            AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
         }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING, kCommandReveal, L"Show in Explorer");
         AppendMenuW(menu, MF_STRING, kCommandCopyPath, L"Copy Path");
         AppendMenuW(menu, MF_STRING, kCommandMoveToTrash, L"Move to Trash");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    } else if (fileOperationState_.hasPendingOperation()) {
-        AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
+    } else if (directoryLocation) {
+        AppendMenuW(menu, MF_STRING, kCommandNewFolder, L"New Folder");
+        AppendMenuW(menu, MF_STRING, kCommandNewFile, L"New File");
+        AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        if (fileOperationState_.hasPendingOperation()) {
+            AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
+            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        }
     }
     AppendMenuW(menu, MF_STRING, kCommandRefresh, L"Refresh");
 
@@ -511,6 +583,15 @@ void MainWindow::handleCommand(WPARAM wParam) {
         break;
     case kCommandPaste:
         pasteIntoCurrentDirectory();
+        break;
+    case kCommandNewFolder:
+        createFolderInCurrentDirectory();
+        break;
+    case kCommandNewFile:
+        createFileInCurrentDirectory();
+        break;
+    case kCommandOpenPowerShell:
+        openPowerShellForContext();
         break;
     case kCommandMoveToTrash:
         moveContextNodeToTrash();
@@ -638,6 +719,11 @@ void MainWindow::cutContextNode() {
 }
 
 void MainWindow::pasteIntoCurrentDirectory() {
+    if (!isActiveDirectoryLocation()) {
+        setStatusText(L"Cannot paste here");
+        return;
+    }
+
     if (!fileOperationState_.hasPendingOperation()) {
         return;
     }
@@ -674,6 +760,60 @@ void MainWindow::pasteIntoCurrentDirectory() {
 
     fileOperationState_.markPasteSucceeded();
     refreshCurrentDirectory();
+}
+
+void MainWindow::createFolderInCurrentDirectory() {
+    if (!isActiveDirectoryLocation()) {
+        setStatusText(L"Cannot create folder here");
+        return;
+    }
+
+    const FileCreationResult result = createNewFolder(activeTab().history.currentPath());
+    if (!result.success) {
+        setStatusText(result.message.empty() ? L"Cannot create folder" : result.message);
+        return;
+    }
+
+    refreshCurrentDirectorySelecting(result.path);
+}
+
+void MainWindow::createFileInCurrentDirectory() {
+    if (!isActiveDirectoryLocation()) {
+        setStatusText(L"Cannot create file here");
+        return;
+    }
+
+    const FileCreationResult result = createNewTextFile(activeTab().history.currentPath());
+    if (!result.success) {
+        setStatusText(result.message.empty() ? L"Cannot create file" : result.message);
+        return;
+    }
+
+    refreshCurrentDirectorySelecting(result.path);
+}
+
+std::wstring MainWindow::powerShellTargetDirectory() const {
+    if (!isActiveDirectoryLocation()) {
+        return {};
+    }
+
+    const NodeId target = commandTargetNode();
+    const TabState& tab = activeTab();
+    if (target != kInvalidNodeId && target < tab.tree.nodes().size()) {
+        const FileNode& node = tab.tree.node(target);
+        if (node.kind == FileKind::Folder) {
+            return node.path;
+        }
+    }
+
+    return tab.history.currentPath();
+}
+
+void MainWindow::openPowerShellForContext() {
+    const std::wstring directory = powerShellTargetDirectory();
+    if (directory.empty() || !shell::openPowerShellAt(hwnd_, directory)) {
+        setStatusText(L"Cannot open PowerShell");
+    }
 }
 
 void MainWindow::revealContextNode() {
@@ -719,6 +859,20 @@ bool MainWindow::refreshCurrentDirectorySelecting(const std::wstring& selectedPa
 }
 
 bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> selectedPaths) {
+    if (!hasActiveTab()) {
+        setStatusText(L"Cannot refresh folder");
+        return false;
+    }
+
+    if (activeTab().locationKind == TabState::LocationKind::ThisPc) {
+        return navigateToThisPc(HistoryMode::Replace);
+    }
+
+    if (!isActiveDirectoryLocation()) {
+        setStatusText(L"Cannot refresh folder");
+        return false;
+    }
+
     TabState& tab = activeTab();
     const std::wstring currentPath = tab.history.currentPath();
     if (currentPath.empty()) {
@@ -801,13 +955,14 @@ void MainWindow::refreshChromeState() {
     }
 
     const TabState& tab = activeTab();
-    std::wstring title = fileNameFromPath(tab.history.currentPath());
+    const bool isThisPc = tab.history.currentPath() == thisPcPath();
+    std::wstring title = isThisPc ? L"This PC" : fileNameFromPath(tab.history.currentPath());
     if (title.empty()) {
         title = tab.history.currentPath();
     }
 
     chromeState_.title = std::move(title);
-    chromeState_.pathText = tab.history.currentPath();
+    chromeState_.pathText = isThisPc ? L"This PC" : tab.history.currentPath();
     chromeState_.canGoBack = tab.history.canGoBack();
     chromeState_.canGoForward = tab.history.canGoForward();
 
@@ -992,7 +1147,7 @@ void MainWindow::goBack() {
     }
 
     const std::wstring target = tab.history.backTarget();
-    if (!navigateToDirectory(target, HistoryMode::BackForward)) {
+    if (!navigateToLocation(target, HistoryMode::BackForward)) {
         return;
     }
 
@@ -1012,7 +1167,7 @@ void MainWindow::goForward() {
     }
 
     const std::wstring target = tab.history.forwardTarget();
-    if (!navigateToDirectory(target, HistoryMode::BackForward)) {
+    if (!navigateToLocation(target, HistoryMode::BackForward)) {
         return;
     }
 
