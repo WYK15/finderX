@@ -257,8 +257,12 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
         const float iconY = y + (kRowHeight - kIconSize) * 0.5f;
         const float nameX = iconX + kIconSize + kIconTextGap;
 
-        drawDisclosure(render, node, disclosureX, y, mutedColor);
-        drawNodeIcon(render, node, iconX, iconY, selected);
+        if (disclosureX + kDisclosureWidth <= nameRight) {
+            drawDisclosure(render, node, disclosureX, y, mutedColor);
+        }
+        if (iconX + kIconSize <= nameRight) {
+            drawNodeIcon(render, node, iconX, iconY, selected);
+        }
         drawTextIfWide(render, node.name, D2D1::RectF(nameX, y + 2.0f, nameRight, y + kRowHeight + 2.0f), render.textFormat(), textColor);
         if (dateWidth > 0.0f) {
             drawTextIfWide(render, node.modified, D2D1::RectF(dateX, y + 2.0f, sizeX - 6.0f, y + kRowHeight + 2.0f), render.textFormat(), mutedColor);
