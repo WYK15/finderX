@@ -29,7 +29,7 @@ private:
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam);
     LayoutRects currentLayout() const;
     void initializeFileTree();
-    bool navigateToDirectory(const std::wstring& path, HistoryMode mode);
+    bool navigateToDirectory(std::wstring path, HistoryMode mode);
     void activateNode(NodeId nodeId);
     void openFile(const std::wstring& path);
     void refreshChromeState();

@@ -169,7 +169,7 @@ void MainWindow::initializeFileTree() {
     navigateToDirectory(homePath_, HistoryMode::Initial);
 }
 
-bool MainWindow::navigateToDirectory(const std::wstring& path, HistoryMode mode) {
+bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     if (path.empty()) {
         setStatusText(L"Cannot open folder");
         return false;
@@ -193,10 +193,10 @@ bool MainWindow::navigateToDirectory(const std::wstring& path, HistoryMode mode)
     switch (mode) {
     case HistoryMode::Initial:
     case HistoryMode::Replace:
-        history_.setInitialPath(path);
+        history_.setInitialPath(std::move(path));
         break;
     case HistoryMode::Push:
-        history_.navigateTo(path);
+        history_.navigateTo(std::move(path));
         break;
     case HistoryMode::BackForward:
         break;
