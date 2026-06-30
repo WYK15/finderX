@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <vector>
 
 namespace {
 
@@ -52,6 +53,30 @@ int main() {
         state.setCut(L"C:\\Source\\Report.txt");
         state.setCut(L"");
         require(!state.hasPendingOperation(), "empty cut should clear state");
+    }
+
+    {
+        FileOperationState state;
+        state.setCopy(std::vector<std::wstring>{L"C:\\Temp\\a.txt", L"C:\\Temp\\b.txt"});
+        require(state.hasPendingOperation(), "multi copy should set pending operation");
+        require(state.sourcePaths().size() == 2, "multi copy should store both paths");
+        state.markPasteSucceeded();
+        require(state.sourcePaths().size() == 2, "multi copy should remain after paste succeeds");
+    }
+
+    {
+        FileOperationState state;
+        state.setCut(std::vector<std::wstring>{L"C:\\Temp\\c.txt", L"", L"C:\\Temp\\d.txt"});
+        require(state.kind() == PendingFileOperationKind::Cut, "multi cut kind should be stored");
+        require(state.sourcePaths().size() == 2, "empty paths should be ignored");
+        state.markPasteSucceeded();
+        require(!state.hasPendingOperation(), "multi cut should clear after paste succeeds");
+    }
+
+    {
+        FileOperationState state;
+        state.setCopy(std::vector<std::wstring>{L""});
+        require(!state.hasPendingOperation(), "all-empty copy path list should clear state");
     }
 
     std::cout << "FileOperationStateTests passed\n";
