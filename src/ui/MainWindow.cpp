@@ -22,6 +22,13 @@ constexpr UINT kCommandCopy = 1006;
 constexpr UINT kCommandCut = 1007;
 constexpr UINT kCommandPaste = 1008;
 constexpr UINT kCommandMoveToTrash = 1009;
+constexpr UINT_PTR kDirectoryWatcherTimerId = 2001;
+constexpr UINT_PTR kDirectoryRefreshTimerId = 2002;
+constexpr UINT kDirectoryWatcherPollMs = 500;
+constexpr DWORD kDirectoryChangeFilter = FILE_NOTIFY_CHANGE_FILE_NAME
+    | FILE_NOTIFY_CHANGE_DIR_NAME
+    | FILE_NOTIFY_CHANGE_LAST_WRITE
+    | FILE_NOTIFY_CHANGE_SIZE;
 
 bool containsPoint(const D2D1_RECT_F& rect, D2D1_POINT_2F point) {
     return point.x >= rect.left && point.x <= rect.right
@@ -169,6 +176,16 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_COMMAND:
         handleCommand(wParam);
         return 0;
+    case WM_TIMER:
+        if (wParam == kDirectoryWatcherTimerId) {
+            pollDirectoryWatcher();
+            return 0;
+        }
+        if (wParam == kDirectoryRefreshTimerId) {
+            consumeDirectoryRefresh();
+            return 0;
+        }
+        return 0;
     case WM_CHAR:
         if (handleSearchChar(wParam)) {
             return 0;
@@ -232,6 +249,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case WM_DESTROY:
+        stopDirectoryWatcher();
         PostQuitMessage(0);
         return 0;
     default:
@@ -268,6 +286,7 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
         return false;
     }
 
+    const std::wstring watchedPath = path;
     DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(path);
     if (!result.ok()) {
         setStatusText(L"Cannot open folder");
@@ -299,6 +318,7 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     }
 
     chromeState_.statusText.clear();
+    startDirectoryWatcher(watchedPath);
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
     return true;
@@ -734,6 +754,71 @@ bool MainWindow::handleSearchChar(WPARAM character) {
         setSearchText(std::move(next));
     }
     return true;
+}
+
+void MainWindow::startDirectoryWatcher(const std::wstring& path) {
+    stopDirectoryWatcher();
+    if (!hwnd_ || path.empty()) {
+        return;
+    }
+
+    directoryChangeHandle_ = FindFirstChangeNotificationW(
+        path.c_str(),
+        FALSE,
+        kDirectoryChangeFilter);
+    if (directoryChangeHandle_ == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    SetTimer(hwnd_, kDirectoryWatcherTimerId, kDirectoryWatcherPollMs, nullptr);
+}
+
+void MainWindow::stopDirectoryWatcher() {
+    if (hwnd_) {
+        KillTimer(hwnd_, kDirectoryWatcherTimerId);
+        KillTimer(hwnd_, kDirectoryRefreshTimerId);
+    }
+
+    directoryRefreshDebouncer_.cancel();
+
+    if (directoryChangeHandle_ != INVALID_HANDLE_VALUE) {
+        FindCloseChangeNotification(directoryChangeHandle_);
+        directoryChangeHandle_ = INVALID_HANDLE_VALUE;
+    }
+}
+
+void MainWindow::pollDirectoryWatcher() {
+    if (directoryChangeHandle_ == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    const DWORD waitResult = WaitForSingleObject(directoryChangeHandle_, 0);
+    if (waitResult != WAIT_OBJECT_0) {
+        return;
+    }
+
+    scheduleDirectoryRefresh();
+    if (!FindNextChangeNotification(directoryChangeHandle_)) {
+        stopDirectoryWatcher();
+    }
+}
+
+void MainWindow::scheduleDirectoryRefresh() {
+    directoryRefreshDebouncer_.request(GetTickCount64());
+    SetTimer(
+        hwnd_,
+        kDirectoryRefreshTimerId,
+        static_cast<UINT>(ui::kDefaultDirectoryRefreshDebounceMs),
+        nullptr);
+}
+
+void MainWindow::consumeDirectoryRefresh() {
+    if (!directoryRefreshDebouncer_.consumeIfDue(GetTickCount64())) {
+        return;
+    }
+
+    KillTimer(hwnd_, kDirectoryRefreshTimerId);
+    refreshCurrentDirectory();
 }
 
 void MainWindow::goBack() {

@@ -5,6 +5,7 @@
 #include "navigation/NavigationHistory.h"
 #include "navigation/SidebarModel.h"
 #include "ui/FileOperationState.h"
+#include "ui/DirectoryRefreshDebouncer.h"
 #include "ui/FinderChrome.h"
 #include "ui/FinderListView.h"
 #include "ui/RenderContext.h"
@@ -61,6 +62,11 @@ private:
     void setSearchText(std::wstring text);
     bool handleSearchKeyDown(WPARAM key);
     bool handleSearchChar(WPARAM character);
+    void startDirectoryWatcher(const std::wstring& path);
+    void stopDirectoryWatcher();
+    void pollDirectoryWatcher();
+    void scheduleDirectoryRefresh();
+    void consumeDirectoryRefresh();
     void goBack();
     void goForward();
     void setStatusText(std::wstring text);
@@ -79,6 +85,8 @@ private:
     ui::FileOperationState fileOperationState_;
     std::wstring homePath_;
     std::wstring searchText_;
+    ui::DirectoryRefreshDebouncer directoryRefreshDebouncer_{ui::kDefaultDirectoryRefreshDebounceMs};
+    HANDLE directoryChangeHandle_ = INVALID_HANDLE_VALUE;
     bool searchFocused_ = false;
     NodeId contextNode_ = kInvalidNodeId;
 };

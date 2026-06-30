@@ -91,6 +91,15 @@ finderx_enable_utf8(finderx_file_operation_state_tests)
 finderx_enable_windows_unicode(finderx_file_operation_state_tests)
 add_test(NAME finderx_file_operation_state_tests COMMAND finderx_file_operation_state_tests)
 
+add_executable(finderx_directory_refresh_debouncer_tests
+    src/ui/DirectoryRefreshDebouncerTests.cpp
+)
+
+target_include_directories(finderx_directory_refresh_debouncer_tests PRIVATE src)
+finderx_enable_utf8(finderx_directory_refresh_debouncer_tests)
+finderx_enable_windows_unicode(finderx_directory_refresh_debouncer_tests)
+add_test(NAME finderx_directory_refresh_debouncer_tests COMMAND finderx_directory_refresh_debouncer_tests)
+
 add_executable(finderx_dpi_scaling_tests
     src/ui/DpiScalingTests.cpp
 )
