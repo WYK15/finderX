@@ -289,6 +289,9 @@ bool promptForRename(HWND owner, const std::wstring& currentName, std::wstring& 
         const int getMessageResult = GetMessageW(&message, nullptr, 0, 0);
         if (getMessageResult == -1) {
             messageLoopError = true;
+            if (IsWindow(dialog)) {
+                DestroyWindow(dialog);
+            }
             break;
         }
 
