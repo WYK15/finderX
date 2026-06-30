@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fs/DirectoryLoader.h"
+#include "settings/AppSettings.h"
 #include "model/FileTree.h"
 #include "navigation/NavigationHistory.h"
 #include "navigation/SidebarModel.h"
@@ -84,6 +85,10 @@ private:
     std::wstring powerShellTargetDirectory() const;
     void revealContextNode();
     void copyContextNodePath();
+    void applySort(std::vector<FileNode>& nodes) const;
+    void changeSort(SortColumn column);
+    void showSortMenu(POINT screenPoint);
+    bool saveSettingsOrStatus();
     bool refreshCurrentDirectory();
     bool refreshCurrentDirectorySelecting(const std::wstring& selectedPath);
     bool refreshCurrentDirectorySelecting(std::span<const std::wstring> selectedPaths);
@@ -113,6 +118,7 @@ private:
     DirectoryLoader directoryLoader_;
     SidebarModel sidebar_;
     ChromeState chromeState_;
+    AppSettings settings_;
     ui::FileOperationState fileOperationState_;
     std::wstring homePath_;
     std::vector<std::unique_ptr<TabState>> tabs_;

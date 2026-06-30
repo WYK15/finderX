@@ -1,5 +1,7 @@
 #pragma once
 
+#include "settings/AppSettings.h"
+
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -24,6 +26,8 @@ struct ChromeState {
     bool searchFocused = false;
     std::vector<std::wstring> tabTitles;
     std::size_t activeTabIndex = 0;
+    SortColumn sortColumn = SortColumn::Name;
+    SortDirection sortDirection = SortDirection::Ascending;
 };
 
 class SidebarModel {

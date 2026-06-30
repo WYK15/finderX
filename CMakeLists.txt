@@ -169,6 +169,18 @@ finderx_enable_utf8(finderx_list_view_tests)
 finderx_enable_windows_unicode(finderx_list_view_tests)
 add_test(NAME finderx_list_view_tests COMMAND finderx_list_view_tests)
 
+add_executable(finderx_chrome_tests
+    src/ui/FinderChromeTests.cpp
+    src/ui/FinderChrome.cpp
+    src/ui/RenderContext.cpp
+)
+
+target_include_directories(finderx_chrome_tests PRIVATE src)
+target_link_libraries(finderx_chrome_tests PRIVATE finderx_navigation d2d1 dwrite windowscodecs)
+finderx_enable_utf8(finderx_chrome_tests)
+finderx_enable_windows_unicode(finderx_chrome_tests)
+add_test(NAME finderx_chrome_tests COMMAND finderx_chrome_tests)
+
 set(FINDERX_APP_SOURCES
     src/main.cpp
     src/app/App.cpp
@@ -199,6 +211,7 @@ if(FINDERX_APP_SOURCES_EXIST)
         finderx_model
         finderx_fs
         finderx_navigation
+        finderx_settings
         d2d1
         dwrite
         windowscodecs

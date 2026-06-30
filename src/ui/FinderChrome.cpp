@@ -38,6 +38,16 @@ constexpr float kPathMinDrawWidth = 20.0f;
 constexpr float kPathMinSegmentWidth = 24.0f;
 constexpr float kPathTextApproxWidth = 7.2f;
 constexpr float kPathChevronWidth = 20.0f;
+constexpr float kToolbarUtilityButtonWidth = 32.0f;
+constexpr float kToolbarUtilityButtonGap = 6.0f;
+constexpr float kToolbarUtilitySearchGap = 8.0f;
+
+struct HeaderColumnRects {
+    D2D1_RECT_F name{};
+    D2D1_RECT_F modified{};
+    D2D1_RECT_F size{};
+    D2D1_RECT_F kind{};
+};
 
 D2D1_COLOR_F rgb(float value) {
     return D2D1::ColorF(value, value, value);
@@ -69,6 +79,70 @@ D2D1_RECT_F searchFieldRect(const D2D1_RECT_F& toolbar) {
     }
     const float searchLeft = (std::max)(toolbar.left + 420.0f, toolbar.right - 202.0f);
     return clampRect(D2D1::RectF(searchLeft, toolbar.top + 16.0f, toolbar.right - 14.0f, toolbar.top + 44.0f), toolbar);
+}
+
+D2D1_RECT_F settingsButtonRect(const D2D1_RECT_F& toolbar) {
+    const D2D1_RECT_F searchRect = searchFieldRect(toolbar);
+    if (searchRect.right - searchRect.left < 80.0f) {
+        return D2D1::RectF();
+    }
+
+    const float right = searchRect.left - kToolbarUtilitySearchGap;
+    const float left = right - kToolbarUtilityButtonWidth;
+    if (left < toolbar.left + 250.0f) {
+        return D2D1::RectF();
+    }
+
+    return D2D1::RectF(left, toolbar.top + kToolbarButtonTop, right, toolbar.top + kToolbarButtonBottom);
+}
+
+D2D1_RECT_F sortButtonRect(const D2D1_RECT_F& toolbar) {
+    const D2D1_RECT_F settingsRect = settingsButtonRect(toolbar);
+    if (!hasArea(settingsRect)) {
+        return D2D1::RectF();
+    }
+
+    const float right = settingsRect.left - kToolbarUtilityButtonGap;
+    const float left = right - kToolbarUtilityButtonWidth;
+    if (left < toolbar.left + 250.0f) {
+        return D2D1::RectF();
+    }
+
+    return D2D1::RectF(left, toolbar.top + kToolbarButtonTop, right, toolbar.top + kToolbarButtonBottom);
+}
+
+HeaderColumnRects headerColumnRects(const D2D1_RECT_F& header) {
+    HeaderColumnRects columns;
+    const float headerWidth = header.right - header.left;
+    if (!hasArea(header) || headerWidth < 80.0f) {
+        return columns;
+    }
+
+    const float padding = 12.0f;
+    const float dateWidth = headerWidth >= 520.0f ? 150.0f : 0.0f;
+    const float sizeWidth = headerWidth >= 420.0f ? 80.0f : 0.0f;
+    const float kindWidth = headerWidth >= 360.0f ? 120.0f : 0.0f;
+    const float kindX = header.right - padding - kindWidth;
+    const float sizeX = kindX - sizeWidth;
+    const float dateX = sizeX - dateWidth;
+    const float trailingLeft = dateWidth > 0.0f
+        ? dateX
+        : (sizeWidth > 0.0f ? sizeX : (kindWidth > 0.0f ? kindX : header.right - padding));
+    const float nameRight = trailingLeft - 8.0f;
+    const float labelTop = header.top + 6.0f;
+    const float labelBottom = header.bottom - 2.0f;
+
+    columns.name = D2D1::RectF(header.left + 64.0f, labelTop, nameRight, labelBottom);
+    if (dateWidth > 0.0f) {
+        columns.modified = D2D1::RectF(dateX, labelTop, sizeX - 8.0f, labelBottom);
+    }
+    if (sizeWidth > 0.0f) {
+        columns.size = D2D1::RectF(sizeX, labelTop, kindX - 8.0f, labelBottom);
+    }
+    if (kindWidth > 0.0f) {
+        columns.kind = D2D1::RectF(kindX, labelTop, header.right - padding, labelBottom);
+    }
+    return columns;
 }
 
 D2D1_RECT_F tabRect(std::size_t index, float right) {
@@ -121,6 +195,15 @@ void drawSeparator(RenderContext& render, float x, float top, float bottom) {
         D2D1::Point2F(x, top),
         D2D1::Point2F(x, bottom),
         D2D1::ColorF(0.82f, 0.82f, 0.82f));
+}
+
+std::wstring sortedHeaderLabel(std::wstring label, SortColumn column, const ChromeState& state) {
+    if (state.sortColumn != column) {
+        return label;
+    }
+
+    label += state.sortDirection == SortDirection::Ascending ? L" \u25B2" : L" \u25BC";
+    return label;
 }
 
 D2D1_COLOR_F navigationColor(bool enabled) {
@@ -461,6 +544,42 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         render.textFormat(),
         D2D1::ColorF(0.36f, 0.36f, 0.36f));
 
+    const D2D1_RECT_F sortRect = sortButtonRect(rects.toolbar);
+    if (hasArea(sortRect)) {
+        render.fillRoundedRect(
+            D2D1::RoundedRect(sortRect, 7.0f, 7.0f),
+            D2D1::ColorF(0.91f, 0.92f, 0.93f));
+        render.drawRoundedRect(
+            D2D1::RoundedRect(sortRect, 7.0f, 7.0f),
+            rgb(0.82f),
+            1.0f);
+        drawTextClipped(
+            render,
+            state.sortDirection == SortDirection::Ascending ? std::wstring_view(L"\u2191\u2193") : std::wstring_view(L"\u2193\u2191"),
+            D2D1::RectF(sortRect.left + 7.0f, sortRect.top + 4.0f, sortRect.right, sortRect.bottom),
+            sortRect,
+            render.textFormat(),
+            D2D1::ColorF(0.30f, 0.30f, 0.30f));
+    }
+
+    const D2D1_RECT_F settingsRect = settingsButtonRect(rects.toolbar);
+    if (hasArea(settingsRect)) {
+        render.fillRoundedRect(
+            D2D1::RoundedRect(settingsRect, 7.0f, 7.0f),
+            D2D1::ColorF(0.91f, 0.92f, 0.93f));
+        render.drawRoundedRect(
+            D2D1::RoundedRect(settingsRect, 7.0f, 7.0f),
+            rgb(0.82f),
+            1.0f);
+        drawTextClipped(
+            render,
+            L"\u2699",
+            D2D1::RectF(settingsRect.left + 9.0f, settingsRect.top + 3.0f, settingsRect.right, settingsRect.bottom),
+            settingsRect,
+            render.textFormat(),
+            D2D1::ColorF(0.30f, 0.30f, 0.30f));
+    }
+
     const D2D1_RECT_F searchRect = searchFieldRect(rects.toolbar);
     if (searchRect.right - searchRect.left >= 80.0f) {
         const bool hasSearchText = !state.searchText.empty();
@@ -480,31 +599,19 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             hasSearchText ? D2D1::ColorF(0.18f, 0.18f, 0.18f) : D2D1::ColorF(0.53f, 0.53f, 0.53f));
     }
 
-    const float headerWidth = rects.header.right - rects.header.left;
-    if (hasArea(rects.header) && headerWidth >= 80.0f) {
-        const float padding = 12.0f;
-        const float dateWidth = headerWidth >= 520.0f ? 150.0f : 0.0f;
-        const float sizeWidth = headerWidth >= 420.0f ? 80.0f : 0.0f;
-        const float kindWidth = headerWidth >= 360.0f ? 120.0f : 0.0f;
-        const float kindX = rects.header.right - padding - kindWidth;
-        const float sizeX = kindX - sizeWidth;
-        const float dateX = sizeX - dateWidth;
-        const float trailingLeft = dateWidth > 0.0f
-            ? dateX
-            : (sizeWidth > 0.0f ? sizeX : (kindWidth > 0.0f ? kindX : rects.header.right - padding));
-        const float nameRight = trailingLeft - 8.0f;
-        const float labelTop = rects.header.top + 6.0f;
-        const float labelBottom = rects.header.bottom - 2.0f;
-
-        drawTextClipped(render, L"Name", D2D1::RectF(rects.header.left + 64.0f, labelTop, nameRight, labelBottom), rects.header, render.headerTextFormat(), D2D1::ColorF(0.18f, 0.18f, 0.18f));
-        if (dateWidth > 0.0f) {
-            drawTextClipped(render, L"Date Modified", D2D1::RectF(dateX, labelTop, sizeX - 8.0f, labelBottom), rects.header, render.headerTextFormat(), D2D1::ColorF(0.38f, 0.38f, 0.38f));
+    const HeaderColumnRects columns = headerColumnRects(rects.header);
+    if (hasArea(columns.name)) {
+        const D2D1_COLOR_F activeHeader = D2D1::ColorF(0.18f, 0.18f, 0.18f);
+        const D2D1_COLOR_F inactiveHeader = D2D1::ColorF(0.38f, 0.38f, 0.38f);
+        drawTextClipped(render, sortedHeaderLabel(L"Name", SortColumn::Name, state), columns.name, rects.header, render.headerTextFormat(), state.sortColumn == SortColumn::Name ? activeHeader : inactiveHeader);
+        if (hasArea(columns.modified)) {
+            drawTextClipped(render, sortedHeaderLabel(L"Date Modified", SortColumn::Modified, state), columns.modified, rects.header, render.headerTextFormat(), state.sortColumn == SortColumn::Modified ? activeHeader : inactiveHeader);
         }
-        if (sizeWidth > 0.0f) {
-            drawTextClipped(render, L"Size", D2D1::RectF(sizeX, labelTop, kindX - 8.0f, labelBottom), rects.header, render.headerTextFormat(), D2D1::ColorF(0.38f, 0.38f, 0.38f));
+        if (hasArea(columns.size)) {
+            drawTextClipped(render, sortedHeaderLabel(L"Size", SortColumn::Size, state), columns.size, rects.header, render.headerTextFormat(), state.sortColumn == SortColumn::Size ? activeHeader : inactiveHeader);
         }
-        if (kindWidth > 0.0f) {
-            drawTextClipped(render, L"Kind", D2D1::RectF(kindX, labelTop, rects.header.right - padding, labelBottom), rects.header, render.headerTextFormat(), D2D1::ColorF(0.38f, 0.38f, 0.38f));
+        if (hasArea(columns.kind)) {
+            drawTextClipped(render, sortedHeaderLabel(L"Kind", SortColumn::Kind, state), columns.kind, rects.header, render.headerTextFormat(), state.sortColumn == SortColumn::Kind ? activeHeader : inactiveHeader);
         }
     }
 
@@ -562,9 +669,33 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
         return {ChromeHitKind::Forward, 0, 0};
     }
 
+    const D2D1_RECT_F sortRect = sortButtonRect(rects.toolbar);
+    if (hasArea(sortRect) && containsPoint(sortRect, x, y)) {
+        return {ChromeHitKind::SortMenu, 0, 0};
+    }
+
+    const D2D1_RECT_F settingsRect = settingsButtonRect(rects.toolbar);
+    if (hasArea(settingsRect) && containsPoint(settingsRect, x, y)) {
+        return {ChromeHitKind::Settings, 0, 0};
+    }
+
     const D2D1_RECT_F searchRect = searchFieldRect(rects.toolbar);
     if (searchRect.right - searchRect.left >= 80.0f && containsPoint(searchRect, x, y)) {
         return {ChromeHitKind::SearchField, 0, 0};
+    }
+
+    const HeaderColumnRects columns = headerColumnRects(rects.header);
+    if (hasArea(columns.name) && containsPoint(columns.name, x, y)) {
+        return {ChromeHitKind::HeaderName, 0, 0};
+    }
+    if (hasArea(columns.modified) && containsPoint(columns.modified, x, y)) {
+        return {ChromeHitKind::HeaderModified, 0, 0};
+    }
+    if (hasArea(columns.size) && containsPoint(columns.size, x, y)) {
+        return {ChromeHitKind::HeaderSize, 0, 0};
+    }
+    if (hasArea(columns.kind) && containsPoint(columns.kind, x, y)) {
+        return {ChromeHitKind::HeaderKind, 0, 0};
     }
 
     for (std::size_t index = 0; index < state.sidebarItems.size(); ++index) {

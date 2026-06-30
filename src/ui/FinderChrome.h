@@ -24,7 +24,13 @@ enum class ChromeHitKind {
     SearchField,
     SidebarItem,
     Tab,
-    NewTab
+    NewTab,
+    SortMenu,
+    Settings,
+    HeaderName,
+    HeaderModified,
+    HeaderSize,
+    HeaderKind
 };
 
 struct ChromeHitResult {

@@ -2,6 +2,8 @@
 
 #include "fs/DriveEnumerator.h"
 #include "fs/FileCreation.h"
+#include "fs/FileSorter.h"
+#include "settings/AppSettings.h"
 #include "shell/ShellActions.h"
 #include "shell/ShellFileOperations.h"
 #include "ui/RenameDialog.h"
@@ -27,6 +29,12 @@ constexpr UINT kCommandMoveToTrash = 1009;
 constexpr UINT kCommandNewFolder = 1010;
 constexpr UINT kCommandNewFile = 1011;
 constexpr UINT kCommandOpenPowerShell = 1012;
+constexpr UINT kCommandSortName = 1013;
+constexpr UINT kCommandSortModified = 1014;
+constexpr UINT kCommandSortSize = 1015;
+constexpr UINT kCommandSortKind = 1016;
+constexpr UINT kCommandSortAscending = 1017;
+constexpr UINT kCommandSortDescending = 1018;
 constexpr UINT_PTR kDirectoryWatcherTimerId = 2001;
 constexpr UINT_PTR kDirectoryRefreshTimerId = 2002;
 constexpr UINT kDirectoryWatcherPollMs = 500;
@@ -155,6 +163,8 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         const D2D1_POINT_2F dipPoint = render_.clientPointToDips(clientPoint);
         const float x = dipPoint.x;
         const float y = dipPoint.y;
+        POINT screenPoint = clientPoint;
+        ClientToScreen(hwnd_, &screenPoint);
 
         const ChromeHitResult chromeHit = chrome_.hitTest(x, y, rects, chromeState_);
         switch (chromeHit.kind) {
@@ -179,6 +189,23 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             createTabAtPath(hasActiveTab() && activeTab().locationKind != TabState::LocationKind::ThisPc
                 ? activeTab().history.currentPath()
                 : homePath_);
+            return 0;
+        case ChromeHitKind::SortMenu:
+            showSortMenu(screenPoint);
+            return 0;
+        case ChromeHitKind::Settings:
+            return 0;
+        case ChromeHitKind::HeaderName:
+            changeSort(SortColumn::Name);
+            return 0;
+        case ChromeHitKind::HeaderModified:
+            changeSort(SortColumn::Modified);
+            return 0;
+        case ChromeHitKind::HeaderSize:
+            changeSort(SortColumn::Size);
+            return 0;
+        case ChromeHitKind::HeaderKind:
+            changeSort(SortColumn::Kind);
             return 0;
         case ChromeHitKind::None:
             break;
@@ -342,6 +369,7 @@ LayoutRects MainWindow::currentLayout() const {
 
 void MainWindow::initializeFileTree() {
     homePath_ = defaultHomeDirectory();
+    settings_ = loadSettings(homePath_).settings;
     createTabAtPath(homePath_);
 }
 
@@ -352,6 +380,7 @@ bool MainWindow::createTabAtPath(const std::wstring& path) {
         setStatusText(L"Cannot open folder");
         return false;
     }
+    applySort(result.children);
 
     std::wstring rootName = fileNameFromPath(target);
     if (rootName.empty()) {
@@ -444,6 +473,7 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
         setStatusText(L"Cannot open folder");
         return false;
     }
+    applySort(result.children);
 
     std::wstring rootName = fileNameFromPath(path);
     if (rootName.empty()) {
@@ -608,6 +638,42 @@ void MainWindow::handleCommand(WPARAM wParam) {
         break;
     case kCommandRefresh:
         refreshCurrentDirectory();
+        break;
+    case kCommandSortName:
+        changeSort(SortColumn::Name);
+        break;
+    case kCommandSortModified:
+        changeSort(SortColumn::Modified);
+        break;
+    case kCommandSortSize:
+        changeSort(SortColumn::Size);
+        break;
+    case kCommandSortKind:
+        changeSort(SortColumn::Kind);
+        break;
+    case kCommandSortAscending:
+        settings_.sortDirection = SortDirection::Ascending;
+        {
+            const bool saved = saveSettingsOrStatus();
+            refreshCurrentDirectory();
+            if (!saved) {
+                setStatusText(L"Cannot save settings");
+            }
+        }
+        refreshChromeState();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        break;
+    case kCommandSortDescending:
+        settings_.sortDirection = SortDirection::Descending;
+        {
+            const bool saved = saveSettingsOrStatus();
+            refreshCurrentDirectory();
+            if (!saved) {
+                setStatusText(L"Cannot save settings");
+            }
+        }
+        refreshChromeState();
+        InvalidateRect(hwnd_, nullptr, FALSE);
         break;
     default:
         break;
@@ -859,6 +925,63 @@ void MainWindow::copyContextNodePath() {
     }
 }
 
+void MainWindow::applySort(std::vector<FileNode>& nodes) const {
+    sortFileNodes(nodes, settings_.sortColumn, settings_.sortDirection);
+}
+
+void MainWindow::changeSort(SortColumn column) {
+    if (settings_.sortColumn == column) {
+        settings_.sortDirection = settings_.sortDirection == SortDirection::Ascending
+            ? SortDirection::Descending
+            : SortDirection::Ascending;
+    } else {
+        settings_.sortColumn = column;
+        settings_.sortDirection = SortDirection::Ascending;
+    }
+
+    const bool saved = saveSettingsOrStatus();
+    refreshCurrentDirectory();
+    if (!saved) {
+        setStatusText(L"Cannot save settings");
+    }
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::showSortMenu(POINT screenPoint) {
+    HMENU menu = CreatePopupMenu();
+    if (!menu) {
+        return;
+    }
+
+    const auto columnFlags = [&](SortColumn column) {
+        return MF_STRING | (settings_.sortColumn == column ? MF_CHECKED : MF_UNCHECKED);
+    };
+    const auto directionFlags = [&](SortDirection direction) {
+        return MF_STRING | (settings_.sortDirection == direction ? MF_CHECKED : MF_UNCHECKED);
+    };
+
+    AppendMenuW(menu, columnFlags(SortColumn::Name), kCommandSortName, L"Name");
+    AppendMenuW(menu, columnFlags(SortColumn::Modified), kCommandSortModified, L"Date Modified");
+    AppendMenuW(menu, columnFlags(SortColumn::Size), kCommandSortSize, L"Size");
+    AppendMenuW(menu, columnFlags(SortColumn::Kind), kCommandSortKind, L"Kind");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, directionFlags(SortDirection::Ascending), kCommandSortAscending, L"Ascending");
+    AppendMenuW(menu, directionFlags(SortDirection::Descending), kCommandSortDescending, L"Descending");
+
+    TrackPopupMenu(menu, TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, 0, hwnd_, nullptr);
+    DestroyMenu(menu);
+}
+
+bool MainWindow::saveSettingsOrStatus() {
+    if (saveSettings(settings_)) {
+        return true;
+    }
+
+    setStatusText(L"Cannot save settings");
+    return false;
+}
+
 bool MainWindow::refreshCurrentDirectory() {
     if (!hasActiveTab()) {
         setStatusText(L"Cannot refresh folder");
@@ -904,6 +1027,7 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
         setStatusText(L"Cannot refresh folder");
         return false;
     }
+    applySort(result.children);
 
     std::wstring rootName = fileNameFromPath(currentPath);
     if (rootName.empty()) {
@@ -970,6 +1094,8 @@ void MainWindow::refreshChromeState() {
         chromeState_.searchFocused = false;
         chromeState_.tabTitles = tabTitles();
         chromeState_.activeTabIndex = activeTabIndex_;
+        chromeState_.sortColumn = settings_.sortColumn;
+        chromeState_.sortDirection = settings_.sortDirection;
         return;
     }
 
@@ -992,6 +1118,8 @@ void MainWindow::refreshChromeState() {
     chromeState_.statusText = tab.statusText;
     chromeState_.tabTitles = tabTitles();
     chromeState_.activeTabIndex = activeTabIndex_;
+    chromeState_.sortColumn = settings_.sortColumn;
+    chromeState_.sortDirection = settings_.sortDirection;
 }
 
 void MainWindow::focusSearch() {
@@ -1216,13 +1344,14 @@ void MainWindow::loadChildrenIfNeeded(NodeId folder) {
         return;
     }
 
-    const DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(node.path);
+    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(node.path);
     if (!result.ok()) {
         tab.tree.setExpanded(folder, false);
         return;
     }
 
-    tab.tree.replaceChildren(folder, result.children);
+    applySort(result.children);
+    tab.tree.replaceChildren(folder, std::move(result.children));
 }
 
 void MainWindow::paint() {
