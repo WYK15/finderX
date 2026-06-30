@@ -18,6 +18,8 @@ struct ChromeState {
     std::wstring statusText;
     bool canGoBack = false;
     bool canGoForward = false;
+    std::wstring searchText;
+    bool searchFocused = false;
     std::vector<SidebarItem> sidebarItems;
 };
 

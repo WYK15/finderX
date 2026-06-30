@@ -21,6 +21,7 @@ enum class ChromeHitKind {
     None,
     Back,
     Forward,
+    SearchField,
     SidebarItem
 };
 

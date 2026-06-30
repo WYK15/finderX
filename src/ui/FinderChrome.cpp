@@ -54,6 +54,14 @@ D2D1_RECT_F clampRect(const D2D1_RECT_F& rect, const D2D1_RECT_F& bounds) {
         (std::clamp)(rect.bottom, bounds.top, bounds.bottom));
 }
 
+D2D1_RECT_F searchFieldRect(const D2D1_RECT_F& toolbar) {
+    if (toolbar.right - toolbar.left < 240.0f) {
+        return D2D1::RectF();
+    }
+    const float searchLeft = (std::max)(toolbar.left + 420.0f, toolbar.right - 202.0f);
+    return clampRect(D2D1::RectF(searchLeft, 16.0f, toolbar.right - 14.0f, 44.0f), toolbar);
+}
+
 void drawTextClipped(
     RenderContext& render,
     std::wstring_view text,
@@ -219,6 +227,8 @@ const ChromeState& defaultChromeState() {
         L"",
         false,
         false,
+        L"",
+        false,
         {
             {L"Applications", L"", true, false},
             {L"Documents", L"", true, false},
@@ -354,27 +364,23 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         render.textFormat(),
         D2D1::ColorF(0.36f, 0.36f, 0.36f));
 
-    if (rects.toolbar.right - rects.toolbar.left >= 240.0f) {
-        const float searchLeft = (std::max)(rects.toolbar.left + 420.0f, rects.toolbar.right - 202.0f);
-        const D2D1_RECT_F searchRect = clampRect(
-            D2D1::RectF(searchLeft, 16.0f, rects.toolbar.right - 14.0f, 44.0f),
-            rects.toolbar);
-        if (searchRect.right - searchRect.left >= 80.0f) {
-            render.fillRoundedRect(
-                D2D1::RoundedRect(searchRect, 7.0f, 7.0f),
-                D2D1::ColorF(1.0f, 1.0f, 1.0f));
-            render.drawLine(
-                D2D1::Point2F(searchRect.left, searchRect.top),
-                D2D1::Point2F(searchRect.right, searchRect.top),
-                rgb(0.88f));
-            drawTextClipped(
-                render,
-                L"\u2315 Search",
-                D2D1::RectF(searchRect.left + 11.0f, searchRect.top + 4.0f, searchRect.right - 12.0f, searchRect.bottom),
-                searchRect,
-                render.textFormat(),
-                D2D1::ColorF(0.53f, 0.53f, 0.53f));
-        }
+    const D2D1_RECT_F searchRect = searchFieldRect(rects.toolbar);
+    if (searchRect.right - searchRect.left >= 80.0f) {
+        const bool hasSearchText = !state.searchText.empty();
+        render.fillRoundedRect(
+            D2D1::RoundedRect(searchRect, 7.0f, 7.0f),
+            D2D1::ColorF(1.0f, 1.0f, 1.0f));
+        render.drawRoundedRect(
+            D2D1::RoundedRect(searchRect, 7.0f, 7.0f),
+            state.searchFocused ? D2D1::ColorF(0.10f, 0.45f, 0.92f) : rgb(0.88f),
+            state.searchFocused ? 1.4f : 1.0f);
+        drawTextClipped(
+            render,
+            hasSearchText ? std::wstring_view(state.searchText) : std::wstring_view(L"\u2315 Search"),
+            D2D1::RectF(searchRect.left + 11.0f, searchRect.top + 4.0f, searchRect.right - 12.0f, searchRect.bottom),
+            searchRect,
+            render.textFormat(),
+            hasSearchText ? D2D1::ColorF(0.18f, 0.18f, 0.18f) : D2D1::ColorF(0.53f, 0.53f, 0.53f));
     }
 
     const float headerWidth = rects.header.right - rects.header.left;
@@ -438,6 +444,11 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
         kToolbarButtonBottom);
     if (state.canGoForward && containsPoint(forwardRect, x, y)) {
         return {ChromeHitKind::Forward, 0};
+    }
+
+    const D2D1_RECT_F searchRect = searchFieldRect(rects.toolbar);
+    if (searchRect.right - searchRect.left >= 80.0f && containsPoint(searchRect, x, y)) {
+        return {ChromeHitKind::SearchField, 0};
     }
 
     for (std::size_t index = 0; index < state.sidebarItems.size(); ++index) {
