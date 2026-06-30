@@ -23,9 +23,9 @@ constexpr UINT kCommandCut = 1007;
 constexpr UINT kCommandPaste = 1008;
 constexpr UINT kCommandMoveToTrash = 1009;
 
-bool containsPoint(const D2D1_RECT_F& rect, POINT point) {
-    return static_cast<float>(point.x) >= rect.left && static_cast<float>(point.x) <= rect.right
-        && static_cast<float>(point.y) >= rect.top && static_cast<float>(point.y) <= rect.bottom;
+bool containsPoint(const D2D1_RECT_F& rect, D2D1_POINT_2F point) {
+    return point.x >= rect.left && point.x <= rect.right
+        && point.y >= rect.top && point.y <= rect.bottom;
 }
 
 }
@@ -108,8 +108,10 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_LBUTTONDOWN: {
         SetFocus(hwnd_);
         const LayoutRects rects = currentLayout();
-        const float x = static_cast<float>(GET_X_LPARAM(lParam));
-        const float y = static_cast<float>(GET_Y_LPARAM(lParam));
+        const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        const D2D1_POINT_2F dipPoint = render_.clientPointToDips(clientPoint);
+        const float x = dipPoint.x;
+        const float y = dipPoint.y;
 
         const ChromeHitResult chromeHit = chrome_.hitTest(x, y, rects, chromeState_);
         switch (chromeHit.kind) {
@@ -145,17 +147,19 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_RBUTTONDOWN: {
         SetFocus(hwnd_);
         const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        const D2D1_POINT_2F dipPoint = render_.clientPointToDips(clientPoint);
         POINT screenPoint = clientPoint;
         ClientToScreen(hwnd_, &screenPoint);
-        showContextMenu(clientPoint, screenPoint);
+        showContextMenu(dipPoint, screenPoint);
         return 0;
     }
     case WM_MOUSEWHEEL: {
         const LayoutRects rects = currentLayout();
         POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         ScreenToClient(hwnd_, &point);
-        const float x = static_cast<float>(point.x);
-        const float y = static_cast<float>(point.y);
+        const D2D1_POINT_2F dipPoint = render_.clientPointToDips(point);
+        const float x = dipPoint.x;
+        const float y = dipPoint.y;
         if (x >= rects.list.left && x <= rects.list.right && y >= rects.list.top && y <= rects.list.bottom
             && listView_.onWheel(GET_WHEEL_DELTA_WPARAM(wParam))) {
             InvalidateRect(hwnd_, nullptr, FALSE);
@@ -236,14 +240,21 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 }
 
 LayoutRects MainWindow::currentLayout() const {
+    const D2D1_SIZE_F renderSize = render_.sizeDips();
+    if (renderSize.width > 0.0f && renderSize.height > 0.0f) {
+        return chrome_.layout(renderSize.width, renderSize.height);
+    }
+
     RECT client{};
     if (!hwnd_ || !GetClientRect(hwnd_, &client)) {
         return chrome_.layout(0.0f, 0.0f);
     }
 
-    const float width = static_cast<float>(client.right - client.left);
-    const float height = static_cast<float>(client.bottom - client.top);
-    return chrome_.layout(width, height);
+    const D2D1_SIZE_F clientSize = pixelsToDips(
+        static_cast<unsigned int>(client.right - client.left),
+        static_cast<unsigned int>(client.bottom - client.top),
+        render_.dpiScale());
+    return chrome_.layout(clientSize.width, clientSize.height);
 }
 
 void MainWindow::initializeFileTree() {
@@ -312,15 +323,15 @@ void MainWindow::openFile(const std::wstring& path) {
     }
 }
 
-void MainWindow::showContextMenu(POINT clientPoint, POINT screenPoint) {
+void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
     const LayoutRects rects = currentLayout();
     if (!containsPoint(rects.list, clientPoint)) {
         return;
     }
 
     contextNode_ = listView_.nodeAtPoint(
-        static_cast<float>(clientPoint.x),
-        static_cast<float>(clientPoint.y),
+        clientPoint.x,
+        clientPoint.y,
         rects.list);
 
     const bool hasTarget = contextNode_ != kInvalidNodeId;

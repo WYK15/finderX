@@ -130,6 +130,25 @@ ID2D1HwndRenderTarget* RenderContext::target() const {
     return target_.Get();
 }
 
+DpiScale RenderContext::dpiScale() const {
+    DpiScale dpi;
+    if (target_) {
+        target_->GetDpi(&dpi.x, &dpi.y);
+    }
+    return dpi;
+}
+
+D2D1_SIZE_F RenderContext::sizeDips() const {
+    if (!target_) {
+        return D2D1::SizeF();
+    }
+    return target_->GetSize();
+}
+
+D2D1_POINT_2F RenderContext::clientPointToDips(POINT point) const {
+    return pixelsToDips(static_cast<int>(point.x), static_cast<int>(point.y), dpiScale());
+}
+
 IDWriteTextFormat* RenderContext::textFormat() const {
     return textFormat_.Get();
 }

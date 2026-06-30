@@ -36,7 +36,7 @@ private:
     bool navigateToDirectory(std::wstring path, HistoryMode mode);
     void activateNode(NodeId nodeId);
     void openFile(const std::wstring& path);
-    void showContextMenu(POINT clientPoint, POINT screenPoint);
+    void showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint);
     void handleCommand(WPARAM wParam);
     NodeId commandTargetNode() const;
     std::vector<NodeId> commandTargetNodes(bool includeSelection) const;

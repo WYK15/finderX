@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui/DpiScaling.h"
+
 #include <windows.h>
 
 #include <d2d1.h>
@@ -20,6 +22,9 @@ public:
     void clear(D2D1_COLOR_F color);
 
     ID2D1HwndRenderTarget* target() const;
+    DpiScale dpiScale() const;
+    D2D1_SIZE_F sizeDips() const;
+    D2D1_POINT_2F clientPointToDips(POINT point) const;
     IDWriteTextFormat* textFormat() const;
     IDWriteTextFormat* headerTextFormat() const;
 
