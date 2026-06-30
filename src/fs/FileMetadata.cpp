@@ -30,19 +30,19 @@ std::wstring formatFileSize(unsigned long long bytes, bool isDirectory) {
 }
 
 std::wstring formatFileTime(const FILETIME& fileTime) {
-    FILETIME localFileTime{};
-    SYSTEMTIME systemTime{};
-    if (!FileTimeToLocalFileTime(&fileTime, &localFileTime) ||
-        !FileTimeToSystemTime(&localFileTime, &systemTime)) {
+    SYSTEMTIME utcTime{};
+    SYSTEMTIME localTime{};
+    if (!FileTimeToSystemTime(&fileTime, &utcTime) ||
+        !SystemTimeToTzSpecificLocalTime(nullptr, &utcTime, &localTime)) {
         return L"";
     }
 
     std::wostringstream out;
-    out << systemTime.wYear << L"/"
-        << std::setw(2) << std::setfill(L'0') << systemTime.wMonth << L"/"
-        << std::setw(2) << std::setfill(L'0') << systemTime.wDay << L" "
-        << std::setw(2) << std::setfill(L'0') << systemTime.wHour << L":"
-        << std::setw(2) << std::setfill(L'0') << systemTime.wMinute;
+    out << localTime.wYear << L"/"
+        << std::setw(2) << std::setfill(L'0') << localTime.wMonth << L"/"
+        << std::setw(2) << std::setfill(L'0') << localTime.wDay << L" "
+        << std::setw(2) << std::setfill(L'0') << localTime.wHour << L":"
+        << std::setw(2) << std::setfill(L'0') << localTime.wMinute;
     return out.str();
 }
 

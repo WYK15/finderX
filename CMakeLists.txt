@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+enable_testing()
+
 function(finderx_enable_utf8 target)
     if(MSVC)
         target_compile_options(${target} PRIVATE /utf-8)
@@ -38,6 +40,7 @@ add_executable(finderx_model_tests
 
 target_link_libraries(finderx_model_tests PRIVATE finderx_model)
 finderx_enable_utf8(finderx_model_tests)
+add_test(NAME finderx_model_tests COMMAND finderx_model_tests)
 
 add_executable(finderx_fs_tests
     src/fs/DirectoryLoaderTests.cpp
@@ -46,6 +49,7 @@ add_executable(finderx_fs_tests
 target_link_libraries(finderx_fs_tests PRIVATE finderx_fs)
 finderx_enable_utf8(finderx_fs_tests)
 finderx_enable_windows_unicode(finderx_fs_tests)
+add_test(NAME finderx_fs_tests COMMAND finderx_fs_tests)
 
 set(FINDERX_APP_SOURCES
     src/main.cpp
