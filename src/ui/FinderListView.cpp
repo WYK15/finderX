@@ -103,6 +103,46 @@ NodeId FinderListView::selectedNode() const {
     return selected_;
 }
 
+NodeId FinderListView::nodeAtPoint(float x, float y, const D2D1_RECT_F& bounds) {
+    if (!tree_) {
+        return kInvalidNodeId;
+    }
+
+    rebuildRows();
+    ensureSelection();
+    viewportHeight_ = (std::max)(0.0f, bounds.bottom - bounds.top);
+    clampScroll();
+
+    const int index = hitTestRow(x, y, bounds);
+    if (index < 0) {
+        return kInvalidNodeId;
+    }
+
+    return rows_[static_cast<std::size_t>(index)].nodeId;
+}
+
+bool FinderListView::selectNode(NodeId id) {
+    if (!tree_ || id == kInvalidNodeId) {
+        return false;
+    }
+
+    rebuildRows();
+    const auto selected = std::find_if(rows_.begin(), rows_.end(), [id](const VisibleRow& row) {
+        return row.nodeId == id;
+    });
+    if (selected == rows_.end()) {
+        return false;
+    }
+
+    if (selected_ == id) {
+        return false;
+    }
+
+    selected_ = id;
+    ensureSelectionVisible();
+    return true;
+}
+
 void FinderListView::rebuildRows() {
     rows_ = tree_ ? tree_->flatten() : std::vector<VisibleRow>{};
 }

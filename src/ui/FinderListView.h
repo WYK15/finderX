@@ -24,6 +24,8 @@ public:
     bool onWheel(int wheelDelta);
     ListInteractionResult onKeyDown(WPARAM key);
     NodeId selectedNode() const;
+    NodeId nodeAtPoint(float x, float y, const D2D1_RECT_F& bounds);
+    bool selectNode(NodeId id);
 
 private:
     void rebuildRows();
