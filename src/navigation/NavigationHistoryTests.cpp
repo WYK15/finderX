@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace finderx;
 
@@ -26,17 +27,28 @@ static const SidebarItem& findItem(const SidebarModel& model, const std::wstring
 
 static void testSidebarModel() {
     SidebarModel model;
-    model.refresh(L"C:\\Users\\leo", L"C:\\Users\\leo");
+    const std::vector<FavoriteLocation> favorites{
+        {L"Home", L"C:\\Users\\leo"},
+        {L"Desktop", L"C:\\Users\\leo\\Desktop"},
+        {L"Documents", L"C:\\Users\\leo\\Documents"},
+        {L"Downloads", L"C:\\Users\\leo\\Downloads"},
+        {L"Projects", L"D:\\Projects"},
+    };
+    model.refresh(L"C:\\Users\\leo", L"d:\\projects", favorites);
 
-    require(model.items().size() == 6, "sidebar should include six items");
+    require(model.items().size() == 6, "sidebar should include favorites and This PC");
+    require(findItem(model, L"Home").role == SidebarItemRole::Favorite, "Home should be a favorite");
     require(findItem(model, L"Home").path == L"C:\\Users\\leo", "Home path should use home path");
     require(findItem(model, L"Desktop").path == L"C:\\Users\\leo\\Desktop", "Desktop path should derive from home path");
     require(findItem(model, L"Documents").path == L"C:\\Users\\leo\\Documents", "Documents path should derive from home path");
     require(findItem(model, L"Downloads").path == L"C:\\Users\\leo\\Downloads", "Downloads path should derive from home path");
+    require(findItem(model, L"Projects").selected, "custom favorite should be selected case-insensitively");
+    require(findItem(model, L"Projects").available, "custom favorite with a path should be available");
+    require(findItem(model, L"This PC").role == SidebarItemRole::Location, "This PC should be a location");
     require(findItem(model, L"This PC").path == thisPcPath(), "This PC path should use virtual path");
     require(findItem(model, L"This PC").available, "This PC should always be available");
 
-    model.refresh(L"C:\\Users\\leo", thisPcPath());
+    model.refresh(L"C:\\Users\\leo", thisPcPath(), favorites);
     require(findItem(model, L"This PC").selected, "This PC should be selected for virtual path");
 
     model.setAvailabilityForTests(L"Home", true);

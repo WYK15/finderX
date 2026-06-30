@@ -23,7 +23,8 @@ constexpr float kMinTextWidth = 20.0f;
 constexpr float kMinTabDrawWidth = 48.0f;
 constexpr float kMinNewTabDrawWidth = 24.0f;
 constexpr float kSidebarHeaderTop = 70.0f;
-constexpr float kSidebarRowStartY = 94.0f;
+constexpr float kSidebarSectionHeaderHeight = 24.0f;
+constexpr float kSidebarSectionGap = 6.0f;
 constexpr float kSidebarRowStep = 28.0f;
 constexpr float kSidebarRowLeft = 24.0f;
 constexpr float kSidebarRowRight = 164.0f;
@@ -49,6 +50,13 @@ struct HeaderColumnRects {
     D2D1_RECT_F kind{};
 };
 
+struct SidebarLayoutRow {
+    std::size_t index = 0;
+    float rowY = 0.0f;
+    float headerTop = 0.0f;
+    const wchar_t* header = nullptr;
+};
+
 D2D1_COLOR_F rgb(float value) {
     return D2D1::ColorF(value, value, value);
 }
@@ -63,6 +71,41 @@ bool hasArea(const D2D1_RECT_F& rect) {
 
 bool containsPoint(const D2D1_RECT_F& rect, float x, float y) {
     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+const wchar_t* sidebarHeaderForRole(SidebarItemRole role) {
+    return role == SidebarItemRole::Location ? L"LOCATIONS" : L"FAVORITES";
+}
+
+std::vector<SidebarLayoutRow> sidebarLayoutRows(const std::vector<SidebarItem>& items) {
+    std::vector<SidebarLayoutRow> rows;
+    rows.reserve(items.size());
+
+    float cursor = kSidebarHeaderTop;
+    bool sawFavorite = false;
+    bool sawLocation = false;
+    for (std::size_t index = 0; index < items.size(); ++index) {
+        const SidebarItemRole role = items[index].role;
+        bool* sawSection = role == SidebarItemRole::Location ? &sawLocation : &sawFavorite;
+
+        SidebarLayoutRow row;
+        row.index = index;
+        if (!*sawSection) {
+            if (!rows.empty()) {
+                cursor += kSidebarSectionGap;
+            }
+            row.headerTop = cursor;
+            row.header = sidebarHeaderForRole(role);
+            cursor += kSidebarSectionHeaderHeight;
+            *sawSection = true;
+        }
+
+        row.rowY = cursor;
+        cursor += kSidebarRowStep;
+        rows.push_back(row);
+    }
+
+    return rows;
 }
 
 D2D1_RECT_F clampRect(const D2D1_RECT_F& rect, const D2D1_RECT_F& bounds) {
@@ -357,11 +400,11 @@ const ChromeState& defaultChromeState() {
         false,
         false,
         {
-            {L"Applications", L"", true, false},
-            {L"Documents", L"", true, false},
-            {L"Desktop", L"", true, false},
-            {L"Home", L"", true, true},
-            {L"Downloads", L"", true, false},
+            {L"Applications", L"", SidebarItemRole::Favorite, true, false},
+            {L"Documents", L"", SidebarItemRole::Favorite, true, false},
+            {L"Desktop", L"", SidebarItemRole::Favorite, true, false},
+            {L"Home", L"", SidebarItemRole::Favorite, true, true},
+            {L"This PC", thisPcPath(), SidebarItemRole::Location, true, false},
         }};
     return state;
 }
@@ -467,17 +510,20 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         D2D1::Point2F(rects.pathbar.right, rects.pathbar.top),
         rgb(0.86f));
 
-    drawTextClipped(
-        render,
-        L"FAVORITES",
-        D2D1::RectF(18.0f, kSidebarHeaderTop, 150.0f, 91.0f),
-        rects.sidebar,
-        render.headerTextFormat(),
-        D2D1::ColorF(0.50f, 0.50f, 0.50f));
+    const std::vector<SidebarLayoutRow> sidebarRows = sidebarLayoutRows(state.sidebarItems);
+    for (const SidebarLayoutRow& row : sidebarRows) {
+        const SidebarItem& item = state.sidebarItems[row.index];
+        const float rowY = row.rowY;
 
-    for (std::size_t index = 0; index < state.sidebarItems.size(); ++index) {
-        const SidebarItem& item = state.sidebarItems[index];
-        const float rowY = kSidebarRowStartY + (static_cast<float>(index) * kSidebarRowStep);
+        if (row.header) {
+            drawTextClipped(
+                render,
+                row.header,
+                D2D1::RectF(18.0f, row.headerTop, 150.0f, row.headerTop + 21.0f),
+                rects.sidebar,
+                render.headerTextFormat(),
+                D2D1::ColorF(0.50f, 0.50f, 0.50f));
+        }
 
         if (item.selected) {
             render.fillRoundedRect(
@@ -699,12 +745,13 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
         return {ChromeHitKind::HeaderKind, 0, 0};
     }
 
-    for (std::size_t index = 0; index < state.sidebarItems.size(); ++index) {
-        const SidebarItem& item = state.sidebarItems[index];
-        const float rowY = kSidebarRowStartY + (static_cast<float>(index) * kSidebarRowStep);
+    const std::vector<SidebarLayoutRow> sidebarRows = sidebarLayoutRows(state.sidebarItems);
+    for (const SidebarLayoutRow& row : sidebarRows) {
+        const SidebarItem& item = state.sidebarItems[row.index];
+        const float rowY = row.rowY;
         const D2D1_RECT_F rowRect = D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, kSidebarRowRight, rowY + 24.0f);
         if (item.available && containsPoint(rowRect, x, y)) {
-            return {ChromeHitKind::SidebarItem, index, 0};
+            return {ChromeHitKind::SidebarItem, row.index, 0};
         }
     }
 

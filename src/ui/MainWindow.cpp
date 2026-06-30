@@ -35,6 +35,8 @@ constexpr UINT kCommandSortSize = 1015;
 constexpr UINT kCommandSortKind = 1016;
 constexpr UINT kCommandSortAscending = 1017;
 constexpr UINT kCommandSortDescending = 1018;
+constexpr UINT kCommandAddFavorite = 1019;
+constexpr UINT kCommandRemoveFavorite = 1020;
 constexpr UINT_PTR kDirectoryWatcherTimerId = 2001;
 constexpr UINT_PTR kDirectoryRefreshTimerId = 2002;
 constexpr UINT kDirectoryWatcherPollMs = 500;
@@ -227,13 +229,20 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     }
     case WM_RBUTTONDOWN: {
         SetFocus(hwnd_);
-        if (!hasActiveTab()) {
-            return 0;
-        }
         const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         const D2D1_POINT_2F dipPoint = render_.clientPointToDips(clientPoint);
         POINT screenPoint = clientPoint;
         ClientToScreen(hwnd_, &screenPoint);
+
+        const ChromeHitResult chromeHit = chrome_.hitTest(dipPoint.x, dipPoint.y, currentLayout(), chromeState_);
+        if (chromeHit.kind == ChromeHitKind::SidebarItem) {
+            showSidebarContextMenu(chromeHit.sidebarIndex, screenPoint);
+            return 0;
+        }
+
+        if (!hasActiveTab()) {
+            return 0;
+        }
         showContextMenu(dipPoint, screenPoint);
         return 0;
     }
@@ -543,6 +552,7 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
         return;
     }
 
+    contextFavoritePath_.clear();
     TabState& tab = activeTab();
     contextNode_ = tab.listView.nodeAtPoint(
         clientPoint.x,
@@ -586,6 +596,10 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
         }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     } else if (directoryLocation) {
+        if (!containsFavorite(settings_, tab.history.currentPath())) {
+            AppendMenuW(menu, MF_STRING, kCommandAddFavorite, L"Add to Favorites");
+            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        }
         AppendMenuW(menu, MF_STRING, kCommandNewFolder, L"New Folder");
         AppendMenuW(menu, MF_STRING, kCommandNewFile, L"New File");
         AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
@@ -597,6 +611,28 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
     }
     AppendMenuW(menu, MF_STRING, kCommandRefresh, L"Refresh");
 
+    TrackPopupMenu(menu, TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, 0, hwnd_, nullptr);
+    DestroyMenu(menu);
+}
+
+void MainWindow::showSidebarContextMenu(std::size_t sidebarIndex, POINT screenPoint) {
+    contextFavoritePath_.clear();
+    if (sidebarIndex >= chromeState_.sidebarItems.size()) {
+        return;
+    }
+
+    const SidebarItem& item = chromeState_.sidebarItems[sidebarIndex];
+    if (item.role != SidebarItemRole::Favorite || item.path.empty()) {
+        return;
+    }
+
+    HMENU menu = CreatePopupMenu();
+    if (!menu) {
+        return;
+    }
+
+    contextFavoritePath_ = item.path;
+    AppendMenuW(menu, MF_STRING, kCommandRemoveFavorite, L"Remove from Favorites");
     TrackPopupMenu(menu, TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, 0, hwnd_, nullptr);
     DestroyMenu(menu);
 }
@@ -623,6 +659,12 @@ void MainWindow::handleCommand(WPARAM wParam) {
         break;
     case kCommandNewFile:
         createFileInCurrentDirectory();
+        break;
+    case kCommandAddFavorite:
+        addCurrentDirectoryToFavorites();
+        break;
+    case kCommandRemoveFavorite:
+        removeContextFavorite();
         break;
     case kCommandOpenPowerShell:
         openPowerShellForContext();
@@ -860,6 +902,42 @@ void MainWindow::createFileInCurrentDirectory() {
     refreshCurrentDirectorySelecting(result.path);
 }
 
+void MainWindow::addCurrentDirectoryToFavorites() {
+    if (!isActiveDirectoryLocation()) {
+        return;
+    }
+
+    const std::wstring path = activeTab().history.currentPath();
+    std::wstring label = fileNameFromPath(path);
+    if (label.empty()) {
+        label = path;
+    }
+
+    if (!addFavorite(settings_, std::move(label), path)) {
+        return;
+    }
+
+    saveSettingsOrStatus();
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::removeContextFavorite() {
+    if (contextFavoritePath_.empty()) {
+        return;
+    }
+
+    if (!removeFavorite(settings_, contextFavoritePath_)) {
+        contextFavoritePath_.clear();
+        return;
+    }
+
+    contextFavoritePath_.clear();
+    saveSettingsOrStatus();
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
 std::wstring MainWindow::powerShellTargetDirectory() const {
     if (!isActiveDirectoryLocation()) {
         return {};
@@ -1085,7 +1163,7 @@ void MainWindow::refreshChromeState() {
         chromeState_.pathText.clear();
         chromeState_.canGoBack = false;
         chromeState_.canGoForward = false;
-        sidebar_.refresh(homePath_, L"");
+        sidebar_.refresh(homePath_, L"", settings_.favorites);
         chromeState_.sidebarItems = sidebar_.items();
         chromeState_.searchText.clear();
         chromeState_.searchFocused = false;
@@ -1108,7 +1186,7 @@ void MainWindow::refreshChromeState() {
     chromeState_.canGoBack = tab.history.canGoBack();
     chromeState_.canGoForward = tab.history.canGoForward();
 
-    sidebar_.refresh(homePath_, tab.history.currentPath());
+    sidebar_.refresh(homePath_, tab.history.currentPath(), settings_.favorites);
     chromeState_.sidebarItems = sidebar_.items();
     chromeState_.searchText = tab.searchText;
     chromeState_.searchFocused = tab.searchFocused;

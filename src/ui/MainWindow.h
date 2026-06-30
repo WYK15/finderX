@@ -69,6 +69,7 @@ private:
     void activateNode(NodeId nodeId);
     void openFile(const std::wstring& path);
     void showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint);
+    void showSidebarContextMenu(std::size_t sidebarIndex, POINT screenPoint);
     void handleCommand(WPARAM wParam);
     NodeId commandTargetNode() const;
     std::vector<NodeId> commandTargetNodes(bool includeSelection) const;
@@ -81,6 +82,8 @@ private:
     void pasteIntoCurrentDirectory();
     void createFolderInCurrentDirectory();
     void createFileInCurrentDirectory();
+    void addCurrentDirectoryToFavorites();
+    void removeContextFavorite();
     void openPowerShellForContext();
     std::wstring powerShellTargetDirectory() const;
     void revealContextNode();
@@ -127,6 +130,7 @@ private:
     ui::DirectoryRefreshDebouncer directoryRefreshDebouncer_{ui::kDefaultDirectoryRefreshDebounceMs};
     HANDLE directoryChangeHandle_ = INVALID_HANDLE_VALUE;
     NodeId contextNode_ = kInvalidNodeId;
+    std::wstring contextFavoritePath_;
 };
 
 }

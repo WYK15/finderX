@@ -8,9 +8,15 @@
 
 namespace finderx {
 
+enum class SidebarItemRole {
+    Favorite,
+    Location
+};
+
 struct SidebarItem {
     std::wstring label;
     std::wstring path;
+    SidebarItemRole role = SidebarItemRole::Favorite;
     bool available = false;
     bool selected = false;
 };
@@ -32,7 +38,7 @@ struct ChromeState {
 
 class SidebarModel {
 public:
-    void refresh(const std::wstring& homePath, const std::wstring& currentPath);
+    void refresh(const std::wstring& homePath, const std::wstring& currentPath, const std::vector<FavoriteLocation>& favorites);
     const std::vector<SidebarItem>& items() const;
     void setAvailabilityForTests(const std::wstring& label, bool available);
 
