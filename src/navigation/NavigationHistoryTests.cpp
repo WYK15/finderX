@@ -1,4 +1,5 @@
 #include "navigation/NavigationHistory.h"
+#include "navigation/SidebarModel.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -11,6 +12,33 @@ static void require(bool condition, const char* message) {
     if (!condition) {
         throw std::runtime_error(message);
     }
+}
+
+static const SidebarItem& findItem(const SidebarModel& model, const std::wstring& label) {
+    for (const auto& item : model.items()) {
+        if (item.label == label) {
+            return item;
+        }
+    }
+
+    throw std::runtime_error("sidebar item not found");
+}
+
+static void testSidebarModel() {
+    SidebarModel model;
+    model.refresh(L"C:\\Users\\leo", L"C:\\Users\\leo");
+
+    require(model.items().size() == 5, "sidebar should include five items");
+    require(findItem(model, L"Home").path == L"C:\\Users\\leo", "Home path should use home path");
+    require(findItem(model, L"Desktop").path == L"C:\\Users\\leo\\Desktop", "Desktop path should derive from home path");
+    require(findItem(model, L"Documents").path == L"C:\\Users\\leo\\Documents", "Documents path should derive from home path");
+    require(findItem(model, L"Downloads").path == L"C:\\Users\\leo\\Downloads", "Downloads path should derive from home path");
+
+    model.setAvailabilityForTests(L"Home", true);
+    require(findItem(model, L"Home").available, "availability override should enable matching item");
+
+    model.setAvailabilityForTests(L"Home", false);
+    require(!findItem(model, L"Home").available, "availability override should disable matching item");
 }
 
 static void runTests() {
@@ -81,6 +109,8 @@ static void runTests() {
         require(history.goBack() == L"C:\\Root", "single back should return to initial path");
         require(!history.canGoBack(), "same-path navigation should not add extra back entry");
     }
+
+    testSidebarModel();
 }
 
 int main() {

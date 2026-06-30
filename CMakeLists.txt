@@ -37,6 +37,7 @@ finderx_enable_windows_unicode(finderx_fs)
 
 add_library(finderx_navigation
     src/navigation/NavigationHistory.cpp
+    src/navigation/SidebarModel.cpp
 )
 
 target_include_directories(finderx_navigation PUBLIC src)
