@@ -5,6 +5,7 @@
 
 #include <d2d1.h>
 #include <span>
+#include <string>
 #include <windows.h>
 #include <vector>
 
@@ -33,6 +34,9 @@ public:
     bool selectNodes(std::span<const NodeId> ids);
     bool selectAllVisible();
     bool clearSelection();
+    void setFilterText(std::wstring text);
+    const std::wstring& filterText() const;
+    bool hasFilter() const;
 
 private:
     void rebuildRows();
@@ -60,6 +64,7 @@ private:
     float scrollY_ = 0.0f;
     float viewportHeight_ = 0.0f;
     std::vector<VisibleRow> rows_;
+    std::wstring filterText_;
 };
 
 }

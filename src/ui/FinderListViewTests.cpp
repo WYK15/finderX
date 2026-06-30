@@ -2,8 +2,12 @@
 
 #include <d2d1helper.h>
 
+#include <algorithm>
+#include <cwctype>
 #include <cstdlib>
 #include <iostream>
+#include <string>
+#include <string_view>
 #include <vector>
 
 using namespace finderx;
@@ -35,6 +39,27 @@ void requireSelectedNodes(const FinderListView& view, std::span<const NodeId> ex
             require(false, message);
         }
     }
+}
+
+std::wstring lowercase(std::wstring_view text) {
+    std::wstring lowered;
+    lowered.reserve(text.size());
+    for (wchar_t ch : text) {
+        lowered.push_back(static_cast<wchar_t>(std::towlower(ch)));
+    }
+    return lowered;
+}
+
+std::vector<NodeId> visibleRowsMatchingName(const FileTree& tree, std::span<const VisibleRow> rows, std::wstring_view query) {
+    const std::wstring loweredQuery = lowercase(query);
+    std::vector<NodeId> matches;
+    for (const VisibleRow& row : rows) {
+        const std::wstring loweredName = lowercase(tree.node(row.nodeId).name);
+        if (loweredName.find(loweredQuery) != std::wstring::npos) {
+            matches.push_back(row.nodeId);
+        }
+    }
+    return matches;
 }
 
 } // namespace
@@ -120,6 +145,47 @@ int main() {
         const NodeId expected[] = {rows[4].nodeId};
         requireSelectedNodes(view, expected, "Down without shift should collapse selection to focused row");
         require(view.selectedNode() == rows[4].nodeId, "Down without shift should move focus");
+    }
+
+    {
+        FileTree tree = FileTree::sample();
+        FinderListView view(&tree);
+        const std::vector<VisibleRow> rows = tree.flatten();
+
+        require(!view.hasFilter(), "empty filter should not be active");
+        require(view.filterText().empty(), "default filter text should be empty");
+
+        view.selectAllVisible();
+        std::vector<NodeId> expectedAll;
+        for (const VisibleRow& row : rows) {
+            expectedAll.push_back(row.nodeId);
+        }
+        requireSelectedNodes(view, expectedAll, "selectAllVisible should select all rows with empty filter");
+
+        const std::wstring sampleName = tree.node(rows[0].nodeId).name;
+        std::wstring query = sampleName.substr(0, (std::min)(std::size_t{4}, sampleName.size()));
+        std::transform(query.begin(), query.end(), query.begin(), [](wchar_t ch) {
+            return static_cast<wchar_t>(std::towupper(ch));
+        });
+        const std::vector<NodeId> expectedFiltered = visibleRowsMatchingName(tree, rows, query);
+        require(!expectedFiltered.empty(), "sample query should match at least one visible row");
+
+        view.setFilterText(query);
+        require(view.hasFilter(), "non-empty filter should be active");
+        require(view.filterText() == query, "filterText should return the original filter text");
+        view.selectAllVisible();
+        requireSelectedNodes(view, expectedFiltered, "case-insensitive filter should constrain selectAllVisible");
+
+        view.setFilterText(L"definitely-not-a-visible-sample-name");
+        require(!view.hasSelection(), "unmatched filter should prune visible selection");
+        const std::vector<NodeId> emptyExpected;
+        require(!view.selectAllVisible(), "selectAllVisible should not change an empty unmatched selection");
+        requireSelectedNodes(view, emptyExpected, "selectAllVisible should keep unmatched filter selection empty");
+
+        view.setFilterText(L"");
+        require(!view.hasFilter(), "clearing filter should make filter inactive");
+        view.selectAllVisible();
+        requireSelectedNodes(view, expectedAll, "clearing filter should restore all visible rows");
     }
 
     std::cout << "FinderListViewTests passed\n";

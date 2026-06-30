@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cwctype>
 #include <string>
+#include <string_view>
+#include <utility>
 
 namespace finderx {
 
@@ -90,6 +93,19 @@ void drawNodeIcon(RenderContext& render, const FileNode& node, float x, float y,
     }
 
     drawFileIcon(render, x, y, selected);
+}
+
+std::wstring lowercase(std::wstring_view text) {
+    std::wstring lowered;
+    lowered.reserve(text.size());
+    for (wchar_t ch : text) {
+        lowered.push_back(static_cast<wchar_t>(std::towlower(ch)));
+    }
+    return lowered;
+}
+
+bool nameMatchesFilter(const FileNode& node, const std::wstring& loweredFilter) {
+    return loweredFilter.empty() || lowercase(node.name).find(loweredFilter) != std::wstring::npos;
 }
 
 }
@@ -227,8 +243,42 @@ bool FinderListView::clearSelection() {
     return changed;
 }
 
+void FinderListView::setFilterText(std::wstring text) {
+    filterText_ = std::move(text);
+    rebuildRows();
+    ensureSelection();
+    ensureSelectionVisible();
+}
+
+const std::wstring& FinderListView::filterText() const {
+    return filterText_;
+}
+
+bool FinderListView::hasFilter() const {
+    return !filterText_.empty();
+}
+
 void FinderListView::rebuildRows() {
-    rows_ = tree_ ? tree_->flatten() : std::vector<VisibleRow>{};
+    if (!tree_) {
+        rows_.clear();
+        return;
+    }
+
+    std::vector<VisibleRow> flattened = tree_->flatten();
+    if (filterText_.empty()) {
+        rows_ = std::move(flattened);
+        return;
+    }
+
+    const std::wstring loweredFilter = lowercase(filterText_);
+    std::vector<VisibleRow> filtered;
+    filtered.reserve(flattened.size());
+    for (const VisibleRow& row : flattened) {
+        if (nameMatchesFilter(tree_->node(row.nodeId), loweredFilter)) {
+            filtered.push_back(row);
+        }
+    }
+    rows_ = std::move(filtered);
 }
 
 void FinderListView::ensureSelection() {
