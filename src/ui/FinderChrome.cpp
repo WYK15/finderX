@@ -227,8 +227,6 @@ const ChromeState& defaultChromeState() {
         L"",
         false,
         false,
-        L"",
-        false,
         {
             {L"Applications", L"", true, false},
             {L"Documents", L"", true, false},

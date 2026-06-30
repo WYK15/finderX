@@ -18,9 +18,9 @@ struct ChromeState {
     std::wstring statusText;
     bool canGoBack = false;
     bool canGoForward = false;
+    std::vector<SidebarItem> sidebarItems;
     std::wstring searchText;
     bool searchFocused = false;
-    std::vector<SidebarItem> sidebarItems;
 };
 
 class SidebarModel {
