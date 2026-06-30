@@ -18,11 +18,13 @@ struct FileNode {
     NodeId id = kInvalidNodeId;
     NodeId parent = kInvalidNodeId;
     std::wstring name;
+    std::wstring path;
     std::wstring modified;
     std::wstring size;
     std::wstring kindText;
     FileKind kind = FileKind::File;
     bool expanded = false;
+    bool childrenLoaded = false;
     std::vector<NodeId> children;
 };
 

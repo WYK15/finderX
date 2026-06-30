@@ -11,6 +11,13 @@ FileTree::FileTree() {
     nodes_[rootId_].expanded = true;
 }
 
+FileTree::FileTree(std::wstring rootPath, std::wstring rootName) {
+    nodes_.push_back(FileNode{});
+    rootId_ = addNode(kInvalidNodeId, std::move(rootName), std::move(rootPath), FileKind::Folder,
+                      L"", L"--", L"Folder");
+    nodes_[rootId_].expanded = true;
+}
+
 NodeId FileTree::rootId() const {
     return rootId_;
 }
@@ -33,7 +40,7 @@ std::span<const FileNode> FileTree::nodes() const {
     return nodes_;
 }
 
-NodeId FileTree::addNode(NodeId parent, std::wstring name, FileKind kind,
+NodeId FileTree::addNode(NodeId parent, std::wstring name, std::wstring path, FileKind kind,
                          std::wstring modified, std::wstring size, std::wstring kindText) {
     if (parent != kInvalidNodeId && node(parent).kind != FileKind::Folder) {
         throw std::invalid_argument("parent must be a folder");
@@ -44,6 +51,7 @@ NodeId FileTree::addNode(NodeId parent, std::wstring name, FileKind kind,
     item.id = id;
     item.parent = parent;
     item.name = std::move(name);
+    item.path = std::move(path);
     item.modified = std::move(modified);
     item.size = std::move(size);
     item.kindText = std::move(kindText);
@@ -57,11 +65,33 @@ NodeId FileTree::addNode(NodeId parent, std::wstring name, FileKind kind,
     return id;
 }
 
+NodeId FileTree::addNode(NodeId parent, std::wstring name, FileKind kind,
+                         std::wstring modified, std::wstring size, std::wstring kindText) {
+    return addNode(parent, std::move(name), L"", kind, std::move(modified), std::move(size), std::move(kindText));
+}
+
+void FileTree::replaceChildren(NodeId parent, std::vector<FileNode> children) {
+    if (node(parent).kind != FileKind::Folder) {
+        throw std::invalid_argument("parent must be a folder");
+    }
+
+    node(parent).children.clear();
+    for (FileNode child : children) {
+        addNode(parent, std::move(child.name), std::move(child.path), child.kind,
+                std::move(child.modified), std::move(child.size), std::move(child.kindText));
+    }
+    node(parent).childrenLoaded = true;
+}
+
 void FileTree::setExpanded(NodeId id, bool expanded) {
     FileNode& item = node(id);
     if (item.kind == FileKind::Folder) {
         item.expanded = expanded;
     }
+}
+
+void FileTree::setChildrenLoaded(NodeId id, bool loaded) {
+    node(id).childrenLoaded = loaded;
 }
 
 void FileTree::toggleExpanded(NodeId id) {
