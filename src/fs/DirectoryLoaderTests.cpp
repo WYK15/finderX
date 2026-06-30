@@ -1,4 +1,5 @@
 #include "fs/DirectoryLoader.h"
+#include "fs/FileCreation.h"
 #include "fs/FileMetadata.h"
 
 #include <cstdlib>
@@ -14,6 +15,28 @@ static void require(bool condition, const char* message) {
     if (!condition) {
         throw std::runtime_error(message);
     }
+}
+
+static std::wstring uniqueTempChild(const std::wstring& prefix) {
+    DWORD length = GetTempPathW(0, nullptr);
+    require(length != 0, "GetTempPathW should report a temp path length");
+
+    std::wstring tempPath(length, L'\0');
+    DWORD written = GetTempPathW(length, tempPath.data());
+    require(written != 0 && written < length, "GetTempPathW should return a temp path");
+    tempPath.resize(written);
+
+    if (!tempPath.empty() && tempPath.back() != L'\\' && tempPath.back() != L'/') {
+        tempPath += L'\\';
+    }
+
+    return tempPath + prefix + L"_" + std::to_wstring(GetCurrentProcessId()) + L"_" +
+           std::to_wstring(GetTickCount64());
+}
+
+static void removeTreeIfExists(const std::wstring& path) {
+    std::error_code ignored;
+    std::filesystem::remove_all(std::filesystem::path(path), ignored);
 }
 
 struct TempDirectoryCleanup {
@@ -56,6 +79,42 @@ private:
         return value;
     }
 };
+
+static void testFileCreationHelpers() {
+    const std::wstring root = uniqueTempChild(L"finderx_creation_test");
+    removeTreeIfExists(root);
+    require(CreateDirectoryW(root.c_str(), nullptr), "temp creation root should be created");
+
+    const std::wstring firstFolder = root + L"\\New Folder";
+    require(nextNewFolderPath(root) == firstFolder, "first new folder path should use default name");
+    require(CreateDirectoryW(firstFolder.c_str(), nullptr), "first new folder should be created");
+
+    const std::wstring secondFolder = root + L"\\New Folder 2";
+    require(nextNewFolderPath(root) == secondFolder, "second new folder path should use numeric suffix");
+    const FileCreationResult folderResult = createNewFolder(root);
+    require(folderResult.success, "createNewFolder should succeed");
+    require(folderResult.path == secondFolder, "createNewFolder should create the second available folder");
+    require(std::filesystem::is_directory(std::filesystem::path(secondFolder)),
+            "created folder should exist");
+
+    const std::wstring firstFile = root + L"\\New Text Document.txt";
+    require(nextNewTextFilePath(root) == firstFile, "first new text file path should use default name");
+    {
+        std::ofstream file{std::filesystem::path(firstFile)};
+        require(file.good(), "first new text file should be created");
+    }
+
+    const std::wstring secondFile = root + L"\\New Text Document 2.txt";
+    require(nextNewTextFilePath(root) == secondFile,
+            "second new text file path should use numeric suffix");
+    const FileCreationResult fileResult = createNewTextFile(root);
+    require(fileResult.success, "createNewTextFile should succeed");
+    require(fileResult.path == secondFile, "createNewTextFile should create the second available file");
+    require(std::filesystem::is_regular_file(std::filesystem::path(secondFile)),
+            "created text file should exist");
+
+    removeTreeIfExists(root);
+}
 
 static void runTests() {
     require(formatFileSize(0, true) == L"--", "directory size should be --");
@@ -130,6 +189,8 @@ static void runTests() {
     require(missing.children.empty(), "missing directory should have no children");
     require(!missing.ok(), "missing directory should preserve failure status");
     require(missing.error != ERROR_SUCCESS, "missing directory should expose Win32 error");
+
+    testFileCreationHelpers();
 }
 
 int main() {

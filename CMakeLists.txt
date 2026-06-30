@@ -28,6 +28,7 @@ finderx_enable_utf8(finderx_model)
 add_library(finderx_fs
     src/fs/FileMetadata.cpp
     src/fs/DirectoryLoader.cpp
+    src/fs/FileCreation.cpp
 )
 
 target_include_directories(finderx_fs PUBLIC src)
