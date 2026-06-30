@@ -35,6 +35,15 @@ target_link_libraries(finderx_fs PUBLIC finderx_model)
 finderx_enable_utf8(finderx_fs)
 finderx_enable_windows_unicode(finderx_fs)
 
+add_library(finderx_navigation
+    src/navigation/NavigationHistory.cpp
+)
+
+target_include_directories(finderx_navigation PUBLIC src)
+target_link_libraries(finderx_navigation PUBLIC finderx_fs)
+finderx_enable_utf8(finderx_navigation)
+finderx_enable_windows_unicode(finderx_navigation)
+
 add_executable(finderx_model_tests
     src/model/FileTreeTests.cpp
 )
@@ -51,6 +60,15 @@ target_link_libraries(finderx_fs_tests PRIVATE finderx_fs)
 finderx_enable_utf8(finderx_fs_tests)
 finderx_enable_windows_unicode(finderx_fs_tests)
 add_test(NAME finderx_fs_tests COMMAND finderx_fs_tests)
+
+add_executable(finderx_navigation_tests
+    src/navigation/NavigationHistoryTests.cpp
+)
+
+target_link_libraries(finderx_navigation_tests PRIVATE finderx_navigation)
+finderx_enable_utf8(finderx_navigation_tests)
+finderx_enable_windows_unicode(finderx_navigation_tests)
+add_test(NAME finderx_navigation_tests COMMAND finderx_navigation_tests)
 
 set(FINDERX_APP_SOURCES
     src/main.cpp
@@ -77,6 +95,7 @@ if(FINDERX_APP_SOURCES_EXIST)
     target_link_libraries(FinderX PRIVATE
         finderx_model
         finderx_fs
+        finderx_navigation
         d2d1
         dwrite
         windowscodecs
