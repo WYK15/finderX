@@ -17,10 +17,17 @@ struct ListInteractionResult {
     NodeId activatedNode = kInvalidNodeId;
 };
 
+struct ListViewStyle {
+    float fontSize = 13.0f;
+    float iconSize = 14.0f;
+};
+
 class FinderListView {
 public:
     explicit FinderListView(FileTree* tree);
 
+    void setStyle(ListViewStyle style);
+    ListViewStyle style() const;
     void draw(RenderContext& render, const D2D1_RECT_F& bounds);
     ListInteractionResult onMouseDown(float x, float y, const D2D1_RECT_F& bounds, bool controlDown = false, bool shiftDown = false);
     bool onWheel(int wheelDelta);
@@ -43,6 +50,8 @@ private:
     void ensureSelection();
     void ensureSelectionVisible();
     void clampScroll();
+    float rowHeight() const;
+    float iconSize() const;
     float maxScroll() const;
     int hitTestRow(float x, float y, const D2D1_RECT_F& bounds) const;
     bool hitTestDisclosure(float x, const D2D1_RECT_F& bounds, const VisibleRow& row) const;
@@ -63,6 +72,7 @@ private:
     DWORD lastClickTime_ = 0;
     float scrollY_ = 0.0f;
     float viewportHeight_ = 0.0f;
+    ListViewStyle style_;
     std::vector<VisibleRow> rows_;
     std::wstring filterText_;
 };

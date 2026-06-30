@@ -89,6 +89,9 @@ private:
     void revealContextNode();
     void copyContextNodePath();
     void applySort(std::vector<FileNode>& nodes) const;
+    ListViewStyle currentListViewStyle() const;
+    void applyListStyle(TabState& tab) const;
+    void applyVisualSettings();
     void changeSort(SortColumn column);
     void setSortDirection(SortDirection direction);
     void showSortMenu(POINT screenPoint);

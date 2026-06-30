@@ -28,6 +28,10 @@ float rowY(int index) {
     return kTopPadding + static_cast<float>(index) * kRowHeight + 1.0f;
 }
 
+float rowY(int index, float rowHeight) {
+    return kTopPadding + static_cast<float>(index) * rowHeight + 1.0f;
+}
+
 void requireSelectedNodes(const FinderListView& view, std::span<const NodeId> expected, const char* message) {
     const std::vector<NodeId> actual = view.selectedNodes();
     if (actual.size() != expected.size()) {
@@ -169,6 +173,18 @@ int main() {
         const NodeId expected[] = {rows[4].nodeId};
         requireSelectedNodes(view, expected, "Down without shift should collapse selection to focused row");
         require(view.selectedNode() == rows[4].nodeId, "Down without shift should move focus");
+    }
+
+    {
+        FileTree tree = FileTree::sample();
+        FinderListView view(&tree);
+        const std::vector<VisibleRow> rows = tree.flatten();
+
+        view.setStyle(ListViewStyle{18.0f, 24.0f});
+        const ListInteractionResult result = view.onMouseDown(200.0f, rowY(2, 30.0f), bounds);
+
+        require(result.changed, "large style click should change selection");
+        require(view.selectedNode() == rows[2].nodeId, "large style click should hit row using dynamic row height");
     }
 
     {

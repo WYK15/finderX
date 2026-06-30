@@ -379,6 +379,7 @@ LayoutRects MainWindow::currentLayout() const {
 void MainWindow::initializeFileTree() {
     homePath_ = defaultHomeDirectory();
     settings_ = loadSettings(homePath_).settings;
+    applyVisualSettings();
     createTabAtPath(homePath_);
 }
 
@@ -397,6 +398,7 @@ bool MainWindow::createTabAtPath(const std::wstring& path) {
     }
 
     auto tab = std::make_unique<TabState>(target, std::move(rootName));
+    applyListStyle(*tab);
     tab->tree.replaceChildren(tab->tree.rootId(), std::move(result.children));
     tab->history.setInitialPath(target);
 
@@ -432,6 +434,7 @@ bool MainWindow::navigateToThisPc(HistoryMode mode) {
     if (!hasActiveTab()) {
         tabs_.push_back(std::make_unique<TabState>(path, L"This PC"));
         activeTabIndex_ = tabs_.size() - 1;
+        applyListStyle(activeTab());
     }
 
     TabState& tab = activeTab();
@@ -439,6 +442,7 @@ bool MainWindow::navigateToThisPc(HistoryMode mode) {
     tab.tree = FileTree(path, L"This PC");
     tab.tree.replaceChildren(tab.tree.rootId(), enumerateDriveNodes());
     tab.listView = FinderListView(&tab.tree);
+    applyListStyle(tab);
     tab.searchText.clear();
     tab.searchFocused = false;
     tab.listView.setFilterText(L"");
@@ -492,6 +496,7 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     if (!hasActiveTab()) {
         tabs_.push_back(std::make_unique<TabState>(path, rootName));
         activeTabIndex_ = tabs_.size() - 1;
+        applyListStyle(activeTab());
     }
 
     TabState& tab = activeTab();
@@ -499,6 +504,7 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     tab.tree = FileTree(path, std::move(rootName));
     tab.tree.replaceChildren(tab.tree.rootId(), std::move(result.children));
     tab.listView = FinderListView(&tab.tree);
+    applyListStyle(tab);
     tab.searchText.clear();
     tab.searchFocused = false;
     tab.listView.setFilterText(L"");
@@ -989,6 +995,27 @@ void MainWindow::applySort(std::vector<FileNode>& nodes) const {
     sortFileNodes(nodes, settings_.sortColumn, settings_.sortDirection);
 }
 
+ListViewStyle MainWindow::currentListViewStyle() const {
+    return ListViewStyle{
+        settings_.fontSize,
+        settings_.iconSize,
+    };
+}
+
+void MainWindow::applyListStyle(TabState& tab) const {
+    tab.listView.setStyle(currentListViewStyle());
+}
+
+void MainWindow::applyVisualSettings() {
+    render_.setFontSize(settings_.fontSize);
+    for (const std::unique_ptr<TabState>& tab : tabs_) {
+        if (tab) {
+            applyListStyle(*tab);
+        }
+    }
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
 void MainWindow::changeSort(SortColumn column) {
     if (settings_.sortColumn == column) {
         settings_.sortDirection = settings_.sortDirection == SortDirection::Ascending
@@ -1112,6 +1139,7 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
     tab.tree = FileTree(currentPath, std::move(rootName));
     tab.tree.replaceChildren(tab.tree.rootId(), std::move(result.children));
     tab.listView = FinderListView(&tab.tree);
+    applyListStyle(tab);
     tab.listView.setFilterText(tab.searchText);
     std::vector<NodeId> restored;
     restored.reserve(selectedPaths.size());

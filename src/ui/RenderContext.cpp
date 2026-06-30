@@ -1,6 +1,15 @@
 #include "ui/RenderContext.h"
 
+#include <algorithm>
+
 namespace finderx {
+
+namespace {
+
+constexpr float kMinFontSize = 11.0f;
+constexpr float kMaxFontSize = 18.0f;
+
+}
 
 bool RenderContext::initialize(HWND hwnd) {
     if (isReady()) {
@@ -40,12 +49,13 @@ bool RenderContext::createFactories() {
             DWRITE_FONT_WEIGHT_NORMAL,
             DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,
-            13.0f,
+            fontSize_,
             L"zh-CN",
             textFormat_.GetAddressOf()))) {
         return false;
     }
 
+    const float headerFontSize = (std::max)(11.0f, fontSize_ - 1.0f);
     if (!headerTextFormat_ &&
         FAILED(dwriteFactory_->CreateTextFormat(
             L"Segoe UI",
@@ -53,7 +63,7 @@ bool RenderContext::createFactories() {
             DWRITE_FONT_WEIGHT_SEMI_BOLD,
             DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,
-            12.0f,
+            headerFontSize,
             L"zh-CN",
             headerTextFormat_.GetAddressOf()))) {
         return false;
@@ -147,6 +157,22 @@ D2D1_SIZE_F RenderContext::sizeDips() const {
 
 D2D1_POINT_2F RenderContext::clientPointToDips(POINT point) const {
     return pixelsToDips(static_cast<int>(point.x), static_cast<int>(point.y), dpiScale());
+}
+
+bool RenderContext::setFontSize(float fontSize) {
+    const float clamped = (std::clamp)(fontSize, kMinFontSize, kMaxFontSize);
+    if (fontSize_ == clamped) {
+        return true;
+    }
+
+    fontSize_ = clamped;
+    headerTextFormat_.Reset();
+    textFormat_.Reset();
+    return createFactories();
+}
+
+float RenderContext::fontSize() const {
+    return fontSize_;
 }
 
 IDWriteTextFormat* RenderContext::textFormat() const {
