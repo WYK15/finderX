@@ -91,6 +91,15 @@ finderx_enable_utf8(finderx_file_operation_state_tests)
 finderx_enable_windows_unicode(finderx_file_operation_state_tests)
 add_test(NAME finderx_file_operation_state_tests COMMAND finderx_file_operation_state_tests)
 
+add_executable(finderx_tab_manager_tests
+    src/ui/TabManagerTests.cpp
+)
+
+target_include_directories(finderx_tab_manager_tests PRIVATE src)
+finderx_enable_utf8(finderx_tab_manager_tests)
+finderx_enable_windows_unicode(finderx_tab_manager_tests)
+add_test(NAME finderx_tab_manager_tests COMMAND finderx_tab_manager_tests)
+
 add_executable(finderx_directory_refresh_debouncer_tests
     src/ui/DirectoryRefreshDebouncerTests.cpp
 )
