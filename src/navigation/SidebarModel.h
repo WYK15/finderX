@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -21,6 +22,8 @@ struct ChromeState {
     std::vector<SidebarItem> sidebarItems;
     std::wstring searchText;
     bool searchFocused = false;
+    std::vector<std::wstring> tabTitles;
+    std::size_t activeTabIndex = 0;
 };
 
 class SidebarModel {

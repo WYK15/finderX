@@ -22,12 +22,15 @@ enum class ChromeHitKind {
     Back,
     Forward,
     SearchField,
-    SidebarItem
+    SidebarItem,
+    Tab,
+    NewTab
 };
 
 struct ChromeHitResult {
     ChromeHitKind kind = ChromeHitKind::None;
     std::size_t sidebarIndex = 0;
+    std::size_t tabIndex = 0;
 };
 
 class FinderChrome {

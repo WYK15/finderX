@@ -9,10 +9,19 @@ namespace finderx {
 namespace {
 
 constexpr float kSidebarWidth = 174.0f;
+constexpr float kTabStripHeight = 34.0f;
+constexpr float kTabTop = 6.0f;
+constexpr float kTabHeight = 28.0f;
+constexpr float kTabLeftPadding = 184.0f;
+constexpr float kTabWidth = 146.0f;
+constexpr float kTabGap = 4.0f;
+constexpr float kNewTabWidth = 30.0f;
 constexpr float kToolbarHeight = 53.0f;
 constexpr float kHeaderBottom = 81.0f;
 constexpr float kPathbarHeight = 28.0f;
 constexpr float kMinTextWidth = 20.0f;
+constexpr float kMinTabDrawWidth = 48.0f;
+constexpr float kMinNewTabDrawWidth = 24.0f;
 constexpr float kSidebarHeaderTop = 70.0f;
 constexpr float kSidebarRowStartY = 94.0f;
 constexpr float kSidebarRowStep = 28.0f;
@@ -59,7 +68,33 @@ D2D1_RECT_F searchFieldRect(const D2D1_RECT_F& toolbar) {
         return D2D1::RectF();
     }
     const float searchLeft = (std::max)(toolbar.left + 420.0f, toolbar.right - 202.0f);
-    return clampRect(D2D1::RectF(searchLeft, 16.0f, toolbar.right - 14.0f, 44.0f), toolbar);
+    return clampRect(D2D1::RectF(searchLeft, toolbar.top + 16.0f, toolbar.right - 14.0f, toolbar.top + 44.0f), toolbar);
+}
+
+D2D1_RECT_F tabRect(std::size_t index, float right) {
+    const float left = kTabLeftPadding + (static_cast<float>(index) * (kTabWidth + kTabGap));
+    if (left >= right) {
+        return D2D1::RectF(right, kTabTop, right, kTabTop + kTabHeight);
+    }
+
+    return D2D1::RectF(left, kTabTop, (std::min)(left + kTabWidth, right), kTabTop + kTabHeight);
+}
+
+D2D1_RECT_F newTabRect(std::size_t tabCount, float right) {
+    const float left = kTabLeftPadding + (static_cast<float>(tabCount) * (kTabWidth + kTabGap));
+    if (left >= right) {
+        return D2D1::RectF(right, kTabTop, right, kTabTop + kTabHeight);
+    }
+
+    return D2D1::RectF(left, kTabTop, (std::min)(left + kNewTabWidth, right), kTabTop + kTabHeight);
+}
+
+bool isTabRectUsable(const D2D1_RECT_F& rect) {
+    return rect.right - rect.left >= kMinTabDrawWidth && rect.top < rect.bottom;
+}
+
+bool isNewTabRectUsable(const D2D1_RECT_F& rect) {
+    return rect.right - rect.left >= kMinNewTabDrawWidth && rect.top < rect.bottom;
 }
 
 void drawTextClipped(
@@ -243,13 +278,14 @@ LayoutRects FinderChrome::layout(float width, float height) const {
     const float right = clampNonNegative(width);
     const float bottom = clampNonNegative(height);
     const float contentLeft = (std::min)(kSidebarWidth, right);
-    const float toolbarBottom = (std::min)(kToolbarHeight, bottom);
-    const float headerBottom = (std::clamp)(kHeaderBottom, toolbarBottom, bottom);
+    const float tabBottom = (std::min)(kTabStripHeight, bottom);
+    const float toolbarBottom = (std::min)(kTabStripHeight + kToolbarHeight, bottom);
+    const float headerBottom = (std::clamp)(kTabStripHeight + kHeaderBottom, toolbarBottom, bottom);
     const float pathbarTop = (std::clamp)(bottom - kPathbarHeight, headerBottom, bottom);
 
     LayoutRects rects;
     rects.sidebar = D2D1::RectF(0.0f, 0.0f, contentLeft, bottom);
-    rects.toolbar = D2D1::RectF(contentLeft, 0.0f, right, toolbarBottom);
+    rects.toolbar = D2D1::RectF(contentLeft, tabBottom, right, toolbarBottom);
     rects.header = D2D1::RectF(contentLeft, toolbarBottom, right, headerBottom);
     rects.pathbar = D2D1::RectF(contentLeft, pathbarTop, right, bottom);
     rects.list = D2D1::RectF(contentLeft, headerBottom, right, pathbarTop);
@@ -268,6 +304,58 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     render.fillRect(rects.toolbar, D2D1::ColorF(0.97f, 0.97f, 0.965f));
     render.fillRect(rects.header, D2D1::ColorF(0.995f, 0.995f, 0.995f));
     render.fillRect(rects.pathbar, D2D1::ColorF(0.975f, 0.975f, 0.972f));
+    render.fillRect(
+        D2D1::RectF(0.0f, 0.0f, rects.pathbar.right, (std::min)(kTabStripHeight, rects.sidebar.bottom)),
+        D2D1::ColorF(0.925f, 0.93f, 0.935f));
+    render.drawLine(
+        D2D1::Point2F(0.0f, kTabStripHeight),
+        D2D1::Point2F(rects.pathbar.right, kTabStripHeight),
+        rgb(0.78f));
+
+    std::size_t visibleTabCount = 0;
+    for (std::size_t index = 0; index < state.tabTitles.size(); ++index) {
+        const D2D1_RECT_F rect = tabRect(index, rects.pathbar.right);
+        if (!isTabRectUsable(rect)) {
+            break;
+        }
+        visibleTabCount = index + 1;
+
+        const bool active = index == state.activeTabIndex;
+        const D2D1_COLOR_F fill = active
+            ? D2D1::ColorF(0.985f, 0.985f, 0.982f)
+            : D2D1::ColorF(0.86f, 0.865f, 0.87f);
+        const D2D1_COLOR_F stroke = active
+            ? D2D1::ColorF(0.76f, 0.76f, 0.76f)
+            : D2D1::ColorF(0.78f, 0.785f, 0.79f);
+
+        render.fillRoundedRect(D2D1::RoundedRect(rect, 6.0f, 6.0f), fill);
+        render.drawRoundedRect(D2D1::RoundedRect(rect, 6.0f, 6.0f), stroke, 1.0f);
+        drawTextClipped(
+            render,
+            state.tabTitles[index],
+            D2D1::RectF(rect.left + 12.0f, rect.top + 5.0f, rect.right - 10.0f, rect.bottom - 3.0f),
+            rect,
+            render.textFormat(),
+            active ? D2D1::ColorF(0.12f, 0.12f, 0.12f) : D2D1::ColorF(0.42f, 0.42f, 0.42f));
+    }
+
+    const D2D1_RECT_F plusRect = newTabRect(visibleTabCount, rects.pathbar.right);
+    if (isNewTabRectUsable(plusRect)) {
+        render.fillRoundedRect(
+            D2D1::RoundedRect(plusRect, 6.0f, 6.0f),
+            D2D1::ColorF(0.875f, 0.88f, 0.885f));
+        render.drawRoundedRect(
+            D2D1::RoundedRect(plusRect, 6.0f, 6.0f),
+            D2D1::ColorF(0.77f, 0.775f, 0.78f),
+            1.0f);
+        drawTextClipped(
+            render,
+            L"+",
+            D2D1::RectF(plusRect.left + 10.0f, plusRect.top + 4.0f, plusRect.right, plusRect.bottom),
+            plusRect,
+            render.headerTextFormat(),
+            D2D1::ColorF(0.34f, 0.34f, 0.34f));
+    }
 
     if (rects.sidebar.right < rects.pathbar.right) {
         drawSeparator(render, rects.sidebar.right, 0.0f, rects.sidebar.bottom);
@@ -320,7 +408,7 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     render.fillRoundedRect(
         D2D1::RoundedRect(
             clampRect(
-                D2D1::RectF(rects.toolbar.left + kBackLeftOffset, kToolbarButtonTop, rects.toolbar.left + kBackRightOffset, kToolbarButtonBottom),
+                D2D1::RectF(rects.toolbar.left + kBackLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kBackRightOffset, rects.toolbar.top + kToolbarButtonBottom),
                 rects.toolbar),
             7.0f,
             7.0f),
@@ -328,7 +416,7 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     render.fillRoundedRect(
         D2D1::RoundedRect(
             clampRect(
-                D2D1::RectF(rects.toolbar.left + kForwardLeftOffset, kToolbarButtonTop, rects.toolbar.left + kForwardRightOffset, kToolbarButtonBottom),
+                D2D1::RectF(rects.toolbar.left + kForwardLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kForwardRightOffset, rects.toolbar.top + kToolbarButtonBottom),
                 rects.toolbar),
             7.0f,
             7.0f),
@@ -336,28 +424,28 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     drawTextClipped(
         render,
         L"\u2039",
-        D2D1::RectF(rects.toolbar.left + 22.0f, 15.0f, rects.toolbar.left + 44.0f, 43.0f),
+        D2D1::RectF(rects.toolbar.left + 22.0f, rects.toolbar.top + 15.0f, rects.toolbar.left + 44.0f, rects.toolbar.top + 43.0f),
         rects.toolbar,
         render.textFormat(),
         navigationColor(state.canGoBack));
     drawTextClipped(
         render,
         L"\u203a",
-        D2D1::RectF(rects.toolbar.left + 56.0f, 15.0f, rects.toolbar.left + 82.0f, 43.0f),
+        D2D1::RectF(rects.toolbar.left + 56.0f, rects.toolbar.top + 15.0f, rects.toolbar.left + 82.0f, rects.toolbar.top + 43.0f),
         rects.toolbar,
         render.textFormat(),
         navigationColor(state.canGoForward));
     drawTextClipped(
         render,
         title,
-        D2D1::RectF(rects.toolbar.left + 106.0f, 16.0f, rects.toolbar.left + 240.0f, 45.0f),
+        D2D1::RectF(rects.toolbar.left + 106.0f, rects.toolbar.top + 16.0f, rects.toolbar.left + 240.0f, rects.toolbar.top + 45.0f),
         rects.toolbar,
         render.headerTextFormat(),
         D2D1::ColorF(0.18f, 0.18f, 0.18f));
     drawTextClipped(
         render,
         L"\u25A6   \u25A4   \u25A1   \u2022\u2022\u2022",
-        D2D1::RectF(rects.toolbar.left + 380.0f, 17.0f, rects.toolbar.right - 232.0f, 44.0f),
+        D2D1::RectF(rects.toolbar.left + 380.0f, rects.toolbar.top + 17.0f, rects.toolbar.right - 232.0f, rects.toolbar.top + 44.0f),
         rects.toolbar,
         render.textFormat(),
         D2D1::ColorF(0.36f, 0.36f, 0.36f));
@@ -394,16 +482,18 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             ? dateX
             : (sizeWidth > 0.0f ? sizeX : (kindWidth > 0.0f ? kindX : rects.header.right - padding));
         const float nameRight = trailingLeft - 8.0f;
+        const float labelTop = rects.header.top + 6.0f;
+        const float labelBottom = rects.header.bottom - 2.0f;
 
-        drawTextClipped(render, L"Name", D2D1::RectF(rects.header.left + 64.0f, 59.0f, nameRight, 79.0f), rects.header, render.headerTextFormat(), D2D1::ColorF(0.18f, 0.18f, 0.18f));
+        drawTextClipped(render, L"Name", D2D1::RectF(rects.header.left + 64.0f, labelTop, nameRight, labelBottom), rects.header, render.headerTextFormat(), D2D1::ColorF(0.18f, 0.18f, 0.18f));
         if (dateWidth > 0.0f) {
-            drawTextClipped(render, L"Date Modified", D2D1::RectF(dateX, 59.0f, sizeX - 8.0f, 79.0f), rects.header, render.headerTextFormat(), D2D1::ColorF(0.38f, 0.38f, 0.38f));
+            drawTextClipped(render, L"Date Modified", D2D1::RectF(dateX, labelTop, sizeX - 8.0f, labelBottom), rects.header, render.headerTextFormat(), D2D1::ColorF(0.38f, 0.38f, 0.38f));
         }
         if (sizeWidth > 0.0f) {
-            drawTextClipped(render, L"Size", D2D1::RectF(sizeX, 59.0f, kindX - 8.0f, 79.0f), rects.header, render.headerTextFormat(), D2D1::ColorF(0.38f, 0.38f, 0.38f));
+            drawTextClipped(render, L"Size", D2D1::RectF(sizeX, labelTop, kindX - 8.0f, labelBottom), rects.header, render.headerTextFormat(), D2D1::ColorF(0.38f, 0.38f, 0.38f));
         }
         if (kindWidth > 0.0f) {
-            drawTextClipped(render, L"Kind", D2D1::RectF(kindX, 59.0f, rects.header.right - padding, 79.0f), rects.header, render.headerTextFormat(), D2D1::ColorF(0.38f, 0.38f, 0.38f));
+            drawTextClipped(render, L"Kind", D2D1::RectF(kindX, labelTop, rects.header.right - padding, labelBottom), rects.header, render.headerTextFormat(), D2D1::ColorF(0.38f, 0.38f, 0.38f));
         }
     }
 
@@ -426,27 +516,44 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
 }
 
 ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects, const ChromeState& state) const {
+    std::size_t visibleTabCount = 0;
+    for (std::size_t index = 0; index < state.tabTitles.size(); ++index) {
+        const D2D1_RECT_F rect = tabRect(index, rects.pathbar.right);
+        if (!isTabRectUsable(rect)) {
+            break;
+        }
+        visibleTabCount = index + 1;
+        if (containsPoint(rect, x, y)) {
+            return {ChromeHitKind::Tab, 0, index};
+        }
+    }
+
+    const D2D1_RECT_F plusRect = newTabRect(visibleTabCount, rects.pathbar.right);
+    if (isNewTabRectUsable(plusRect) && containsPoint(plusRect, x, y)) {
+        return {ChromeHitKind::NewTab, 0, 0};
+    }
+
     const D2D1_RECT_F backRect = D2D1::RectF(
         rects.toolbar.left + kBackLeftOffset,
-        kToolbarButtonTop,
+        rects.toolbar.top + kToolbarButtonTop,
         rects.toolbar.left + kBackRightOffset,
-        kToolbarButtonBottom);
+        rects.toolbar.top + kToolbarButtonBottom);
     if (state.canGoBack && containsPoint(backRect, x, y)) {
-        return {ChromeHitKind::Back, 0};
+        return {ChromeHitKind::Back, 0, 0};
     }
 
     const D2D1_RECT_F forwardRect = D2D1::RectF(
         rects.toolbar.left + kForwardLeftOffset,
-        kToolbarButtonTop,
+        rects.toolbar.top + kToolbarButtonTop,
         rects.toolbar.left + kForwardRightOffset,
-        kToolbarButtonBottom);
+        rects.toolbar.top + kToolbarButtonBottom);
     if (state.canGoForward && containsPoint(forwardRect, x, y)) {
-        return {ChromeHitKind::Forward, 0};
+        return {ChromeHitKind::Forward, 0, 0};
     }
 
     const D2D1_RECT_F searchRect = searchFieldRect(rects.toolbar);
     if (searchRect.right - searchRect.left >= 80.0f && containsPoint(searchRect, x, y)) {
-        return {ChromeHitKind::SearchField, 0};
+        return {ChromeHitKind::SearchField, 0, 0};
     }
 
     for (std::size_t index = 0; index < state.sidebarItems.size(); ++index) {
@@ -454,7 +561,7 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
         const float rowY = kSidebarRowStartY + (static_cast<float>(index) * kSidebarRowStep);
         const D2D1_RECT_F rowRect = D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, kSidebarRowRight, rowY + 24.0f);
         if (item.available && containsPoint(rowRect, x, y)) {
-            return {ChromeHitKind::SidebarItem, index};
+            return {ChromeHitKind::SidebarItem, index, 0};
         }
     }
 
