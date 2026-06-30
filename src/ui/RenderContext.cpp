@@ -166,6 +166,15 @@ void RenderContext::fillRoundedRect(const D2D1_ROUNDED_RECT& rect, D2D1_COLOR_F 
     target_->FillRoundedRectangle(rect, brush_.Get());
 }
 
+void RenderContext::drawRoundedRect(const D2D1_ROUNDED_RECT& rect, D2D1_COLOR_F color, float width) {
+    if (!target_ || !brush_ || width <= 0.0f || rect.rect.left >= rect.rect.right || rect.rect.top >= rect.rect.bottom) {
+        return;
+    }
+
+    brush_->SetColor(color);
+    target_->DrawRoundedRectangle(rect, brush_.Get(), width);
+}
+
 void RenderContext::fillRect(const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
     if (!target_ || !brush_ || rect.left >= rect.right || rect.top >= rect.bottom) {
         return;
