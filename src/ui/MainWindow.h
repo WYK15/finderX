@@ -87,6 +87,7 @@ private:
     void copyContextNodePath();
     void applySort(std::vector<FileNode>& nodes) const;
     void changeSort(SortColumn column);
+    void setSortDirection(SortDirection direction);
     void showSortMenu(POINT screenPoint);
     bool saveSettingsOrStatus();
     bool refreshCurrentDirectory();

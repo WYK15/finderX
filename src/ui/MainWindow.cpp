@@ -652,28 +652,10 @@ void MainWindow::handleCommand(WPARAM wParam) {
         changeSort(SortColumn::Kind);
         break;
     case kCommandSortAscending:
-        settings_.sortDirection = SortDirection::Ascending;
-        {
-            const bool saved = saveSettingsOrStatus();
-            refreshCurrentDirectory();
-            if (!saved) {
-                setStatusText(L"Cannot save settings");
-            }
-        }
-        refreshChromeState();
-        InvalidateRect(hwnd_, nullptr, FALSE);
+        setSortDirection(SortDirection::Ascending);
         break;
     case kCommandSortDescending:
-        settings_.sortDirection = SortDirection::Descending;
-        {
-            const bool saved = saveSettingsOrStatus();
-            refreshCurrentDirectory();
-            if (!saved) {
-                setStatusText(L"Cannot save settings");
-            }
-        }
-        refreshChromeState();
-        InvalidateRect(hwnd_, nullptr, FALSE);
+        setSortDirection(SortDirection::Descending);
         break;
     default:
         break;
@@ -939,6 +921,21 @@ void MainWindow::changeSort(SortColumn column) {
         settings_.sortDirection = SortDirection::Ascending;
     }
 
+    const bool saved = saveSettingsOrStatus();
+    refreshCurrentDirectory();
+    if (!saved) {
+        setStatusText(L"Cannot save settings");
+    }
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::setSortDirection(SortDirection direction) {
+    if (settings_.sortDirection == direction) {
+        return;
+    }
+
+    settings_.sortDirection = direction;
     const bool saved = saveSettingsOrStatus();
     refreshCurrentDirectory();
     if (!saved) {

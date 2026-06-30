@@ -536,15 +536,16 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         rects.toolbar,
         render.headerTextFormat(),
         D2D1::ColorF(0.18f, 0.18f, 0.18f));
+    const D2D1_RECT_F sortRect = sortButtonRect(rects.toolbar);
+    const float toolbarModesRight = hasArea(sortRect) ? sortRect.left - 10.0f : rects.toolbar.right - 232.0f;
     drawTextClipped(
         render,
         L"\u25A6   \u25A4   \u25A1   \u2022\u2022\u2022",
-        D2D1::RectF(rects.toolbar.left + 380.0f, rects.toolbar.top + 17.0f, rects.toolbar.right - 232.0f, rects.toolbar.top + 44.0f),
+        D2D1::RectF(rects.toolbar.left + 380.0f, rects.toolbar.top + 17.0f, toolbarModesRight, rects.toolbar.top + 44.0f),
         rects.toolbar,
         render.textFormat(),
         D2D1::ColorF(0.36f, 0.36f, 0.36f));
 
-    const D2D1_RECT_F sortRect = sortButtonRect(rects.toolbar);
     if (hasArea(sortRect)) {
         render.fillRoundedRect(
             D2D1::RoundedRect(sortRect, 7.0f, 7.0f),
