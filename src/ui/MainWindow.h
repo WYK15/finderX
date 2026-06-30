@@ -9,6 +9,8 @@
 #include "ui/FinderListView.h"
 #include "ui/RenderContext.h"
 
+#include <span>
+#include <vector>
 #include <windows.h>
 
 namespace finderx {
@@ -36,6 +38,8 @@ private:
     void showContextMenu(POINT clientPoint, POINT screenPoint);
     void handleCommand(WPARAM wParam);
     NodeId commandTargetNode() const;
+    std::vector<NodeId> commandTargetNodes(bool includeSelection) const;
+    std::vector<std::wstring> pathsForNodes(std::span<const NodeId> nodes) const;
     void openContextNode();
     void renameContextNode();
     void moveContextNodeToTrash();
@@ -46,6 +50,7 @@ private:
     void copyContextNodePath();
     bool refreshCurrentDirectory();
     bool refreshCurrentDirectorySelecting(const std::wstring& selectedPath);
+    bool refreshCurrentDirectorySelecting(std::span<const std::wstring> selectedPaths);
     std::wstring selectedNodePath() const;
     bool selectNodeByPath(const std::wstring& path);
     void refreshChromeState();

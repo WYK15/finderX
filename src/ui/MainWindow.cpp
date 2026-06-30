@@ -128,7 +128,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             break;
         }
 
-        const ListInteractionResult result = listView_.onMouseDown(x, y, rects.list);
+        const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        const bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        const ListInteractionResult result = listView_.onMouseDown(x, y, rects.list, controlDown, shiftDown);
         loadChildrenIfNeeded(result.expandedFolder);
         activateNode(result.activatedNode);
         if (result.changed) {
@@ -162,6 +164,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_KEYDOWN: {
         contextNode_ = kInvalidNodeId;
         const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        const bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
 
         if (wParam == VK_F5 || (wParam == L'R' && controlDown)) {
             refreshCurrentDirectory();
@@ -198,7 +201,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
-        const ListInteractionResult result = listView_.onKeyDown(wParam);
+        const ListInteractionResult result = listView_.onKeyDown(wParam, controlDown, shiftDown);
         loadChildrenIfNeeded(result.expandedFolder);
         activateNode(result.activatedNode);
         if (result.changed) {
@@ -300,7 +303,7 @@ void MainWindow::showContextMenu(POINT clientPoint, POINT screenPoint) {
         rects.list);
 
     const bool hasTarget = contextNode_ != kInvalidNodeId;
-    if (hasTarget && listView_.selectNode(contextNode_)) {
+    if (hasTarget && !listView_.isSelected(contextNode_) && listView_.selectNode(contextNode_)) {
         InvalidateRect(hwnd_, nullptr, FALSE);
     }
 
@@ -309,9 +312,13 @@ void MainWindow::showContextMenu(POINT clientPoint, POINT screenPoint) {
         return;
     }
 
+    const std::vector<NodeId> targets = commandTargetNodes(true);
+    const bool singleTarget = targets.size() == 1;
     if (hasTarget) {
         AppendMenuW(menu, MF_STRING, kCommandOpen, L"Open");
-        AppendMenuW(menu, MF_STRING, kCommandRename, L"Rename");
+        if (singleTarget) {
+            AppendMenuW(menu, MF_STRING, kCommandRename, L"Rename");
+        }
         AppendMenuW(menu, MF_STRING, kCommandCopy, L"Copy");
         AppendMenuW(menu, MF_STRING, kCommandCut, L"Cut");
         if (fileOperationState_.hasPendingOperation()) {
@@ -374,19 +381,51 @@ NodeId MainWindow::commandTargetNode() const {
     return listView_.selectedNode();
 }
 
-void MainWindow::openContextNode() {
-    if (contextNode_ == kInvalidNodeId) {
-        return;
+std::vector<NodeId> MainWindow::commandTargetNodes(bool includeSelection) const {
+    if (contextNode_ != kInvalidNodeId && contextNode_ < tree_.nodes().size()) {
+        if (includeSelection && listView_.isSelected(contextNode_)) {
+            return listView_.selectedNodes();
+        }
+        return {contextNode_};
     }
-    activateNode(contextNode_);
+
+    if (includeSelection) {
+        return listView_.selectedNodes();
+    }
+
+    const NodeId target = commandTargetNode();
+    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+        return {};
+    }
+    return {target};
 }
 
-void MainWindow::renameContextNode() {
+std::vector<std::wstring> MainWindow::pathsForNodes(std::span<const NodeId> nodes) const {
+    std::vector<std::wstring> paths;
+    paths.reserve(nodes.size());
+    for (const NodeId node : nodes) {
+        if (node != kInvalidNodeId && node < tree_.nodes().size()) {
+            paths.push_back(tree_.node(node).path);
+        }
+    }
+    return paths;
+}
+
+void MainWindow::openContextNode() {
     const NodeId target = commandTargetNode();
     if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
         return;
     }
+    activateNode(target);
+}
 
+void MainWindow::renameContextNode() {
+    const std::vector<NodeId> targets = commandTargetNodes(true);
+    if (targets.size() != 1 || targets.front() >= tree_.nodes().size()) {
+        return;
+    }
+
+    const NodeId target = targets.front();
     const FileNode& node = tree_.node(target);
     std::wstring newName;
     if (!ui::promptForRename(hwnd_, node.name, newName)) {
@@ -403,36 +442,39 @@ void MainWindow::renameContextNode() {
 }
 
 void MainWindow::moveContextNodeToTrash() {
-    const NodeId target = commandTargetNode();
-    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+    const std::vector<NodeId> targets = commandTargetNodes(true);
+    const std::vector<std::wstring> paths = pathsForNodes(targets);
+    if (paths.empty()) {
         return;
     }
 
-    const shell::FileOperationResult result = shell::moveToTrash(hwnd_, tree_.node(target).path);
+    const shell::FileOperationResult result = shell::moveToTrash(hwnd_, paths);
     if (!result.success) {
-        setStatusText(result.message.empty() ? L"Cannot move item to trash" : result.message);
+        setStatusText(result.message.empty() ? L"Cannot move items to trash" : result.message);
         return;
     }
 
-    refreshCurrentDirectorySelecting({});
+    refreshCurrentDirectorySelecting(std::span<const std::wstring>{});
 }
 
 void MainWindow::copyContextNode() {
-    const NodeId target = commandTargetNode();
-    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+    const std::vector<NodeId> targets = commandTargetNodes(true);
+    std::vector<std::wstring> paths = pathsForNodes(targets);
+    if (paths.empty()) {
         return;
     }
 
-    fileOperationState_.setCopy(tree_.node(target).path);
+    fileOperationState_.setCopy(std::move(paths));
 }
 
 void MainWindow::cutContextNode() {
-    const NodeId target = commandTargetNode();
-    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
+    const std::vector<NodeId> targets = commandTargetNodes(true);
+    std::vector<std::wstring> paths = pathsForNodes(targets);
+    if (paths.empty()) {
         return;
     }
 
-    fileOperationState_.setCut(tree_.node(target).path);
+    fileOperationState_.setCut(std::move(paths));
 }
 
 void MainWindow::pasteIntoCurrentDirectory() {
@@ -446,15 +488,27 @@ void MainWindow::pasteIntoCurrentDirectory() {
         return;
     }
 
+    const std::vector<std::wstring>& sourcePaths = fileOperationState_.sourcePaths();
+    if (sourcePaths.empty()) {
+        setStatusText(L"Cannot paste here");
+        return;
+    }
+
     shell::FileOperationResult result;
     if (fileOperationState_.kind() == ui::PendingFileOperationKind::Copy) {
-        result = shell::copyToDirectory(hwnd_, fileOperationState_.sourcePath(), currentPath);
+        result = shell::copyToDirectory(hwnd_, sourcePaths, currentPath);
+    } else if (fileOperationState_.kind() == ui::PendingFileOperationKind::Cut) {
+        result = shell::moveToDirectory(hwnd_, sourcePaths, currentPath);
     } else {
-        result = shell::moveToDirectory(hwnd_, fileOperationState_.sourcePath(), currentPath);
+        setStatusText(L"Cannot paste here");
+        return;
     }
 
     if (!result.success) {
-        setStatusText(result.message.empty() ? L"Cannot paste here" : result.message);
+        const wchar_t* fallback = fileOperationState_.kind() == ui::PendingFileOperationKind::Copy
+            ? L"Cannot copy items"
+            : L"Cannot move items";
+        setStatusText(result.message.empty() ? fallback : result.message);
         return;
     }
 
@@ -463,30 +517,41 @@ void MainWindow::pasteIntoCurrentDirectory() {
 }
 
 void MainWindow::revealContextNode() {
-    if (contextNode_ == kInvalidNodeId || contextNode_ >= tree_.nodes().size()) {
+    const NodeId target = commandTargetNode();
+    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
         return;
     }
 
-    if (!shell::revealInExplorer(hwnd_, tree_.node(contextNode_).path)) {
+    if (!shell::revealInExplorer(hwnd_, tree_.node(target).path)) {
         setStatusText(L"Cannot show in Explorer");
     }
 }
 
 void MainWindow::copyContextNodePath() {
-    if (contextNode_ == kInvalidNodeId || contextNode_ >= tree_.nodes().size()) {
+    const NodeId target = commandTargetNode();
+    if (target == kInvalidNodeId || target >= tree_.nodes().size()) {
         return;
     }
 
-    if (!shell::copyPathToClipboard(hwnd_, tree_.node(contextNode_).path)) {
+    if (!shell::copyPathToClipboard(hwnd_, tree_.node(target).path)) {
         setStatusText(L"Cannot copy path");
     }
 }
 
 bool MainWindow::refreshCurrentDirectory() {
-    return refreshCurrentDirectorySelecting(selectedNodePath());
+    const std::vector<NodeId> selectedNodes = listView_.selectedNodes();
+    const std::vector<std::wstring> selectedPaths = pathsForNodes(selectedNodes);
+    return refreshCurrentDirectorySelecting(selectedPaths);
 }
 
 bool MainWindow::refreshCurrentDirectorySelecting(const std::wstring& selectedPath) {
+    if (selectedPath.empty()) {
+        return refreshCurrentDirectorySelecting(std::span<const std::wstring>{});
+    }
+    return refreshCurrentDirectorySelecting(std::span<const std::wstring>(&selectedPath, 1));
+}
+
+bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> selectedPaths) {
     const std::wstring currentPath = history_.currentPath();
     if (currentPath.empty()) {
         setStatusText(L"Cannot refresh folder");
@@ -507,7 +572,20 @@ bool MainWindow::refreshCurrentDirectorySelecting(const std::wstring& selectedPa
     tree_ = FileTree(currentPath, std::move(rootName));
     tree_.replaceChildren(tree_.rootId(), std::move(result.children));
     listView_ = FinderListView(&tree_);
-    selectNodeByPath(selectedPath);
+    std::vector<NodeId> restored;
+    restored.reserve(selectedPaths.size());
+    for (const std::wstring& selectedPath : selectedPaths) {
+        if (selectedPath.empty()) {
+            continue;
+        }
+        for (const FileNode& node : tree_.nodes()) {
+            if (node.path == selectedPath) {
+                restored.push_back(node.id);
+                break;
+            }
+        }
+    }
+    listView_.selectNodes(restored);
     contextNode_ = kInvalidNodeId;
     chromeState_.statusText.clear();
     refreshChromeState();
