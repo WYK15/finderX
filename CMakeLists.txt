@@ -95,6 +95,7 @@ set(FINDERX_APP_SOURCES
     src/main.cpp
     src/app/App.cpp
     src/shell/ShellActions.cpp
+    src/shell/ShellFileOperations.cpp
     src/ui/FileOperationState.cpp
     src/ui/FinderChrome.cpp
     src/ui/FinderListView.cpp
