@@ -1,6 +1,8 @@
 #include "ui/FinderChrome.h"
 
 #include <algorithm>
+#include <string>
+#include <vector>
 
 namespace finderx {
 
@@ -16,13 +18,15 @@ constexpr float kSidebarRowStartY = 94.0f;
 constexpr float kSidebarRowStep = 28.0f;
 constexpr float kSidebarRowLeft = 24.0f;
 constexpr float kSidebarRowRight = 164.0f;
-constexpr float kSidebarTextLeft = 34.0f;
+constexpr float kSidebarTextLeft = 56.0f;
 constexpr float kBackLeftOffset = 18.0f;
 constexpr float kBackRightOffset = 48.0f;
 constexpr float kForwardLeftOffset = 52.0f;
 constexpr float kForwardRightOffset = 86.0f;
 constexpr float kToolbarButtonTop = 12.0f;
 constexpr float kToolbarButtonBottom = 44.0f;
+constexpr float kPathTextApproxWidth = 7.2f;
+constexpr float kPathChevronWidth = 12.0f;
 
 D2D1_COLOR_F rgb(float value) {
     return D2D1::ColorF(value, value, value);
@@ -76,6 +80,123 @@ void drawSeparator(RenderContext& render, float x, float top, float bottom) {
 
 D2D1_COLOR_F navigationColor(bool enabled) {
     return enabled ? D2D1::ColorF(0.20f, 0.20f, 0.20f) : D2D1::ColorF(0.68f, 0.68f, 0.68f);
+}
+
+void drawFolderGlyph(RenderContext& render, float x, float y, D2D1_COLOR_F color) {
+    render.drawLine(D2D1::Point2F(x + 1.0f, y + 7.0f), D2D1::Point2F(x + 4.5f, y + 4.0f), color, 1.4f);
+    render.drawLine(D2D1::Point2F(x + 4.5f, y + 4.0f), D2D1::Point2F(x + 8.0f, y + 4.0f), color, 1.4f);
+    render.drawLine(D2D1::Point2F(x + 8.0f, y + 4.0f), D2D1::Point2F(x + 10.0f, y + 6.0f), color, 1.4f);
+    render.fillRoundedRect(
+        D2D1::RoundedRect(D2D1::RectF(x + 1.0f, y + 7.0f, x + 15.0f, y + 14.0f), 1.8f, 1.8f),
+        D2D1::ColorF(color.r, color.g, color.b, 0.24f));
+    render.drawRoundedRect(
+        D2D1::RoundedRect(D2D1::RectF(x + 1.0f, y + 7.0f, x + 15.0f, y + 14.0f), 1.8f, 1.8f),
+        color,
+        1.2f);
+}
+
+void drawSidebarIcon(RenderContext& render, std::wstring_view label, float x, float y, bool selected, bool available) {
+    const D2D1_COLOR_F color = !available
+        ? D2D1::ColorF(0.62f, 0.62f, 0.62f)
+        : (selected ? D2D1::ColorF(0.02f, 0.33f, 0.70f) : D2D1::ColorF(0.02f, 0.45f, 0.92f));
+
+    if (label == L"Downloads") {
+        render.drawLine(D2D1::Point2F(x + 8.0f, y + 2.0f), D2D1::Point2F(x + 8.0f, y + 10.0f), color, 1.6f);
+        render.drawLine(D2D1::Point2F(x + 4.5f, y + 7.0f), D2D1::Point2F(x + 8.0f, y + 10.5f), color, 1.6f);
+        render.drawLine(D2D1::Point2F(x + 11.5f, y + 7.0f), D2D1::Point2F(x + 8.0f, y + 10.5f), color, 1.6f);
+        render.drawLine(D2D1::Point2F(x + 3.0f, y + 13.0f), D2D1::Point2F(x + 13.0f, y + 13.0f), color, 1.6f);
+        render.drawLine(D2D1::Point2F(x + 3.0f, y + 13.0f), D2D1::Point2F(x + 3.0f, y + 10.0f), color, 1.2f);
+        render.drawLine(D2D1::Point2F(x + 13.0f, y + 13.0f), D2D1::Point2F(x + 13.0f, y + 10.0f), color, 1.2f);
+        return;
+    }
+
+    if (label == L"Home") {
+        render.drawLine(D2D1::Point2F(x + 2.0f, y + 8.0f), D2D1::Point2F(x + 8.0f, y + 3.0f), color, 1.5f);
+        render.drawLine(D2D1::Point2F(x + 8.0f, y + 3.0f), D2D1::Point2F(x + 14.0f, y + 8.0f), color, 1.5f);
+        render.drawRoundedRect(
+            D2D1::RoundedRect(D2D1::RectF(x + 4.0f, y + 8.0f, x + 12.0f, y + 14.0f), 1.6f, 1.6f),
+            color,
+            1.3f);
+        render.drawLine(D2D1::Point2F(x + 8.0f, y + 10.0f), D2D1::Point2F(x + 8.0f, y + 14.0f), color, 1.1f);
+        return;
+    }
+
+    if (label == L"Applications") {
+        for (int row = 0; row < 2; ++row) {
+            for (int column = 0; column < 2; ++column) {
+                const float left = x + 2.0f + static_cast<float>(column) * 6.5f;
+                const float top = y + 3.0f + static_cast<float>(row) * 6.5f;
+                render.fillRoundedRect(
+                    D2D1::RoundedRect(D2D1::RectF(left, top, left + 4.5f, top + 4.5f), 1.2f, 1.2f),
+                    color);
+            }
+        }
+        return;
+    }
+
+    drawFolderGlyph(render, x, y, color);
+}
+
+std::vector<std::wstring> splitPathSegments(std::wstring_view path) {
+    std::vector<std::wstring> segments;
+    std::size_t start = 0;
+
+    for (std::size_t index = 0; index <= path.size(); ++index) {
+        if (index == path.size() || path[index] == L'\\' || path[index] == L'/') {
+            if (index > start) {
+                segments.emplace_back(path.substr(start, index - start));
+            }
+            start = index + 1;
+        }
+    }
+
+    return segments;
+}
+
+float approximateTextWidth(std::wstring_view text) {
+    return static_cast<float>(text.size()) * kPathTextApproxWidth;
+}
+
+void drawPathSegments(RenderContext& render, const D2D1_RECT_F& rect, std::wstring_view path) {
+    const std::vector<std::wstring> segments = splitPathSegments(path);
+    const float maxRight = rect.right - 12.0f;
+    float cursor = rect.left;
+    const D2D1_COLOR_F textColor = D2D1::ColorF(0.34f, 0.34f, 0.34f);
+    const D2D1_COLOR_F chevronColor = D2D1::ColorF(0.56f, 0.56f, 0.56f);
+
+    if (cursor >= maxRight) {
+        return;
+    }
+
+    for (std::size_t index = 0; index < segments.size(); ++index) {
+        const float segmentWidth = (std::max)(14.0f, approximateTextWidth(segments[index]));
+        if (cursor + segmentWidth > maxRight) {
+            break;
+        }
+
+        drawTextClipped(
+            render,
+            segments[index],
+            D2D1::RectF(cursor, rect.top, cursor + segmentWidth, rect.bottom),
+            rect,
+            render.textFormat(),
+            textColor);
+        cursor += segmentWidth;
+
+        if (index + 1 < segments.size()) {
+            if (cursor + kPathChevronWidth > maxRight) {
+                break;
+            }
+            drawTextClipped(
+                render,
+                L"\u203a",
+                D2D1::RectF(cursor + 1.0f, rect.top, cursor + kPathChevronWidth, rect.bottom),
+                rect,
+                render.textFormat(),
+                chevronColor);
+            cursor += kPathChevronWidth;
+        }
+    }
 }
 
 const ChromeState& defaultChromeState() {
@@ -164,6 +285,8 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
                 D2D1::ColorF(0.80f, 0.82f, 0.84f));
         }
 
+        drawSidebarIcon(render, item.label, 35.0f, rowY + 4.0f, item.selected, item.available);
+
         drawTextClipped(
             render,
             item.label,
@@ -173,6 +296,22 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             item.available ? D2D1::ColorF(0.16f, 0.16f, 0.16f) : D2D1::ColorF(0.58f, 0.58f, 0.58f));
     }
 
+    render.fillRoundedRect(
+        D2D1::RoundedRect(
+            clampRect(
+                D2D1::RectF(rects.toolbar.left + kBackLeftOffset, kToolbarButtonTop, rects.toolbar.left + kBackRightOffset, kToolbarButtonBottom),
+                rects.toolbar),
+            7.0f,
+            7.0f),
+        state.canGoBack ? D2D1::ColorF(0.90f, 0.91f, 0.92f) : D2D1::ColorF(0.945f, 0.945f, 0.94f));
+    render.fillRoundedRect(
+        D2D1::RoundedRect(
+            clampRect(
+                D2D1::RectF(rects.toolbar.left + kForwardLeftOffset, kToolbarButtonTop, rects.toolbar.left + kForwardRightOffset, kToolbarButtonBottom),
+                rects.toolbar),
+            7.0f,
+            7.0f),
+        state.canGoForward ? D2D1::ColorF(0.90f, 0.91f, 0.92f) : D2D1::ColorF(0.945f, 0.945f, 0.94f));
     drawTextClipped(
         render,
         L"\u2039",
@@ -251,13 +390,22 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         }
     }
 
-    drawTextClipped(
-        render,
-        state.statusText.empty() ? std::wstring_view(state.pathText) : std::wstring_view(state.statusText),
-        D2D1::RectF(rects.pathbar.left + 14.0f, rects.pathbar.top + 5.0f, rects.pathbar.right - 12.0f, rects.pathbar.bottom),
-        window,
-        render.textFormat(),
-        state.statusText.empty() ? D2D1::ColorF(0.34f, 0.34f, 0.34f) : D2D1::ColorF(0.72f, 0.18f, 0.16f));
+    const D2D1_RECT_F pathTextRect = D2D1::RectF(
+        rects.pathbar.left + 14.0f,
+        rects.pathbar.top + 5.0f,
+        rects.pathbar.right - 12.0f,
+        rects.pathbar.bottom);
+    if (state.statusText.empty()) {
+        drawPathSegments(render, clampRect(pathTextRect, window), state.pathText);
+    } else {
+        drawTextClipped(
+            render,
+            state.statusText,
+            pathTextRect,
+            window,
+            render.textFormat(),
+            D2D1::ColorF(0.72f, 0.18f, 0.16f));
+    }
 }
 
 ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects, const ChromeState& state) const {
