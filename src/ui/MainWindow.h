@@ -10,6 +10,7 @@
 #include "ui/RenderContext.h"
 
 #include <span>
+#include <string>
 #include <vector>
 #include <windows.h>
 
@@ -54,6 +55,12 @@ private:
     std::wstring selectedNodePath() const;
     bool selectNodeByPath(const std::wstring& path);
     void refreshChromeState();
+    void focusSearch();
+    void blurSearch();
+    void clearSearch();
+    void setSearchText(std::wstring text);
+    bool handleSearchKeyDown(WPARAM key);
+    bool handleSearchChar(WPARAM character);
     void goBack();
     void goForward();
     void setStatusText(std::wstring text);
@@ -71,6 +78,8 @@ private:
     ChromeState chromeState_;
     ui::FileOperationState fileOperationState_;
     std::wstring homePath_;
+    std::wstring searchText_;
+    bool searchFocused_ = false;
     NodeId contextNode_ = kInvalidNodeId;
 };
 

@@ -119,6 +119,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         case ChromeHitKind::Forward:
             goForward();
             return 0;
+        case ChromeHitKind::SearchField:
+            focusSearch();
+            return 0;
         case ChromeHitKind::SidebarItem:
             if (chromeHit.sidebarIndex < chromeState_.sidebarItems.size()) {
                 navigateToDirectory(chromeState_.sidebarItems[chromeHit.sidebarIndex].path, HistoryMode::Push);
@@ -130,6 +133,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
         const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         const bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        blurSearch();
         const ListInteractionResult result = listView_.onMouseDown(x, y, rects.list, controlDown, shiftDown);
         loadChildrenIfNeeded(result.expandedFolder);
         activateNode(result.activatedNode);
@@ -161,10 +165,24 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_COMMAND:
         handleCommand(wParam);
         return 0;
+    case WM_CHAR:
+        if (handleSearchChar(wParam)) {
+            return 0;
+        }
+        return DefWindowProcW(hwnd_, message, wParam, lParam);
     case WM_KEYDOWN: {
         contextNode_ = kInvalidNodeId;
         const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         const bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+
+        if (wParam == L'F' && controlDown) {
+            focusSearch();
+            return 0;
+        }
+
+        if (handleSearchKeyDown(wParam)) {
+            return 0;
+        }
 
         if (wParam == VK_F5 || (wParam == L'R' && controlDown)) {
             refreshCurrentDirectory();
@@ -253,6 +271,9 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     tree_ = FileTree(path, std::move(rootName));
     tree_.replaceChildren(tree_.rootId(), std::move(result.children));
     listView_ = FinderListView(&tree_);
+    searchText_.clear();
+    searchFocused_ = false;
+    listView_.setFilterText(L"");
 
     switch (mode) {
     case HistoryMode::Initial:
@@ -572,6 +593,7 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
     tree_ = FileTree(currentPath, std::move(rootName));
     tree_.replaceChildren(tree_.rootId(), std::move(result.children));
     listView_ = FinderListView(&tree_);
+    listView_.setFilterText(searchText_);
     std::vector<NodeId> restored;
     restored.reserve(selectedPaths.size());
     for (const std::wstring& selectedPath : selectedPaths) {
@@ -627,6 +649,80 @@ void MainWindow::refreshChromeState() {
 
     sidebar_.refresh(homePath_, history_.currentPath());
     chromeState_.sidebarItems = sidebar_.items();
+    chromeState_.searchText = searchText_;
+    chromeState_.searchFocused = searchFocused_;
+}
+
+void MainWindow::focusSearch() {
+    searchFocused_ = true;
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::blurSearch() {
+    if (!searchFocused_) {
+        return;
+    }
+
+    searchFocused_ = false;
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::clearSearch() {
+    setSearchText(L"");
+}
+
+void MainWindow::setSearchText(std::wstring text) {
+    if (searchText_ == text) {
+        return;
+    }
+
+    searchText_ = std::move(text);
+    listView_.setFilterText(searchText_);
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+bool MainWindow::handleSearchKeyDown(WPARAM key) {
+    if (!searchFocused_) {
+        return false;
+    }
+
+    switch (key) {
+    case VK_BACK:
+        if (!searchText_.empty()) {
+            std::wstring next = searchText_;
+            next.pop_back();
+            setSearchText(std::move(next));
+        }
+        return true;
+    case VK_ESCAPE:
+        if (!searchText_.empty()) {
+            clearSearch();
+        } else {
+            blurSearch();
+        }
+        return true;
+    case VK_RETURN:
+        blurSearch();
+        return true;
+    default:
+        return true;
+    }
+}
+
+bool MainWindow::handleSearchChar(WPARAM character) {
+    if (!searchFocused_) {
+        return false;
+    }
+
+    if (character >= 32 && character != 127) {
+        std::wstring next = searchText_;
+        next.push_back(static_cast<wchar_t>(character));
+        setSearchText(std::move(next));
+    }
+    return true;
 }
 
 void MainWindow::goBack() {
