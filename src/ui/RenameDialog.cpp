@@ -280,8 +280,24 @@ bool promptForRename(HWND owner, const std::wstring& currentName, std::wstring& 
     ShowWindow(dialog, SW_SHOW);
     UpdateWindow(dialog);
 
+    bool sawQuitMessage = false;
+    bool messageLoopError = false;
+    WPARAM quitCode = 0;
+
     MSG message{};
-    while (IsWindow(dialog) && GetMessageW(&message, nullptr, 0, 0) > 0) {
+    while (IsWindow(dialog)) {
+        const int getMessageResult = GetMessageW(&message, nullptr, 0, 0);
+        if (getMessageResult == -1) {
+            messageLoopError = true;
+            break;
+        }
+
+        if (getMessageResult == 0) {
+            sawQuitMessage = true;
+            quitCode = message.wParam;
+            break;
+        }
+
         if (IsWindow(dialog) && IsDialogMessageW(dialog, &message)) {
             continue;
         }
@@ -294,6 +310,15 @@ bool promptForRename(HWND owner, const std::wstring& currentName, std::wstring& 
         EnableWindow(owner, TRUE);
         SetForegroundWindow(owner);
         SetFocus(owner);
+    }
+
+    if (sawQuitMessage) {
+        PostQuitMessage(static_cast<int>(quitCode));
+        return false;
+    }
+
+    if (messageLoopError) {
+        return false;
     }
 
     if (!state.accepted || state.result == state.currentName) {
