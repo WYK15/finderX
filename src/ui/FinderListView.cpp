@@ -26,6 +26,10 @@ bool hasArea(const D2D1_RECT_F& rect) {
     return rect.left < rect.right && rect.top < rect.bottom;
 }
 
+bool isExpandableFolder(const FileNode& node) {
+    return node.kind == FileKind::Folder && (!node.childrenLoaded || !node.children.empty());
+}
+
 void drawTextIfWide(
     RenderContext& render,
     std::wstring_view text,
@@ -40,7 +44,7 @@ void drawTextIfWide(
 }
 
 void drawDisclosure(RenderContext& render, const FileNode& node, float x, float y, D2D1_COLOR_F color) {
-    if (node.kind != FileKind::Folder) {
+    if (!isExpandableFolder(node)) {
         return;
     }
 
@@ -506,7 +510,7 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
         const float iconY = y + (kRowHeight - kIconSize) * 0.5f;
         const float nameX = iconX + kIconSize + kIconTextGap;
 
-        if (disclosureX + kDisclosureWidth <= nameRight) {
+        if (isExpandableFolder(node) && disclosureX + kDisclosureWidth <= nameRight) {
             drawDisclosure(render, node, disclosureX, y, mutedColor);
         }
         if (iconX + kIconSize <= nameRight) {
@@ -549,7 +553,7 @@ ListInteractionResult FinderListView::onMouseDown(float x, float y, const D2D1_R
 
     const VisibleRow row = rows_[static_cast<std::size_t>(index)];
     FileNode& node = tree_->node(row.nodeId);
-    const bool disclosureClick = node.kind == FileKind::Folder && hitTestDisclosure(x, bounds, row);
+    const bool disclosureClick = isExpandableFolder(node) && hitTestDisclosure(x, bounds, row);
     if (disclosureClick) {
         if (!containsSelected(row.nodeId) || (!controlDown && !shiftDown)) {
             if (setSingleSelection(row.nodeId)) {
@@ -680,7 +684,7 @@ ListInteractionResult FinderListView::onKeyDown(WPARAM key, bool controlDown, bo
         break;
     case VK_LEFT: {
         const FileNode& node = tree_->node(selected_);
-        if (node.kind == FileKind::Folder && node.expanded) {
+        if (isExpandableFolder(node) && node.expanded) {
             tree_->setExpanded(selected_, false);
             rebuildRows();
             ensureSelection();
@@ -691,7 +695,7 @@ ListInteractionResult FinderListView::onKeyDown(WPARAM key, bool controlDown, bo
     }
     case VK_RIGHT: {
         const FileNode& node = tree_->node(selected_);
-        if (node.kind == FileKind::Folder && !node.expanded) {
+        if (isExpandableFolder(node) && !node.expanded) {
             tree_->setExpanded(selected_, true);
             result.expandedFolder = selected_;
             rebuildRows();

@@ -110,6 +110,30 @@ int main() {
     }
 
     {
+        FileTree tree(L"C:\\Root", L"Root");
+        FileNode emptyFolder;
+        emptyFolder.name = L"Empty";
+        emptyFolder.path = L"C:\\Root\\Empty";
+        emptyFolder.kind = FileKind::Folder;
+        tree.replaceChildren(tree.rootId(), {emptyFolder});
+        const NodeId emptyId = tree.node(tree.rootId()).children.front();
+        tree.replaceChildren(emptyId, {});
+
+        FinderListView view(&tree);
+        const D2D1_RECT_F emptyBounds = D2D1::RectF(0.0f, 0.0f, 800.0f, 400.0f);
+
+        const ListInteractionResult result = view.onMouseDown(8.0f, 10.0f, emptyBounds, false, false);
+
+        require(result.expandedFolder == kInvalidNodeId, "Known-empty folder disclosure click should not request expansion");
+        require(!tree.node(emptyId).expanded, "Known-empty folder disclosure click should not expand folder");
+
+        const ListInteractionResult disclosureResult = view.onMouseDown(38.0f, 10.0f, emptyBounds, false, false);
+
+        require(disclosureResult.expandedFolder == kInvalidNodeId, "Known-empty folder disclosure hit should not request expansion");
+        require(!tree.node(emptyId).expanded, "Known-empty folder disclosure hit should not expand folder");
+    }
+
+    {
         FileTree tree = FileTree::sample();
         FinderListView view(&tree);
         const std::vector<VisibleRow> rows = tree.flatten();
