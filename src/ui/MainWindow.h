@@ -123,6 +123,7 @@ private:
     void goForward();
     void setStatusText(std::wstring text);
     void loadChildrenIfNeeded(NodeId folder);
+    void restoreExpandedFolders(TabState& tab, std::vector<std::wstring> expandedPaths);
     void paint();
 
     HWND hwnd_ = nullptr;

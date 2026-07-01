@@ -10,7 +10,9 @@
 #include "ui/SettingsDialog.h"
 #include "ui/TabManager.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <string_view>
 #include <utility>
 
 #include <windowsx.h>
@@ -51,6 +53,11 @@ constexpr DWORD kDirectoryChangeFilter = FILE_NOTIFY_CHANGE_FILE_NAME
 bool containsPoint(const D2D1_RECT_F& rect, D2D1_POINT_2F point) {
     return point.x >= rect.left && point.x <= rect.right
         && point.y >= rect.top && point.y <= rect.bottom;
+}
+
+std::size_t pathDepth(std::wstring_view path) {
+    return static_cast<std::size_t>(std::count(path.begin(), path.end(), L'\\')
+        + std::count(path.begin(), path.end(), L'/'));
 }
 
 }
@@ -1230,6 +1237,7 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
         setStatusText(L"Cannot refresh folder");
         return false;
     }
+    std::vector<std::wstring> expandedPaths = tab.tree.expandedFolderPaths();
 
     DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(currentPath);
     if (!result.ok()) {
@@ -1245,6 +1253,7 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
 
     tab.tree = FileTree(currentPath, std::move(rootName));
     tab.tree.replaceChildren(tab.tree.rootId(), std::move(result.children));
+    restoreExpandedFolders(tab, std::move(expandedPaths));
     tab.listView = FinderListView(&tab.tree);
     applyListStyle(tab);
     tab.listView.setFilterText(tab.searchText);
@@ -1563,6 +1572,49 @@ void MainWindow::loadChildrenIfNeeded(NodeId folder) {
 
     applySort(result.children);
     tab.tree.replaceChildren(folder, std::move(result.children));
+}
+
+void MainWindow::restoreExpandedFolders(TabState& tab, std::vector<std::wstring> expandedPaths) {
+    std::sort(expandedPaths.begin(), expandedPaths.end(), [](const std::wstring& left, const std::wstring& right) {
+        const std::size_t leftDepth = pathDepth(left);
+        const std::size_t rightDepth = pathDepth(right);
+        if (leftDepth != rightDepth) {
+            return leftDepth < rightDepth;
+        }
+        return left < right;
+    });
+    expandedPaths.erase(std::unique(expandedPaths.begin(), expandedPaths.end()), expandedPaths.end());
+
+    const std::wstring currentPath = tab.history.currentPath();
+    for (const std::wstring& path : expandedPaths) {
+        if (path.empty() || path == currentPath) {
+            continue;
+        }
+
+        const NodeId folder = tab.tree.findNodeByPath(path);
+        if (folder == kInvalidNodeId || folder >= tab.tree.nodes().size()) {
+            continue;
+        }
+
+        FileNode& node = tab.tree.node(folder);
+        if (node.kind != FileKind::Folder) {
+            continue;
+        }
+
+        tab.tree.setExpanded(folder, true);
+        if (node.childrenLoaded) {
+            continue;
+        }
+
+        DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(node.path);
+        if (!result.ok()) {
+            tab.tree.setExpanded(folder, false);
+            continue;
+        }
+
+        applySort(result.children);
+        tab.tree.replaceChildren(folder, std::move(result.children));
+    }
 }
 
 void MainWindow::paint() {

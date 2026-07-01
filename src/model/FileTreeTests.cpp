@@ -1,5 +1,6 @@
 #include "model/FileTree.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
 #include <iostream>
@@ -100,6 +101,36 @@ int main() {
         rejectedReplaceOnFile = true;
     }
     require(rejectedReplaceOnFile, "replaceChildren should reject a non-folder parent");
+
+    FileTree expansionTree(L"C:\\Root", L"Root");
+    FileNode parent;
+    parent.name = L"Parent";
+    parent.path = L"C:\\Root\\Parent";
+    parent.kind = FileKind::Folder;
+    parent.size = L"--";
+    parent.kindText = L"Folder";
+    FileNode sibling;
+    sibling.name = L"Sibling";
+    sibling.path = L"C:\\Root\\Sibling";
+    sibling.kind = FileKind::Folder;
+    sibling.size = L"--";
+    sibling.kindText = L"Folder";
+    expansionTree.replaceChildren(expansionTree.rootId(), {parent, sibling});
+
+    const NodeId parentId = expansionTree.findNodeByPath(L"C:\\Root\\Parent");
+    const NodeId siblingId = expansionTree.findNodeByPath(L"C:\\Root\\Sibling");
+    require(parentId != kInvalidNodeId, "findNodeByPath should find child folder by path");
+    require(siblingId != kInvalidNodeId, "findNodeByPath should find sibling folder by path");
+    require(expansionTree.findNodeByPath(L"C:\\Root\\Missing") == kInvalidNodeId, "findNodeByPath should reject missing paths");
+    require(expansionTree.findNodeByPath(L"") == kInvalidNodeId, "findNodeByPath should reject empty paths");
+
+    expansionTree.setExpanded(parentId, true);
+    const std::vector<std::wstring> expandedPaths = expansionTree.expandedFolderPaths();
+    require(expandedPaths.size() == 2, "expandedFolderPaths should include root and expanded child");
+    require(expandedPaths[0] == L"C:\\Root", "expandedFolderPaths should include expanded root path first");
+    require(expandedPaths[1] == L"C:\\Root\\Parent", "expandedFolderPaths should include expanded child path");
+    require(std::find(expandedPaths.begin(), expandedPaths.end(), L"C:\\Root\\Sibling") == expandedPaths.end(),
+            "expandedFolderPaths should skip collapsed folders");
 
     std::cout << "FileTreeTests passed\n";
     return 0;

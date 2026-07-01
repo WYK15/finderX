@@ -122,6 +122,29 @@ std::vector<VisibleRow> FileTree::flatten() const {
     return rows;
 }
 
+std::vector<std::wstring> FileTree::expandedFolderPaths() const {
+    std::vector<std::wstring> paths;
+    for (const FileNode& item : nodes_) {
+        if (item.kind == FileKind::Folder && item.expanded && !item.path.empty()) {
+            paths.push_back(item.path);
+        }
+    }
+    return paths;
+}
+
+NodeId FileTree::findNodeByPath(const std::wstring& path) const {
+    if (path.empty()) {
+        return kInvalidNodeId;
+    }
+
+    for (const FileNode& item : nodes_) {
+        if (item.path == path) {
+            return item.id;
+        }
+    }
+    return kInvalidNodeId;
+}
+
 void FileTree::detachSubtree(NodeId id) {
     FileNode& item = node(id);
     const std::vector<NodeId> children = item.children;

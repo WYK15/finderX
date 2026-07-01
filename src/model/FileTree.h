@@ -3,6 +3,7 @@
 #include "model/FileNode.h"
 
 #include <span>
+#include <string>
 #include <vector>
 
 namespace finderx {
@@ -26,6 +27,8 @@ public:
     void setChildrenLoaded(NodeId id, bool loaded);
     void toggleExpanded(NodeId id);
     std::vector<VisibleRow> flatten() const;
+    std::vector<std::wstring> expandedFolderPaths() const;
+    NodeId findNodeByPath(const std::wstring& path) const;
 
     static FileTree sample();
 
