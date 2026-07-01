@@ -20,7 +20,20 @@ constexpr int kIconEditId = 102;
 constexpr int kOkId = IDOK;
 constexpr int kCancelId = IDCANCEL;
 constexpr int kDialogWidth = 328;
-constexpr int kDialogHeight = 158;
+constexpr int kDialogHeight = 318;
+
+std::wstring shortcutHelpText() {
+    return L"Keyboard shortcuts:\r\n"
+           L"Ctrl+T  New tab\r\n"
+           L"Ctrl+W  Close tab\r\n"
+           L"Ctrl+F  Search\r\n"
+           L"F5 / Ctrl+R  Refresh\r\n"
+           L"F2  Rename\r\n"
+           L"Delete  Move to Trash\r\n"
+           L"Ctrl+C  Copy\r\n"
+           L"Ctrl+X  Cut\r\n"
+           L"Ctrl+V  Paste";
+}
 
 void setControlFont(HWND control) {
     SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
@@ -180,12 +193,22 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             24,
                                             hwnd,
                                             kIconEditId);
+        HWND shortcuts = createDialogControl(WS_EX_CLIENTEDGE,
+                                             L"EDIT",
+                                             shortcutHelpText().c_str(),
+                                             WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
+                                             16,
+                                             84,
+                                             280,
+                                             138,
+                                             hwnd,
+                                             0);
         HWND ok = createDialogControl(0,
                                       L"BUTTON",
                                       L"OK",
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                       136,
-                                      88,
+                                      236,
                                       76,
                                       28,
                                       hwnd,
@@ -195,12 +218,12 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                           L"Cancel",
                                           WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                           220,
-                                          88,
+                                          236,
                                           76,
                                           28,
                                           hwnd,
                                           kCancelId);
-        if (!fontLabel || !fontEdit || !iconLabel || !iconEdit || !ok || !cancel) {
+        if (!fontLabel || !fontEdit || !iconLabel || !iconEdit || !shortcuts || !ok || !cancel) {
             return -1;
         }
 
