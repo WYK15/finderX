@@ -6,6 +6,7 @@
 #include "settings/AppSettings.h"
 #include "shell/ShellActions.h"
 #include "shell/ShellFileOperations.h"
+#include "ui/DirectoryWatcherConfig.h"
 #include "ui/RenameDialog.h"
 #include "ui/SettingsDialog.h"
 #include "ui/TabManager.h"
@@ -1446,7 +1447,7 @@ void MainWindow::startDirectoryWatcher(const std::wstring& path) {
 
     directoryChangeHandle_ = FindFirstChangeNotificationW(
         path.c_str(),
-        FALSE,
+        ui::kDirectoryWatcherIncludeSubtree ? TRUE : FALSE,
         kDirectoryChangeFilter);
     if (directoryChangeHandle_ == INVALID_HANDLE_VALUE) {
         return;

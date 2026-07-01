@@ -1,4 +1,5 @@
 #include "ui/DirectoryRefreshDebouncer.h"
+#include "ui/DirectoryWatcherConfig.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -17,6 +18,8 @@ void require(bool condition, const char* message) {
 } // namespace
 
 int main() {
+    require(kDirectoryWatcherIncludeSubtree, "directory watcher should include subtree changes");
+
     {
         DirectoryRefreshDebouncer debouncer(250);
         require(!debouncer.pending(), "new debouncer should not be pending");
