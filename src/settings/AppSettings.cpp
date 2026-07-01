@@ -44,6 +44,19 @@ std::wstring joinPath(const std::wstring& base, const std::wstring& child) {
     return base + L"\\" + child;
 }
 
+std::wstring favoriteLabelFromPath(const std::wstring& path) {
+    const std::size_t end = path.find_last_not_of(L"\\/");
+    if (end == std::wstring::npos) {
+        return path;
+    }
+    const std::size_t slash = path.find_last_of(L"\\/", end);
+    if (slash == std::wstring::npos) {
+        return path.substr(0, end + 1);
+    }
+    std::wstring label = path.substr(slash + 1, end - slash);
+    return label.empty() ? path : label;
+}
+
 std::string wideToUtf8(const std::wstring& value) {
     if (value.empty()) {
         return {};
@@ -343,6 +356,32 @@ bool containsFavorite(const AppSettings& settings, const std::wstring& path) {
     return std::any_of(settings.favorites.begin(), settings.favorites.end(), [&](const FavoriteLocation& favorite) {
         return pathsEqual(favorite.path, path);
     });
+}
+
+bool renameFavorite(AppSettings& settings, std::size_t index, std::wstring label) {
+    if (index >= settings.favorites.size()) {
+        return false;
+    }
+    if (label.empty()) {
+        label = favoriteLabelFromPath(settings.favorites[index].path);
+    }
+    settings.favorites[index].label = std::move(label);
+    return true;
+}
+
+bool moveFavorite(AppSettings& settings, std::size_t index, int direction) {
+    if (index >= settings.favorites.size() || (direction != -1 && direction != 1)) {
+        return false;
+    }
+    if (direction < 0 && index == 0) {
+        return false;
+    }
+    const std::size_t next = direction < 0 ? index - 1 : index + 1;
+    if (next >= settings.favorites.size()) {
+        return false;
+    }
+    std::swap(settings.favorites[index], settings.favorites[next]);
+    return true;
 }
 
 std::filesystem::path defaultSettingsPath() {

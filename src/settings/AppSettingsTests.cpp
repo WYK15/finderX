@@ -69,6 +69,38 @@ void testFavoriteOperations() {
     require(!removeFavorite(settings, L"D:\\Missing"), "removing missing favorite should report false");
 }
 
+void testRenameFavoriteByIndex() {
+    AppSettings settings;
+    require(addFavorite(settings, L"Projects", L"D:\\Projects"), "favorite should exist before rename");
+
+    require(renameFavorite(settings, 0, L"Work"), "renameFavorite should rename valid index");
+    require(settings.favorites[0].label == L"Work", "renameFavorite should update label");
+    require(settings.favorites[0].path == L"D:\\Projects", "renameFavorite should keep path");
+    require(!renameFavorite(settings, 9, L"Missing"), "renameFavorite should reject invalid index");
+}
+
+void testRenameFavoriteEmptyLabelFallsBackToPathName() {
+    AppSettings settings;
+    require(addFavorite(settings, L"Projects", L"D:\\Projects"), "favorite should exist before fallback rename");
+
+    require(renameFavorite(settings, 0, L""), "empty rename should still update valid favorite");
+    require(settings.favorites[0].label == L"Projects", "empty label should fall back to final path component");
+}
+
+void testMoveFavoriteByIndex() {
+    AppSettings settings;
+    require(addFavorite(settings, L"One", L"D:\\One"), "first favorite should be added");
+    require(addFavorite(settings, L"Two", L"D:\\Two"), "second favorite should be added");
+    require(addFavorite(settings, L"Three", L"D:\\Three"), "third favorite should be added");
+
+    require(moveFavorite(settings, 2, -1), "moveFavorite should move item up");
+    require(settings.favorites[1].label == L"Three", "moved favorite should occupy previous slot");
+    require(moveFavorite(settings, 1, 1), "moveFavorite should move item down");
+    require(settings.favorites[2].label == L"Three", "moved favorite should occupy next slot");
+    require(!moveFavorite(settings, 0, -1), "moveFavorite should reject first item moving up");
+    require(!moveFavorite(settings, 2, 1), "moveFavorite should reject last item moving down");
+}
+
 void testSaveLoadRoundTrip() {
     const std::filesystem::path path = tempSettingsPath(L"finderx-settings-");
     AppSettings settings = makeDefaultSettings(L"C:\\Users\\Example");
@@ -182,6 +214,9 @@ int main() {
     testDefaults();
     testClamping();
     testFavoriteOperations();
+    testRenameFavoriteByIndex();
+    testRenameFavoriteEmptyLabelFallsBackToPathName();
+    testMoveFavoriteByIndex();
     testSaveLoadRoundTrip();
     testEmptyFavoritesRoundTrip();
     testFavoritesWithStructuralCharactersRoundTrip();

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -48,6 +49,8 @@ void clampSettings(AppSettings& settings);
 bool addFavorite(AppSettings& settings, std::wstring label, std::wstring path);
 bool removeFavorite(AppSettings& settings, const std::wstring& path);
 bool containsFavorite(const AppSettings& settings, const std::wstring& path);
+bool renameFavorite(AppSettings& settings, std::size_t index, std::wstring label);
+bool moveFavorite(AppSettings& settings, std::size_t index, int direction);
 std::filesystem::path defaultSettingsPath();
 SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesystem::path& path = defaultSettingsPath());
 bool saveSettings(const AppSettings& settings, const std::filesystem::path& path = defaultSettingsPath());
