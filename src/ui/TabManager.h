@@ -14,6 +14,25 @@ struct TabInfo {
     std::wstring statusText;
 };
 
+inline std::size_t activeTabIndexAfterClose(
+    std::size_t oldActiveIndex,
+    std::size_t closedIndex,
+    std::size_t remainingTabCount) {
+    if (remainingTabCount == 0) {
+        return 0;
+    }
+
+    if (closedIndex < oldActiveIndex) {
+        return oldActiveIndex - 1;
+    }
+
+    if (closedIndex == oldActiveIndex) {
+        return (std::min)(closedIndex, remainingTabCount - 1);
+    }
+
+    return oldActiveIndex;
+}
+
 class TabManager {
 public:
     void initialize(std::wstring path) {

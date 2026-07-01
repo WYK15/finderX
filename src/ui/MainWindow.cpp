@@ -8,8 +8,8 @@
 #include "shell/ShellFileOperations.h"
 #include "ui/RenameDialog.h"
 #include "ui/SettingsDialog.h"
+#include "ui/TabManager.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <utility>
 
@@ -458,6 +458,7 @@ void MainWindow::closeTab(std::size_t index) {
     contextNode_ = kInvalidNodeId;
     contextNodePath_.clear();
     contextFavoritePath_.clear();
+    const std::size_t oldActiveIndex = activeTabIndex_;
 
     if (tabs_.size() == 1) {
         if (!createTabAtPath(homePath_)) {
@@ -467,7 +468,7 @@ void MainWindow::closeTab(std::size_t index) {
         activeTabIndex_ = 0;
     } else {
         tabs_.erase(tabs_.begin() + static_cast<std::ptrdiff_t>(index));
-        ensureActiveTabAfterClose(index);
+        ensureActiveTabAfterClose(index, oldActiveIndex);
     }
 
     if (hasActiveTab() && activeTab().locationKind == TabState::LocationKind::Directory) {
@@ -479,13 +480,13 @@ void MainWindow::closeTab(std::size_t index) {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
-void MainWindow::ensureActiveTabAfterClose(std::size_t closedIndex) {
+void MainWindow::ensureActiveTabAfterClose(std::size_t closedIndex, std::size_t oldActiveIndex) {
     if (tabs_.empty()) {
         activeTabIndex_ = 0;
         return;
     }
 
-    activeTabIndex_ = (std::min)(closedIndex, tabs_.size() - 1);
+    activeTabIndex_ = ui::activeTabIndexAfterClose(oldActiveIndex, closedIndex, tabs_.size());
 }
 
 bool MainWindow::navigateToThisPc(HistoryMode mode) {

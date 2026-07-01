@@ -68,6 +68,17 @@ int main() {
         require(tabs.active().title == L"C:\\", "root-like path should fall back to full path");
     }
 
+    {
+        require(activeTabIndexAfterClose(2, 0, 2) == 1,
+                "closing a tab before active should preserve logical active tab");
+        require(activeTabIndexAfterClose(2, 2, 2) == 2,
+                "closing active tab should activate same index when available");
+        require(activeTabIndexAfterClose(2, 2, 1) == 1,
+                "closing active last tab should activate previous tab");
+        require(activeTabIndexAfterClose(0, 2, 2) == 0,
+                "closing a tab after active should leave active index unchanged");
+    }
+
     std::cout << "TabManagerTests passed\n";
     return 0;
 }
