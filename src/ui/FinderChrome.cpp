@@ -57,6 +57,12 @@ struct SidebarLayoutRow {
     const wchar_t* header = nullptr;
 };
 
+struct PathSegmentLayout {
+    std::wstring label;
+    std::wstring targetPath;
+    D2D1_RECT_F rect{};
+};
+
 D2D1_COLOR_F rgb(float value) {
     return D2D1::ColorF(value, value, value);
 }
@@ -347,57 +353,102 @@ float approximateTextWidth(std::wstring_view text) {
     return static_cast<float>(text.size()) * kPathTextApproxWidth;
 }
 
-void drawPathSegments(RenderContext& render, const D2D1_RECT_F& rect, std::wstring_view path) {
+std::wstring pathTargetForSegment(const std::vector<std::wstring>& segments, std::size_t index) {
+    std::wstring target;
+    for (std::size_t segmentIndex = 0; segmentIndex <= index && segmentIndex < segments.size(); ++segmentIndex) {
+        if (segmentIndex == 0) {
+            target = segments[segmentIndex];
+            if (!target.empty() && target.back() == L':') {
+                target += L"\\";
+            }
+            continue;
+        }
+
+        if (!target.empty() && target.back() != L'\\' && target.back() != L'/') {
+            target += L"\\";
+        }
+        target += segments[segmentIndex];
+    }
+    return target;
+}
+
+std::vector<PathSegmentLayout> pathSegmentLayouts(const D2D1_RECT_F& rect, std::wstring_view path) {
     const std::vector<std::wstring> segments = splitPathSegments(path);
     const float maxRight = rect.right - 12.0f;
     float cursor = rect.left;
-    const D2D1_COLOR_F textColor = D2D1::ColorF(0.34f, 0.34f, 0.34f);
-    const D2D1_COLOR_F chevronColor = D2D1::ColorF(0.56f, 0.56f, 0.56f);
+    std::vector<PathSegmentLayout> layouts;
 
     if (segments.empty() || maxRight - cursor < kPathMinSegmentWidth) {
-        drawTextClipped(render, path, rect, rect, render.textFormat(), textColor);
-        return;
+        return layouts;
+    }
+    if (segments.size() == 1 && (segments.front().empty() || segments.front().back() != L':')) {
+        return layouts;
     }
 
     for (std::size_t index = 0; index < segments.size(); ++index) {
         const float remaining = maxRight - cursor;
         if (remaining < kPathMinDrawWidth) {
-            if (index == 0) {
-                drawTextClipped(render, path, rect, rect, render.textFormat(), textColor);
-            }
             break;
         }
 
         const float preferredSegmentWidth = (std::max)(kPathMinSegmentWidth, approximateTextWidth(segments[index]));
         const float segmentWidth = (std::min)(preferredSegmentWidth, remaining);
         if (index == 0 && segmentWidth < kPathMinSegmentWidth) {
-            drawTextClipped(render, path, rect, rect, render.textFormat(), textColor);
             break;
         }
 
-        drawTextClipped(
-            render,
-            segments[index],
-            D2D1::RectF(cursor, rect.top, cursor + segmentWidth, rect.bottom),
-            rect,
-            render.textFormat(),
-            textColor);
+        layouts.push_back({segments[index], pathTargetForSegment(segments, index), D2D1::RectF(cursor, rect.top, cursor + segmentWidth, rect.bottom)});
         cursor += segmentWidth;
 
         if (index + 1 < segments.size()) {
             if (maxRight - cursor < kPathChevronWidth) {
                 break;
             }
-            drawTextClipped(
-                render,
-                L"\u203a",
-                D2D1::RectF(cursor, rect.top, cursor + kPathChevronWidth, rect.bottom),
-                rect,
-                render.textFormat(),
-                chevronColor);
             cursor += kPathChevronWidth;
         }
     }
+
+    return layouts;
+}
+
+void drawPathSegments(RenderContext& render, const D2D1_RECT_F& rect, std::wstring_view path) {
+    const std::vector<PathSegmentLayout> layouts = pathSegmentLayouts(rect, path);
+    const D2D1_COLOR_F textColor = D2D1::ColorF(0.34f, 0.34f, 0.34f);
+    const D2D1_COLOR_F chevronColor = D2D1::ColorF(0.56f, 0.56f, 0.56f);
+
+    if (layouts.empty()) {
+        drawTextClipped(render, path, rect, rect, render.textFormat(), textColor);
+        return;
+    }
+
+    for (std::size_t index = 0; index < layouts.size(); ++index) {
+        const PathSegmentLayout& segment = layouts[index];
+        drawTextClipped(
+            render,
+            segment.label,
+            segment.rect,
+            rect,
+            render.textFormat(),
+            textColor);
+
+        if (index + 1 < layouts.size()) {
+            drawTextClipped(
+                render,
+                L"\u203a",
+                D2D1::RectF(segment.rect.right, rect.top, segment.rect.right + kPathChevronWidth, rect.bottom),
+                rect,
+                render.textFormat(),
+                chevronColor);
+        }
+    }
+}
+
+D2D1_RECT_F pathTextRect(const LayoutRects& rects) {
+    return D2D1::RectF(
+        rects.pathbar.left + 14.0f,
+        rects.pathbar.top + 5.0f,
+        rects.pathbar.right - 12.0f,
+        rects.pathbar.bottom);
 }
 
 const ChromeState& defaultChromeState() {
@@ -687,18 +738,14 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         }
     }
 
-    const D2D1_RECT_F pathTextRect = D2D1::RectF(
-        rects.pathbar.left + 14.0f,
-        rects.pathbar.top + 5.0f,
-        rects.pathbar.right - 12.0f,
-        rects.pathbar.bottom);
+    const D2D1_RECT_F pathRect = pathTextRect(rects);
     if (state.statusText.empty()) {
-        drawPathSegments(render, clampRect(pathTextRect, window), state.pathText);
+        drawPathSegments(render, clampRect(pathRect, window), state.pathText);
     } else {
         drawTextClipped(
             render,
             state.statusText,
-            pathTextRect,
+            pathRect,
             window,
             render.textFormat(),
             D2D1::ColorF(0.72f, 0.18f, 0.16f));
@@ -781,6 +828,15 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
         const D2D1_RECT_F rowRect = D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, kSidebarRowRight, rowY + 24.0f);
         if (item.available && containsPoint(rowRect, x, y)) {
             return {ChromeHitKind::SidebarItem, row.index, 0};
+        }
+    }
+
+    if (state.statusText.empty() && containsPoint(rects.pathbar, x, y)) {
+        const D2D1_RECT_F pathRect = pathTextRect(rects);
+        for (const PathSegmentLayout& segment : pathSegmentLayouts(pathRect, state.pathText)) {
+            if (!segment.targetPath.empty() && containsPoint(segment.rect, x, y)) {
+                return {ChromeHitKind::PathSegment, 0, 0, segment.targetPath};
+            }
         }
     }
 

@@ -61,11 +61,57 @@ void testTabCloseHitTargetDoesNotActivateTab() {
             "tab body should report first tab index");
 }
 
+void testPathbarSegmentsReturnNavigationTargets() {
+    FinderChrome chrome;
+    const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
+    ChromeState state;
+    state.pathText = L"D:\\alpha\\beta";
+
+    const ChromeHitResult driveHit = chrome.hitTest(196.0f, 684.0f, rects, state);
+    require(driveHit.kind == ChromeHitKind::PathSegment,
+            "drive path segment should be hittable");
+    require(driveHit.path == L"D:\\",
+            "drive path segment should navigate to drive root");
+
+    const ChromeHitResult alphaHit = chrome.hitTest(244.0f, 684.0f, rects, state);
+    require(alphaHit.kind == ChromeHitKind::PathSegment,
+            "middle path segment should be hittable");
+    require(alphaHit.path == L"D:\\alpha",
+            "middle path segment should navigate to accumulated directory");
+
+    const ChromeHitResult betaHit = chrome.hitTest(288.0f, 684.0f, rects, state);
+    require(betaHit.kind == ChromeHitKind::PathSegment,
+            "last path segment should be hittable");
+    require(betaHit.path == L"D:\\alpha\\beta",
+            "last path segment should navigate to full path");
+
+    require(chrome.hitTest(222.0f, 684.0f, rects, state).kind == ChromeHitKind::None,
+            "path chevron should not navigate");
+}
+
+void testPathbarIgnoresStatusTextAndVirtualLocations() {
+    FinderChrome chrome;
+    const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
+
+    ChromeState statusState;
+    statusState.pathText = L"D:\\alpha";
+    statusState.statusText = L"Cannot refresh folder";
+    require(chrome.hitTest(196.0f, 684.0f, rects, statusState).kind == ChromeHitKind::None,
+            "status text should disable path segment hits");
+
+    ChromeState thisPcState;
+    thisPcState.pathText = L"This PC";
+    require(chrome.hitTest(196.0f, 684.0f, rects, thisPcState).kind == ChromeHitKind::None,
+            "virtual locations should not expose path segment hits");
+}
+
 } // namespace
 
 int main() {
     testToolbarSortAndSettingsHitTargetsSitBeforeSearch();
     testHeaderColumnsHitUsingDrawnGeometry();
     testTabCloseHitTargetDoesNotActivateTab();
+    testPathbarSegmentsReturnNavigationTargets();
+    testPathbarIgnoresStatusTextAndVirtualLocations();
     std::cout << "FinderChromeTests passed\n";
 }

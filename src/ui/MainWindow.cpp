@@ -224,6 +224,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         case ChromeHitKind::HeaderKind:
             changeSort(SortColumn::Kind);
             return 0;
+        case ChromeHitKind::PathSegment:
+            navigateToLocation(chromeHit.path, HistoryMode::Push);
+            return 0;
         case ChromeHitKind::None:
             break;
         }

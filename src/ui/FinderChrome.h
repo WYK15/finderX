@@ -4,6 +4,7 @@
 #include "ui/RenderContext.h"
 
 #include <cstddef>
+#include <string>
 
 #include <d2d1.h>
 
@@ -31,13 +32,15 @@ enum class ChromeHitKind {
     HeaderName,
     HeaderModified,
     HeaderSize,
-    HeaderKind
+    HeaderKind,
+    PathSegment
 };
 
 struct ChromeHitResult {
     ChromeHitKind kind = ChromeHitKind::None;
     std::size_t sidebarIndex = 0;
     std::size_t tabIndex = 0;
+    std::wstring path;
 };
 
 class FinderChrome {
