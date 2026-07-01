@@ -596,6 +596,10 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
                 AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
             }
         }
+        if (singleTarget && targets.front() < tab.tree.nodes().size()
+            && !containsFavorite(settings_, tab.tree.node(targets.front()).path)) {
+            AppendMenuW(menu, MF_STRING, kCommandAddFavorite, L"Add to Favorites");
+        }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING, kCommandReveal, L"Show in Explorer");
         AppendMenuW(menu, MF_STRING, kCommandCopyPath, L"Copy Path");
@@ -669,7 +673,11 @@ void MainWindow::handleCommand(WPARAM wParam) {
         createFileInCurrentDirectory();
         break;
     case kCommandAddFavorite:
-        addCurrentDirectoryToFavorites();
+        if (contextNode_ != kInvalidNodeId && contextNode_ < activeTab().tree.nodes().size()) {
+            addPathToFavorites(activeTab().tree.node(contextNode_).path);
+        } else {
+            addCurrentDirectoryToFavorites();
+        }
         break;
     case kCommandRemoveFavorite:
         removeContextFavorite();
@@ -910,24 +918,34 @@ void MainWindow::createFileInCurrentDirectory() {
     refreshCurrentDirectorySelecting(result.path);
 }
 
-void MainWindow::addCurrentDirectoryToFavorites() {
-    if (!isActiveDirectoryLocation()) {
+void MainWindow::addPathToFavorites(const std::wstring& path) {
+    if (path.empty() || containsFavorite(settings_, path)) {
         return;
     }
 
-    const std::wstring path = activeTab().history.currentPath();
-    std::wstring label = fileNameFromPath(path);
-    if (label.empty()) {
-        label = path;
-    }
-
-    if (!addFavorite(settings_, std::move(label), path)) {
+    if (!addFavorite(settings_, favoriteLabelForPath(path), path)) {
         return;
     }
 
     saveSettingsOrStatus();
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+std::wstring MainWindow::favoriteLabelForPath(const std::wstring& path) const {
+    std::wstring label = fileNameFromPath(path);
+    if (label.empty()) {
+        label = path;
+    }
+    return label;
+}
+
+void MainWindow::addCurrentDirectoryToFavorites() {
+    if (!isActiveDirectoryLocation()) {
+        return;
+    }
+
+    addPathToFavorites(activeTab().history.currentPath());
 }
 
 void MainWindow::removeContextFavorite() {

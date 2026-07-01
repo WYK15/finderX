@@ -83,6 +83,8 @@ private:
     void pasteIntoCurrentDirectory();
     void createFolderInCurrentDirectory();
     void createFileInCurrentDirectory();
+    void addPathToFavorites(const std::wstring& path);
+    std::wstring favoriteLabelForPath(const std::wstring& path) const;
     void addCurrentDirectoryToFavorites();
     void removeContextFavorite();
     void openPowerShellForContext();
