@@ -114,7 +114,7 @@ FinderX-0.1.0-win64.msi
 The repository includes two workflows:
 
 - `.github/workflows/build.yml`: runs on push and pull requests, builds Release, runs tests, and uploads `FinderX.exe` as an artifact.
-- `.github/workflows/release.yml`: runs when pushing a `v*` tag or when manually triggered, builds Release, runs tests, packages an MSI, uploads it as an artifact, and attaches it to a GitHub Release.
+- `.github/workflows/release.yml`: runs when pushing a `v*` tag or when manually triggered, builds Release, runs tests, packages an MSI and a portable ZIP, uploads both as artifacts, and attaches both to a GitHub Release.
 
 To publish a release from your machine:
 
@@ -127,4 +127,5 @@ GitHub Actions will create or update the release for that tag and attach:
 
 ```text
 FinderX-0.1.0-x64.msi
+FinderX-0.1.0-portable.zip
 ```

@@ -56,6 +56,13 @@ jobs:
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
 
+      - name: Package portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist\FinderX | Out-Null
+          Copy-Item build\Release\FinderX.exe dist\FinderX\FinderX.exe -Force
+          Compress-Archive -Path dist\FinderX\* -DestinationPath "dist\FinderX-$env:FINDERX_VERSION-portable.zip" -Force
+
       - name: Package MSI
         run: cpack --config build/CPackConfig.cmake -C Release -G WIX
 
@@ -75,10 +82,18 @@ jobs:
           name: FinderX-MSI
           path: dist/*.msi
 
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinderX-Portable
+          path: dist/*.zip
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.FINDERX_TAG }}
           name: FinderX ${{ env.FINDERX_VERSION }}
-          files: dist/*.msi
+          files: |
+            dist/*.msi
+            dist/*.zip
           generate_release_notes: true
