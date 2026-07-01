@@ -45,6 +45,8 @@ private:
         NavigationHistory history;
         std::wstring searchText;
         bool searchFocused = false;
+        std::wstring addressText;
+        bool addressEditing = false;
         std::wstring statusText;
         LocationKind locationKind = LocationKind::Directory;
 
@@ -112,6 +114,11 @@ private:
     void blurSearch();
     void clearSearch();
     void setSearchText(std::wstring text);
+    void focusAddress();
+    void blurAddress();
+    void commitAddress();
+    bool handleAddressCharacter(wchar_t character);
+    bool handleAddressKeyDown(WPARAM key);
     bool handleSearchKeyDown(WPARAM key);
     bool handleSearchChar(WPARAM character);
     void startDirectoryWatcher(const std::wstring& path);

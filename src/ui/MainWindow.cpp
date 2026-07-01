@@ -190,6 +190,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         case ChromeHitKind::SearchField:
             focusSearch();
             return 0;
+        case ChromeHitKind::AddressField:
+            focusAddress();
+            return 0;
         case ChromeHitKind::SidebarItem:
             if (chromeHit.sidebarIndex < chromeState_.sidebarItems.size()) {
                 navigateToLocation(chromeState_.sidebarItems[chromeHit.sidebarIndex].path, HistoryMode::Push);
@@ -237,6 +240,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
         blurSearch();
+        blurAddress();
         const ListInteractionResult result = activeTab().listView.onMouseDown(x, y, rects.list, controlDown, shiftDown);
         loadChildrenIfNeeded(result.expandedFolder);
         activateNode(result.activatedNode);
@@ -295,6 +299,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         if (!hasActiveTab()) {
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         }
+        if (hasActiveTab() && activeTab().addressEditing && handleAddressCharacter(static_cast<wchar_t>(wParam))) {
+            return 0;
+        }
         if (handleSearchChar(wParam)) {
             return 0;
         }
@@ -321,6 +328,10 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
         if (!hasActiveTab()) {
             return DefWindowProcW(hwnd_, message, wParam, lParam);
+        }
+
+        if (hasActiveTab() && activeTab().addressEditing && handleAddressKeyDown(wParam)) {
+            return 0;
         }
 
         if (wParam == L'F' && controlDown) {
@@ -430,6 +441,8 @@ bool MainWindow::createTabAtPath(const std::wstring& path) {
     applyListStyle(*tab);
     tab->tree.replaceChildren(tab->tree.rootId(), std::move(result.children));
     tab->history.setInitialPath(target);
+    tab->addressEditing = false;
+    tab->addressText.clear();
 
     tabs_.push_back(std::move(tab));
     activeTabIndex_ = tabs_.size() - 1;
@@ -449,6 +462,8 @@ void MainWindow::activateTab(std::size_t index) {
 
     if (hasActiveTab()) {
         activeTab().searchFocused = false;
+        activeTab().addressEditing = false;
+        activeTab().addressText.clear();
     }
 
     activeTabIndex_ = index;
@@ -516,6 +531,8 @@ bool MainWindow::navigateToThisPc(HistoryMode mode) {
     applyListStyle(tab);
     tab.searchText.clear();
     tab.searchFocused = false;
+    tab.addressEditing = false;
+    tab.addressText.clear();
     tab.listView.setFilterText(L"");
 
     switch (mode) {
@@ -581,6 +598,8 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     applyListStyle(tab);
     tab.searchText.clear();
     tab.searchFocused = false;
+    tab.addressEditing = false;
+    tab.addressText.clear();
     tab.listView.setFilterText(L"");
 
     switch (mode) {
@@ -1316,6 +1335,8 @@ void MainWindow::refreshChromeState() {
         chromeState_.sidebarItems = sidebar_.items();
         chromeState_.searchText.clear();
         chromeState_.searchFocused = false;
+        chromeState_.addressEditing = false;
+        chromeState_.addressText.clear();
         chromeState_.tabTitles = tabTitles();
         chromeState_.activeTabIndex = activeTabIndex_;
         chromeState_.sortColumn = settings_.sortColumn;
@@ -1339,6 +1360,8 @@ void MainWindow::refreshChromeState() {
     chromeState_.sidebarItems = sidebar_.items();
     chromeState_.searchText = tab.searchText;
     chromeState_.searchFocused = tab.searchFocused;
+    chromeState_.addressEditing = tab.addressEditing;
+    chromeState_.addressText = tab.addressEditing ? tab.addressText : L"";
     chromeState_.statusText = tab.statusText;
     chromeState_.tabTitles = tabTitles();
     chromeState_.activeTabIndex = activeTabIndex_;
@@ -1351,7 +1374,10 @@ void MainWindow::focusSearch() {
         return;
     }
 
-    activeTab().searchFocused = true;
+    TabState& tab = activeTab();
+    tab.addressEditing = false;
+    tab.addressText.clear();
+    tab.searchFocused = true;
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -1389,6 +1415,85 @@ void MainWindow::setSearchText(std::wstring text) {
     tab.listView.setFilterText(tab.searchText);
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::focusAddress() {
+    if (!hasActiveTab() || activeTab().locationKind == TabState::LocationKind::ThisPc) {
+        return;
+    }
+
+    TabState& tab = activeTab();
+    tab.searchFocused = false;
+    tab.addressEditing = true;
+    tab.addressText = tab.history.currentPath();
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::blurAddress() {
+    if (!hasActiveTab()) {
+        return;
+    }
+
+    TabState& tab = activeTab();
+    if (!tab.addressEditing) {
+        return;
+    }
+
+    tab.addressEditing = false;
+    tab.addressText.clear();
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::commitAddress() {
+    if (!hasActiveTab() || !activeTab().addressEditing) {
+        return;
+    }
+
+    std::wstring target = activeTab().addressText;
+    blurAddress();
+    if (!navigateToLocation(std::move(target), HistoryMode::Push)) {
+        setStatusText(L"Cannot open folder");
+    }
+}
+
+bool MainWindow::handleAddressKeyDown(WPARAM key) {
+    if (!hasActiveTab() || !activeTab().addressEditing) {
+        return false;
+    }
+
+    if (key == VK_RETURN) {
+        commitAddress();
+        return true;
+    }
+    if (key == VK_ESCAPE) {
+        blurAddress();
+        return true;
+    }
+    if (key == VK_BACK) {
+        std::wstring& text = activeTab().addressText;
+        if (!text.empty()) {
+            text.pop_back();
+            refreshChromeState();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
+        return true;
+    }
+    return true;
+}
+
+bool MainWindow::handleAddressCharacter(wchar_t character) {
+    if (!hasActiveTab() || !activeTab().addressEditing) {
+        return false;
+    }
+
+    if (character >= 32 && character != 127) {
+        activeTab().addressText.push_back(character);
+        refreshChromeState();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+    return true;
 }
 
 bool MainWindow::handleSearchKeyDown(WPARAM key) {
