@@ -137,6 +137,7 @@ private:
     ui::DirectoryRefreshDebouncer directoryRefreshDebouncer_{ui::kDefaultDirectoryRefreshDebounceMs};
     HANDLE directoryChangeHandle_ = INVALID_HANDLE_VALUE;
     NodeId contextNode_ = kInvalidNodeId;
+    std::wstring contextNodePath_;
     std::wstring contextFavoritePath_;
 };
 

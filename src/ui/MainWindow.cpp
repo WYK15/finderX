@@ -285,6 +285,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         return DefWindowProcW(hwnd_, message, wParam, lParam);
     case WM_KEYDOWN: {
         contextNode_ = kInvalidNodeId;
+        contextNodePath_.clear();
         const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         const bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
 
@@ -386,6 +387,9 @@ void MainWindow::initializeFileTree() {
 }
 
 bool MainWindow::createTabAtPath(const std::wstring& path) {
+    contextNode_ = kInvalidNodeId;
+    contextNodePath_.clear();
+
     const std::wstring target = path.empty() ? homePath_ : path;
     DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(target);
     if (!result.ok()) {
@@ -416,6 +420,9 @@ void MainWindow::activateTab(std::size_t index) {
     if (index >= tabs_.size() || index == activeTabIndex_) {
         return;
     }
+
+    contextNode_ = kInvalidNodeId;
+    contextNodePath_.clear();
 
     if (hasActiveTab()) {
         activeTab().searchFocused = false;
@@ -463,6 +470,7 @@ bool MainWindow::navigateToThisPc(HistoryMode mode) {
 
     tab.statusText.clear();
     contextNode_ = kInvalidNodeId;
+    contextNodePath_.clear();
     stopDirectoryWatcher();
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -502,6 +510,8 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     }
 
     TabState& tab = activeTab();
+    contextNode_ = kInvalidNodeId;
+    contextNodePath_.clear();
     tab.locationKind = TabState::LocationKind::Directory;
     tab.tree = FileTree(path, std::move(rootName));
     tab.tree.replaceChildren(tab.tree.rootId(), std::move(result.children));
@@ -561,6 +571,7 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
     }
 
     contextFavoritePath_.clear();
+    contextNodePath_.clear();
     TabState& tab = activeTab();
     contextNode_ = tab.listView.nodeAtPoint(
         clientPoint.x,
@@ -568,6 +579,9 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
         rects.list);
 
     const bool hasTarget = contextNode_ != kInvalidNodeId;
+    if (hasTarget && contextNode_ < tab.tree.nodes().size()) {
+        contextNodePath_ = tab.tree.node(contextNode_).path;
+    }
     if (hasTarget && !tab.listView.isSelected(contextNode_) && tab.listView.selectNode(contextNode_)) {
         InvalidateRect(hwnd_, nullptr, FALSE);
     }
@@ -628,6 +642,8 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
 }
 
 void MainWindow::showSidebarContextMenu(std::size_t sidebarIndex, POINT screenPoint) {
+    contextNode_ = kInvalidNodeId;
+    contextNodePath_.clear();
     contextFavoritePath_.clear();
     if (sidebarIndex >= chromeState_.sidebarItems.size()) {
         return;
@@ -672,13 +688,19 @@ void MainWindow::handleCommand(WPARAM wParam) {
     case kCommandNewFile:
         createFileInCurrentDirectory();
         break;
-    case kCommandAddFavorite:
-        if (contextNode_ != kInvalidNodeId && contextNode_ < activeTab().tree.nodes().size()) {
-            addPathToFavorites(activeTab().tree.node(contextNode_).path);
+    case kCommandAddFavorite: {
+        if (!hasActiveTab()) {
+            return;
+        }
+        const TabState& tab = activeTab();
+        if (contextNode_ != kInvalidNodeId && contextNode_ < tab.tree.nodes().size()
+            && !contextNodePath_.empty() && tab.tree.node(contextNode_).path == contextNodePath_) {
+            addPathToFavorites(contextNodePath_);
         } else {
             addCurrentDirectoryToFavorites();
         }
         break;
+    }
     case kCommandRemoveFavorite:
         removeContextFavorite();
         break;
@@ -1190,6 +1212,7 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
     }
     tab.listView.selectNodes(restored);
     contextNode_ = kInvalidNodeId;
+    contextNodePath_.clear();
     tab.statusText.clear();
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
