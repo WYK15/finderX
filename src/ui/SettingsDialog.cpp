@@ -17,10 +17,16 @@ struct SettingsDialogState {
 constexpr wchar_t kDialogClassName[] = L"FinderXSettingsDialog";
 constexpr int kFontEditId = 101;
 constexpr int kIconEditId = 102;
+constexpr int kFavoritesListId = 201;
+constexpr int kFavoriteLabelEditId = 202;
+constexpr int kFavoritePathEditId = 203;
+constexpr int kFavoriteUpId = 204;
+constexpr int kFavoriteDownId = 205;
+constexpr int kFavoriteRemoveId = 206;
 constexpr int kOkId = IDOK;
 constexpr int kCancelId = IDCANCEL;
 constexpr int kDialogWidth = 328;
-constexpr int kDialogHeight = 318;
+constexpr int kDialogHeight = 456;
 
 std::wstring shortcutHelpText() {
     return L"Keyboard shortcuts:\r\n"
@@ -120,6 +126,69 @@ bool settingsEqual(const AppSettings& left, const AppSettings& right) {
     return true;
 }
 
+void populateFavoritesList(HWND hwnd, const AppSettings& settings, int selectedIndex) {
+    HWND list = GetDlgItem(hwnd, kFavoritesListId);
+    if (!list) {
+        return;
+    }
+
+    SendMessageW(list, LB_RESETCONTENT, 0, 0);
+    for (const FavoriteLocation& favorite : settings.favorites) {
+        SendMessageW(list, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(favorite.label.c_str()));
+    }
+
+    if (selectedIndex >= 0 && selectedIndex < static_cast<int>(settings.favorites.size())) {
+        SendMessageW(list, LB_SETCURSEL, static_cast<WPARAM>(selectedIndex), 0);
+    }
+}
+
+int selectedFavoriteIndex(HWND hwnd) {
+    HWND list = GetDlgItem(hwnd, kFavoritesListId);
+    if (!list) {
+        return -1;
+    }
+
+    const LRESULT selected = SendMessageW(list, LB_GETCURSEL, 0, 0);
+    return selected == LB_ERR ? -1 : static_cast<int>(selected);
+}
+
+void selectFavorite(HWND hwnd, SettingsDialogState& state, int index) {
+    HWND list = GetDlgItem(hwnd, kFavoritesListId);
+    HWND labelEdit = GetDlgItem(hwnd, kFavoriteLabelEditId);
+    HWND pathEdit = GetDlgItem(hwnd, kFavoritePathEditId);
+    if (!labelEdit || !pathEdit) {
+        return;
+    }
+
+    if (index < 0 || index >= static_cast<int>(state.resultSettings.favorites.size())) {
+        if (list) {
+            SendMessageW(list, LB_SETCURSEL, static_cast<WPARAM>(-1), 0);
+        }
+        SetWindowTextW(labelEdit, L"");
+        SetWindowTextW(pathEdit, L"");
+        return;
+    }
+
+    if (list) {
+        SendMessageW(list, LB_SETCURSEL, static_cast<WPARAM>(index), 0);
+    }
+
+    const FavoriteLocation& favorite = state.resultSettings.favorites[static_cast<std::size_t>(index)];
+    SetWindowTextW(labelEdit, favorite.label.c_str());
+    SetWindowTextW(pathEdit, favorite.path.c_str());
+}
+
+void syncSelectedFavoriteLabel(HWND hwnd, SettingsDialogState& state) {
+    const int index = selectedFavoriteIndex(hwnd);
+    if (index < 0 || index >= static_cast<int>(state.resultSettings.favorites.size())) {
+        return;
+    }
+
+    renameFavorite(state.resultSettings,
+                   static_cast<std::size_t>(index),
+                   getEditText(GetDlgItem(hwnd, kFavoriteLabelEditId)));
+}
+
 void centerDialog(HWND hwnd, HWND owner) {
     RECT anchor{};
     if (owner && GetWindowRect(owner, &anchor)) {
@@ -193,14 +262,104 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             24,
                                             hwnd,
                                             kIconEditId);
+        HWND favoritesLabel = createDialogControl(0,
+                                                  L"STATIC",
+                                                  L"Favorites:",
+                                                  WS_CHILD | WS_VISIBLE,
+                                                  16,
+                                                  72,
+                                                  88,
+                                                  18,
+                                                  hwnd,
+                                                  0);
+        HWND favoritesList = createDialogControl(WS_EX_CLIENTEDGE,
+                                                 L"LISTBOX",
+                                                 L"",
+                                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY,
+                                                 16,
+                                                 92,
+                                                 280,
+                                                 96,
+                                                 hwnd,
+                                                 kFavoritesListId);
+        HWND favoriteNameLabel = createDialogControl(0,
+                                                     L"STATIC",
+                                                     L"Name:",
+                                                     WS_CHILD | WS_VISIBLE,
+                                                     16,
+                                                     202,
+                                                     48,
+                                                     18,
+                                                     hwnd,
+                                                     0);
+        HWND favoriteLabelEdit = createDialogControl(WS_EX_CLIENTEDGE,
+                                                     L"EDIT",
+                                                     L"",
+                                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                                     72,
+                                                     198,
+                                                     224,
+                                                     24,
+                                                     hwnd,
+                                                     kFavoriteLabelEditId);
+        HWND favoritePathLabel = createDialogControl(0,
+                                                     L"STATIC",
+                                                     L"Path:",
+                                                     WS_CHILD | WS_VISIBLE,
+                                                     16,
+                                                     234,
+                                                     48,
+                                                     18,
+                                                     hwnd,
+                                                     0);
+        HWND favoritePathEdit = createDialogControl(WS_EX_CLIENTEDGE,
+                                                    L"EDIT",
+                                                    L"",
+                                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_READONLY,
+                                                    72,
+                                                    230,
+                                                    224,
+                                                    24,
+                                                    hwnd,
+                                                    kFavoritePathEditId);
+        HWND favoriteUp = createDialogControl(0,
+                                              L"BUTTON",
+                                              L"Up",
+                                              WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                                              72,
+                                              264,
+                                              64,
+                                              28,
+                                              hwnd,
+                                              kFavoriteUpId);
+        HWND favoriteDown = createDialogControl(0,
+                                                L"BUTTON",
+                                                L"Down",
+                                                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                                                144,
+                                                264,
+                                                68,
+                                                28,
+                                                hwnd,
+                                                kFavoriteDownId);
+        HWND favoriteRemove = createDialogControl(0,
+                                                  L"BUTTON",
+                                                  L"Remove",
+                                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                                                  220,
+                                                  264,
+                                                  76,
+                                                  28,
+                                                  hwnd,
+                                                  kFavoriteRemoveId);
         HWND shortcuts = createDialogControl(WS_EX_CLIENTEDGE,
                                              L"EDIT",
                                              shortcutHelpText().c_str(),
                                              WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
                                              16,
-                                             84,
+                                             306,
                                              280,
-                                             138,
+                                             72,
                                              hwnd,
                                              0);
         HWND ok = createDialogControl(0,
@@ -208,7 +367,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                       L"OK",
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                       136,
-                                      236,
+                                      392,
                                       76,
                                       28,
                                       hwnd,
@@ -218,24 +377,86 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                           L"Cancel",
                                           WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                           220,
-                                          236,
+                                          392,
                                           76,
                                           28,
                                           hwnd,
                                           kCancelId);
-        if (!fontLabel || !fontEdit || !iconLabel || !iconEdit || !shortcuts || !ok || !cancel) {
+        if (!fontLabel || !fontEdit || !iconLabel || !iconEdit || !favoritesLabel || !favoritesList
+            || !favoriteNameLabel || !favoriteLabelEdit || !favoritePathLabel || !favoritePathEdit
+            || !favoriteUp || !favoriteDown || !favoriteRemove || !shortcuts || !ok || !cancel) {
             return -1;
         }
 
+        populateFavoritesList(hwnd, state->resultSettings, state->resultSettings.favorites.empty() ? -1 : 0);
+        selectFavorite(hwnd, *state, state->resultSettings.favorites.empty() ? -1 : 0);
         SetFocus(fontEdit);
         SendMessageW(fontEdit, EM_SETSEL, 0, -1);
         return 0;
     }
     case WM_COMMAND:
+        if (!state) {
+            break;
+        }
+
+        if (LOWORD(wParam) == kFavoritesListId && HIWORD(wParam) == LBN_SELCHANGE) {
+            selectFavorite(hwnd, *state, selectedFavoriteIndex(hwnd));
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kFavoriteLabelEditId && HIWORD(wParam) == EN_CHANGE) {
+            const int index = selectedFavoriteIndex(hwnd);
+            if (index >= 0 && index < static_cast<int>(state->resultSettings.favorites.size())) {
+                renameFavorite(state->resultSettings,
+                               static_cast<std::size_t>(index),
+                               getEditText(GetDlgItem(hwnd, kFavoriteLabelEditId)));
+                populateFavoritesList(hwnd, state->resultSettings, index);
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kFavoriteUpId) {
+            syncSelectedFavoriteLabel(hwnd, *state);
+            const int index = selectedFavoriteIndex(hwnd);
+            if (index > 0 && moveFavorite(state->resultSettings, static_cast<std::size_t>(index), -1)) {
+                const int nextIndex = index - 1;
+                populateFavoritesList(hwnd, state->resultSettings, nextIndex);
+                selectFavorite(hwnd, *state, nextIndex);
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kFavoriteDownId) {
+            syncSelectedFavoriteLabel(hwnd, *state);
+            const int index = selectedFavoriteIndex(hwnd);
+            if (index >= 0 && moveFavorite(state->resultSettings, static_cast<std::size_t>(index), 1)) {
+                const int nextIndex = index + 1;
+                populateFavoritesList(hwnd, state->resultSettings, nextIndex);
+                selectFavorite(hwnd, *state, nextIndex);
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kFavoriteRemoveId) {
+            const int index = selectedFavoriteIndex(hwnd);
+            if (index >= 0 && index < static_cast<int>(state->resultSettings.favorites.size())) {
+                state->resultSettings.favorites.erase(state->resultSettings.favorites.begin() + index);
+                int nextIndex = -1;
+                if (!state->resultSettings.favorites.empty()) {
+                    nextIndex = index < static_cast<int>(state->resultSettings.favorites.size())
+                                    ? index
+                                    : static_cast<int>(state->resultSettings.favorites.size()) - 1;
+                }
+                populateFavoritesList(hwnd, state->resultSettings, nextIndex);
+                selectFavorite(hwnd, *state, nextIndex);
+            }
+            return 0;
+        }
+
         if (LOWORD(wParam) == kOkId) {
+            syncSelectedFavoriteLabel(hwnd, *state);
             state->values.fontSizeText = getEditText(GetDlgItem(hwnd, kFontEditId));
             state->values.iconSizeText = getEditText(GetDlgItem(hwnd, kIconEditId));
-            state->resultSettings = state->initialSettings;
             applySettingsDialogValues(state->values, state->resultSettings);
             state->accepted = true;
             DestroyWindow(hwnd);

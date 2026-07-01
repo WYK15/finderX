@@ -23,6 +23,7 @@ bool nearlyEqual(float left, float right) {
 
 int main() {
     using finderx::AppSettings;
+    using finderx::addFavorite;
     using finderx::kMaxIconSize;
     using finderx::ui::SettingsDialogValues;
     using finderx::ui::applySettingsDialogValues;
@@ -47,6 +48,14 @@ int main() {
         AppSettings settings;
         applySettingsDialogValues(SettingsDialogValues{L"14", L"99"}, settings);
         require(nearlyEqual(settings.iconSize, kMaxIconSize), "icon text 99 should clamp to max icon size");
+    }
+
+    {
+        AppSettings settings;
+        require(addFavorite(settings, L"Projects", L"D:\\Projects"), "favorite should exist before applying dialog values");
+        applySettingsDialogValues(SettingsDialogValues{L"16", L"20"}, settings);
+        require(settings.favorites.size() == 1, "applying size values should preserve favorites");
+        require(settings.favorites[0].label == L"Projects", "applying size values should preserve favorite label");
     }
 
     std::cout << "SettingsDialogTests passed\n";
