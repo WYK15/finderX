@@ -75,8 +75,8 @@ int main() {
                 "closing active last tab should activate previous tab");
         require(activeTabIndexAfterClose(1, 1, 2) == 1,
                 "closing active tab should activate same index when available");
-        require(activeTabIndexAfterClose(2, 2, 1) == 1,
-                "closing active last tab should activate previous tab");
+        require(activeTabIndexAfterClose(2, 2, 1) == 0,
+                "closing active tab with one remaining tab should activate only remaining tab");
         require(activeTabIndexAfterClose(0, 2, 2) == 0,
                 "closing a tab after active should leave active index unchanged");
     }
