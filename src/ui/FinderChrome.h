@@ -33,6 +33,9 @@ enum class ChromeHitKind {
     HeaderModified,
     HeaderSize,
     HeaderKind,
+    ResizeModifiedColumn,
+    ResizeSizeColumn,
+    ResizeKindColumn,
     PathSegment,
     AddressField
 };

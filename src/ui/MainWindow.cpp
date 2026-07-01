@@ -45,7 +45,9 @@ constexpr UINT kCommandAddFavorite = 1019;
 constexpr UINT kCommandRemoveFavorite = 1020;
 constexpr UINT_PTR kDirectoryWatcherTimerId = 2001;
 constexpr UINT_PTR kDirectoryRefreshTimerId = 2002;
+constexpr UINT_PTR kSearchCaretTimerId = 2003;
 constexpr UINT kDirectoryWatcherPollMs = 500;
+constexpr UINT kSearchCaretBlinkMs = 500;
 constexpr DWORD kDirectoryChangeFilter = FILE_NOTIFY_CHANGE_FILE_NAME
     | FILE_NOTIFY_CHANGE_DIR_NAME
     | FILE_NOTIFY_CHANGE_LAST_WRITE
@@ -181,6 +183,24 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
         const ChromeHitResult chromeHit = chrome_.hitTest(x, y, rects, chromeState_);
         switch (chromeHit.kind) {
+        case ChromeHitKind::ResizeModifiedColumn:
+            columnResizeTarget_ = ColumnResizeTarget::Modified;
+            columnResizeStartX_ = x;
+            columnResizeStartWidth_ = settings_.modifiedColumnWidth;
+            SetCapture(hwnd_);
+            return 0;
+        case ChromeHitKind::ResizeSizeColumn:
+            columnResizeTarget_ = ColumnResizeTarget::Size;
+            columnResizeStartX_ = x;
+            columnResizeStartWidth_ = settings_.sizeColumnWidth;
+            SetCapture(hwnd_);
+            return 0;
+        case ChromeHitKind::ResizeKindColumn:
+            columnResizeTarget_ = ColumnResizeTarget::Kind;
+            columnResizeStartX_ = x;
+            columnResizeStartWidth_ = settings_.kindColumnWidth;
+            SetCapture(hwnd_);
+            return 0;
         case ChromeHitKind::Back:
             goBack();
             return 0;
@@ -249,6 +269,68 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
         return 0;
     }
+    case WM_MOUSEMOVE: {
+        if (columnResizeTarget_ == ColumnResizeTarget::None) {
+            break;
+        }
+
+        const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        const D2D1_POINT_2F dipPoint = render_.clientPointToDips(clientPoint);
+        const float deltaX = dipPoint.x - columnResizeStartX_;
+        const float nextWidth = columnResizeStartWidth_ - deltaX;
+        switch (columnResizeTarget_) {
+        case ColumnResizeTarget::Modified:
+            settings_.modifiedColumnWidth = (std::clamp)(nextWidth, kMinModifiedColumnWidth, kMaxModifiedColumnWidth);
+            break;
+        case ColumnResizeTarget::Size:
+            settings_.sizeColumnWidth = (std::clamp)(nextWidth, kMinSizeColumnWidth, kMaxSizeColumnWidth);
+            break;
+        case ColumnResizeTarget::Kind:
+            settings_.kindColumnWidth = (std::clamp)(nextWidth, kMinKindColumnWidth, kMaxKindColumnWidth);
+            break;
+        case ColumnResizeTarget::None:
+            break;
+        }
+        applyVisualSettings();
+        refreshChromeState();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return 0;
+    }
+    case WM_LBUTTONUP:
+        if (columnResizeTarget_ != ColumnResizeTarget::None) {
+            columnResizeTarget_ = ColumnResizeTarget::None;
+            ReleaseCapture();
+            if (!saveSettingsOrStatus()) {
+                setStatusText(L"Cannot save settings");
+            }
+            refreshChromeState();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return 0;
+        }
+        break;
+    case WM_SETCURSOR: {
+        if (LOWORD(lParam) != HTCLIENT) {
+            break;
+        }
+        if (columnResizeTarget_ != ColumnResizeTarget::None) {
+            SetCursor(LoadCursorW(nullptr, IDC_SIZEWE));
+            return TRUE;
+        }
+
+        POINT clientPoint{};
+        if (!GetCursorPos(&clientPoint) || !ScreenToClient(hwnd_, &clientPoint)) {
+            break;
+        }
+        const D2D1_POINT_2F dipPoint = render_.clientPointToDips(clientPoint);
+        const ChromeHitKind kind = chrome_.hitTest(dipPoint.x, dipPoint.y, currentLayout(), chromeState_).kind;
+        if (kind == ChromeHitKind::ResizeModifiedColumn
+            || kind == ChromeHitKind::ResizeSizeColumn
+            || kind == ChromeHitKind::ResizeKindColumn) {
+            SetCursor(LoadCursorW(nullptr, IDC_SIZEWE));
+            return TRUE;
+        }
+        break;
+    }
     case WM_RBUTTONDOWN: {
         SetFocus(hwnd_);
         const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
@@ -292,6 +374,16 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
         if (wParam == kDirectoryRefreshTimerId) {
             consumeDirectoryRefresh();
+            return 0;
+        }
+        if (wParam == kSearchCaretTimerId) {
+            if (hasActiveTab() && activeTab().searchFocused) {
+                activeTab().searchCaretVisible = !activeTab().searchCaretVisible;
+                refreshChromeState();
+                InvalidateRect(hwnd_, nullptr, FALSE);
+            } else {
+                KillTimer(hwnd_, kSearchCaretTimerId);
+            }
             return 0;
         }
         return 0;
@@ -388,11 +480,14 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     }
     case WM_DESTROY:
         stopDirectoryWatcher();
+        KillTimer(hwnd_, kSearchCaretTimerId);
         PostQuitMessage(0);
         return 0;
     default:
         return DefWindowProcW(hwnd_, message, wParam, lParam);
     }
+
+    return DefWindowProcW(hwnd_, message, wParam, lParam);
 }
 
 LayoutRects MainWindow::currentLayout() const {
@@ -425,7 +520,7 @@ bool MainWindow::createTabAtPath(const std::wstring& path) {
     contextNodePath_.clear();
 
     const std::wstring target = path.empty() ? homePath_ : path;
-    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(target);
+    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(target, settings_.showHiddenAndSystemItems);
     if (!result.ok()) {
         setStatusText(L"Cannot open folder");
         return false;
@@ -462,6 +557,7 @@ void MainWindow::activateTab(std::size_t index) {
 
     if (hasActiveTab()) {
         activeTab().searchFocused = false;
+        activeTab().searchCaretVisible = false;
         activeTab().addressEditing = false;
         activeTab().addressText.clear();
     }
@@ -531,6 +627,7 @@ bool MainWindow::navigateToThisPc(HistoryMode mode) {
     applyListStyle(tab);
     tab.searchText.clear();
     tab.searchFocused = false;
+    tab.searchCaretVisible = false;
     tab.addressEditing = false;
     tab.addressText.clear();
     tab.listView.setFilterText(L"");
@@ -570,7 +667,7 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     }
 
     const std::wstring watchedPath = path;
-    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(path);
+    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(path, settings_.showHiddenAndSystemItems);
     if (!result.ok()) {
         setStatusText(L"Cannot open folder");
         return false;
@@ -1122,6 +1219,10 @@ ListViewStyle MainWindow::currentListViewStyle() const {
     return ListViewStyle{
         settings_.fontSize,
         settings_.iconSize,
+        settings_.themeMode,
+        settings_.modifiedColumnWidth,
+        settings_.sizeColumnWidth,
+        settings_.kindColumnWidth,
     };
 }
 
@@ -1130,6 +1231,7 @@ void MainWindow::applyListStyle(TabState& tab) const {
 }
 
 void MainWindow::applyVisualSettings() {
+    render_.setFontFamily(settings_.fontFamily);
     render_.setFontSize(settings_.fontSize);
     for (const std::unique_ptr<TabState>& tab : tabs_) {
         if (tab) {
@@ -1145,10 +1247,14 @@ void MainWindow::openSettingsDialog() {
         return;
     }
 
+    const bool hiddenVisibilityChanged = next.showHiddenAndSystemItems != settings_.showHiddenAndSystemItems;
     settings_ = std::move(next);
     clampSettings(settings_);
     saveSettingsOrStatus();
     applyVisualSettings();
+    if (hiddenVisibilityChanged && isActiveDirectoryLocation()) {
+        refreshCurrentDirectory();
+    }
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -1262,7 +1368,7 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
     }
     std::vector<std::wstring> expandedPaths = tab.tree.expandedFolderPaths();
 
-    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(currentPath);
+    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(currentPath, settings_.showHiddenAndSystemItems);
     if (!result.ok()) {
         setStatusText(L"Cannot refresh folder");
         return false;
@@ -1335,12 +1441,17 @@ void MainWindow::refreshChromeState() {
         chromeState_.sidebarItems = sidebar_.items();
         chromeState_.searchText.clear();
         chromeState_.searchFocused = false;
+        chromeState_.searchCaretVisible = false;
         chromeState_.addressEditing = false;
         chromeState_.addressText.clear();
         chromeState_.tabTitles = tabTitles();
         chromeState_.activeTabIndex = activeTabIndex_;
         chromeState_.sortColumn = settings_.sortColumn;
         chromeState_.sortDirection = settings_.sortDirection;
+        chromeState_.themeMode = settings_.themeMode;
+        chromeState_.modifiedColumnWidth = settings_.modifiedColumnWidth;
+        chromeState_.sizeColumnWidth = settings_.sizeColumnWidth;
+        chromeState_.kindColumnWidth = settings_.kindColumnWidth;
         return;
     }
 
@@ -1360,6 +1471,7 @@ void MainWindow::refreshChromeState() {
     chromeState_.sidebarItems = sidebar_.items();
     chromeState_.searchText = tab.searchText;
     chromeState_.searchFocused = tab.searchFocused;
+    chromeState_.searchCaretVisible = tab.searchCaretVisible;
     chromeState_.addressEditing = tab.addressEditing;
     chromeState_.addressText = tab.addressEditing ? tab.addressText : L"";
     chromeState_.statusText = tab.statusText;
@@ -1367,6 +1479,10 @@ void MainWindow::refreshChromeState() {
     chromeState_.activeTabIndex = activeTabIndex_;
     chromeState_.sortColumn = settings_.sortColumn;
     chromeState_.sortDirection = settings_.sortDirection;
+    chromeState_.themeMode = settings_.themeMode;
+    chromeState_.modifiedColumnWidth = settings_.modifiedColumnWidth;
+    chromeState_.sizeColumnWidth = settings_.sizeColumnWidth;
+    chromeState_.kindColumnWidth = settings_.kindColumnWidth;
 }
 
 void MainWindow::focusSearch() {
@@ -1378,6 +1494,8 @@ void MainWindow::focusSearch() {
     tab.addressEditing = false;
     tab.addressText.clear();
     tab.searchFocused = true;
+    tab.searchCaretVisible = true;
+    SetTimer(hwnd_, kSearchCaretTimerId, kSearchCaretBlinkMs, nullptr);
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -1393,6 +1511,8 @@ void MainWindow::blurSearch() {
     }
 
     tab.searchFocused = false;
+    tab.searchCaretVisible = false;
+    KillTimer(hwnd_, kSearchCaretTimerId);
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -1412,6 +1532,7 @@ void MainWindow::setSearchText(std::wstring text) {
     }
 
     tab.searchText = std::move(text);
+    tab.searchCaretVisible = tab.searchFocused;
     tab.listView.setFilterText(tab.searchText);
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -1424,6 +1545,8 @@ void MainWindow::focusAddress() {
 
     TabState& tab = activeTab();
     tab.searchFocused = false;
+    tab.searchCaretVisible = false;
+    KillTimer(hwnd_, kSearchCaretTimerId);
     tab.addressEditing = true;
     tab.addressText = tab.history.currentPath();
     refreshChromeState();
@@ -1673,7 +1796,7 @@ void MainWindow::loadChildrenIfNeeded(NodeId folder) {
         return;
     }
 
-    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(node.path);
+    DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(node.path, settings_.showHiddenAndSystemItems);
     if (!result.ok()) {
         tab.tree.setExpanded(folder, false);
         return;
@@ -1715,7 +1838,7 @@ void MainWindow::restoreExpandedFolders(TabState& tab, std::vector<std::wstring>
             continue;
         }
 
-        DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(node.path);
+        DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(node.path, settings_.showHiddenAndSystemItems);
         if (!result.ok()) {
             tab.tree.setExpanded(folder, false);
             continue;
@@ -1738,7 +1861,9 @@ void MainWindow::paint() {
     const LayoutRects rects = currentLayout();
 
     render_.beginDraw();
-    render_.clear(D2D1::ColorF(1.0f, 1.0f, 1.0f));
+    render_.clear(settings_.themeMode == ThemeMode::Dark
+        ? D2D1::ColorF(0.065f, 0.080f, 0.115f)
+        : D2D1::ColorF(1.0f, 1.0f, 1.0f));
     chrome_.draw(render_, rects, chromeState_);
     if (hasActiveTab()) {
         activeTab().listView.draw(render_, rects.list);

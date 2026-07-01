@@ -9,10 +9,20 @@ namespace finderx {
 
 inline constexpr float kDefaultFontSize = 13.0f;
 inline constexpr float kDefaultIconSize = 14.0f;
+inline constexpr wchar_t kDefaultFontFamily[] = L"Segoe UI";
 inline constexpr float kMinFontSize = 11.0f;
 inline constexpr float kMaxFontSize = 18.0f;
 inline constexpr float kMinIconSize = 12.0f;
 inline constexpr float kMaxIconSize = 24.0f;
+inline constexpr float kDefaultModifiedColumnWidth = 150.0f;
+inline constexpr float kDefaultSizeColumnWidth = 80.0f;
+inline constexpr float kDefaultKindColumnWidth = 120.0f;
+inline constexpr float kMinModifiedColumnWidth = 96.0f;
+inline constexpr float kMaxModifiedColumnWidth = 280.0f;
+inline constexpr float kMinSizeColumnWidth = 56.0f;
+inline constexpr float kMaxSizeColumnWidth = 160.0f;
+inline constexpr float kMinKindColumnWidth = 80.0f;
+inline constexpr float kMaxKindColumnWidth = 260.0f;
 
 enum class SortColumn {
     Name,
@@ -26,6 +36,11 @@ enum class SortDirection {
     Descending
 };
 
+enum class ThemeMode {
+    Light,
+    Dark
+};
+
 struct FavoriteLocation {
     std::wstring label;
     std::wstring path;
@@ -33,7 +48,13 @@ struct FavoriteLocation {
 
 struct AppSettings {
     float fontSize = kDefaultFontSize;
+    std::wstring fontFamily = kDefaultFontFamily;
     float iconSize = kDefaultIconSize;
+    float modifiedColumnWidth = kDefaultModifiedColumnWidth;
+    float sizeColumnWidth = kDefaultSizeColumnWidth;
+    float kindColumnWidth = kDefaultKindColumnWidth;
+    ThemeMode themeMode = ThemeMode::Dark;
+    bool showHiddenAndSystemItems = false;
     SortColumn sortColumn = SortColumn::Name;
     SortDirection sortDirection = SortDirection::Ascending;
     std::vector<FavoriteLocation> favorites;
@@ -56,5 +77,6 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
 bool saveSettings(const AppSettings& settings, const std::filesystem::path& path = defaultSettingsPath());
 std::wstring sortColumnName(SortColumn column);
 std::wstring sortDirectionName(SortDirection direction);
+std::wstring themeModeName(ThemeMode mode);
 
 } // namespace finderx

@@ -17,8 +17,8 @@ struct DirectoryLoadResult {
 
 class DirectoryLoader {
 public:
-    std::vector<FileNode> loadChildren(const std::wstring& directoryPath) const;
-    DirectoryLoadResult loadChildrenWithStatus(const std::wstring& directoryPath) const;
+    std::vector<FileNode> loadChildren(const std::wstring& directoryPath, bool includeHiddenAndSystem = false) const;
+    DirectoryLoadResult loadChildrenWithStatus(const std::wstring& directoryPath, bool includeHiddenAndSystem = false) const;
 };
 
 std::wstring defaultHomeDirectory();

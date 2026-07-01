@@ -34,6 +34,13 @@ private:
         BackForward
     };
 
+    enum class ColumnResizeTarget {
+        None,
+        Modified,
+        Size,
+        Kind
+    };
+
     struct TabState {
         enum class LocationKind {
             Directory,
@@ -45,6 +52,7 @@ private:
         NavigationHistory history;
         std::wstring searchText;
         bool searchFocused = false;
+        bool searchCaretVisible = false;
         std::wstring addressText;
         bool addressEditing = false;
         std::wstring statusText;
@@ -149,6 +157,9 @@ private:
     NodeId contextNode_ = kInvalidNodeId;
     std::wstring contextNodePath_;
     std::wstring contextFavoritePath_;
+    ColumnResizeTarget columnResizeTarget_ = ColumnResizeTarget::None;
+    float columnResizeStartX_ = 0.0f;
+    float columnResizeStartWidth_ = 0.0f;
 };
 
 }

@@ -190,6 +190,16 @@ int main() {
     {
         FileTree tree = FileTree::sample();
         FinderListView view(&tree);
+
+        view.setStyle(ListViewStyle{13.0f, 14.0f, ThemeMode::Light});
+        require(view.style().themeMode == ThemeMode::Light, "list view style should keep light theme");
+        view.setStyle(ListViewStyle{13.0f, 14.0f, ThemeMode::Dark});
+        require(view.style().themeMode == ThemeMode::Dark, "list view style should keep dark theme");
+    }
+
+    {
+        FileTree tree = FileTree::sample();
+        FinderListView view(&tree);
         const std::vector<VisibleRow> rows = tree.flatten();
 
         require(!view.hasFilter(), "empty filter should not be active");

@@ -1,6 +1,7 @@
 #include "ui/RenderContext.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace finderx {
 
@@ -44,7 +45,7 @@ bool RenderContext::createFactories() {
 
     if (!textFormat_ &&
         FAILED(dwriteFactory_->CreateTextFormat(
-            L"Segoe UI",
+            fontFamily_.c_str(),
             nullptr,
             DWRITE_FONT_WEIGHT_NORMAL,
             DWRITE_FONT_STYLE_NORMAL,
@@ -58,7 +59,7 @@ bool RenderContext::createFactories() {
     const float headerFontSize = (std::max)(11.0f, fontSize_ - 1.0f);
     if (!headerTextFormat_ &&
         FAILED(dwriteFactory_->CreateTextFormat(
-            L"Segoe UI",
+            fontFamily_.c_str(),
             nullptr,
             DWRITE_FONT_WEIGHT_SEMI_BOLD,
             DWRITE_FONT_STYLE_NORMAL,
@@ -171,8 +172,26 @@ bool RenderContext::setFontSize(float fontSize) {
     return createFactories();
 }
 
+bool RenderContext::setFontFamily(std::wstring fontFamily) {
+    if (fontFamily.empty()) {
+        fontFamily = L"Segoe UI";
+    }
+    if (fontFamily_ == fontFamily) {
+        return true;
+    }
+
+    fontFamily_ = std::move(fontFamily);
+    headerTextFormat_.Reset();
+    textFormat_.Reset();
+    return createFactories();
+}
+
 float RenderContext::fontSize() const {
     return fontSize_;
+}
+
+const std::wstring& RenderContext::fontFamily() const {
+    return fontFamily_;
 }
 
 IDWriteTextFormat* RenderContext::textFormat() const {

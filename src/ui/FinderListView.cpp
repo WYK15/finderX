@@ -20,10 +20,10 @@ constexpr float kNameStartOffset = 32.0f;
 constexpr float kBaseIconSize = 14.0f;
 constexpr float kIconTextGap = 5.0f;
 constexpr float kWheelPixelsPerDelta = 40.0f;
-constexpr float kMinFontSize = 11.0f;
-constexpr float kMaxFontSize = 18.0f;
-constexpr float kMinIconSize = 12.0f;
-constexpr float kMaxIconSize = 24.0f;
+constexpr float kListMinFontSize = 11.0f;
+constexpr float kListMaxFontSize = 18.0f;
+constexpr float kListMinIconSize = 12.0f;
+constexpr float kListMaxIconSize = 24.0f;
 
 bool hasArea(const D2D1_RECT_F& rect) {
     return rect.left < rect.right && rect.top < rect.bottom;
@@ -31,6 +31,32 @@ bool hasArea(const D2D1_RECT_F& rect) {
 
 bool isExpandableFolder(const FileNode& node) {
     return node.kind == FileKind::Folder && (!node.childrenLoaded || !node.children.empty());
+}
+
+bool isDark(ThemeMode mode) {
+    return mode == ThemeMode::Dark;
+}
+
+D2D1_COLOR_F rowStripeColor(ThemeMode mode) {
+    return isDark(mode) ? D2D1::ColorF(0.095f, 0.115f, 0.155f) : D2D1::ColorF(0.965f, 0.965f, 0.965f);
+}
+
+D2D1_COLOR_F rowSelectionColor(ThemeMode mode) {
+    return isDark(mode) ? D2D1::ColorF(0.12f, 0.34f, 0.74f) : D2D1::ColorF(0.00f, 0.42f, 0.88f);
+}
+
+D2D1_COLOR_F primaryTextColor(ThemeMode mode, bool selected) {
+    if (selected) {
+        return D2D1::ColorF(1.0f, 1.0f, 1.0f);
+    }
+    return isDark(mode) ? D2D1::ColorF(0.90f, 0.93f, 0.97f) : D2D1::ColorF(0.10f, 0.10f, 0.10f);
+}
+
+D2D1_COLOR_F mutedTextColor(ThemeMode mode, bool selected) {
+    if (selected) {
+        return D2D1::ColorF(0.92f, 0.96f, 1.0f);
+    }
+    return isDark(mode) ? D2D1::ColorF(0.57f, 0.63f, 0.72f) : D2D1::ColorF(0.42f, 0.42f, 0.42f);
 }
 
 void drawTextIfWide(
@@ -59,13 +85,17 @@ void drawDisclosure(RenderContext& render, const FileNode& node, float x, float 
         color);
 }
 
-void drawFolderIcon(RenderContext& render, float x, float y, float size, bool selected) {
+void drawFolderIcon(RenderContext& render, float x, float y, float size, bool selected, ThemeMode mode) {
+    const bool dark = isDark(mode);
     const D2D1_COLOR_F tabColor = selected
         ? D2D1::ColorF(0.82f, 0.91f, 1.0f)
-        : D2D1::ColorF(0.96f, 0.72f, 0.24f);
+        : (dark ? D2D1::ColorF(0.30f, 0.58f, 1.0f) : D2D1::ColorF(0.96f, 0.72f, 0.24f));
     const D2D1_COLOR_F bodyColor = selected
         ? D2D1::ColorF(0.72f, 0.86f, 1.0f)
-        : D2D1::ColorF(1.0f, 0.80f, 0.32f);
+        : (dark ? D2D1::ColorF(0.20f, 0.43f, 0.86f) : D2D1::ColorF(1.0f, 0.80f, 0.32f));
+    const D2D1_COLOR_F highlightColor = selected
+        ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.36f)
+        : (dark ? D2D1::ColorF(0.62f, 0.77f, 1.0f, 0.30f) : D2D1::ColorF(1.0f, 0.92f, 0.58f, 0.45f));
     const float scale = size / kBaseIconSize;
 
     render.fillRoundedRect(
@@ -80,23 +110,39 @@ void drawFolderIcon(RenderContext& render, float x, float y, float size, bool se
             2.0f * scale,
             2.0f * scale),
         bodyColor);
+    render.fillRoundedRect(
+        D2D1::RoundedRect(
+            D2D1::RectF(x + 1.5f * scale, y + 6.5f * scale, x + size - 1.5f * scale, y + 8.0f * scale),
+            1.0f * scale,
+            1.0f * scale),
+        highlightColor);
 }
 
-void drawFileIcon(RenderContext& render, float x, float y, float size, bool selected) {
+void drawFileIcon(RenderContext& render, float x, float y, float size, bool selected, ThemeMode mode) {
+    const bool dark = isDark(mode);
     const D2D1_COLOR_F fillColor = selected
         ? D2D1::ColorF(0.96f, 0.99f, 1.0f)
-        : D2D1::ColorF(1.0f, 1.0f, 1.0f);
+        : (dark ? D2D1::ColorF(0.13f, 0.16f, 0.22f) : D2D1::ColorF(1.0f, 1.0f, 1.0f));
     const D2D1_COLOR_F strokeColor = selected
         ? D2D1::ColorF(0.78f, 0.89f, 1.0f)
-        : D2D1::ColorF(0.72f, 0.72f, 0.72f);
+        : (dark ? D2D1::ColorF(0.30f, 0.36f, 0.47f) : D2D1::ColorF(0.72f, 0.72f, 0.72f));
     const D2D1_COLOR_F lineColor = selected
         ? D2D1::ColorF(0.52f, 0.74f, 1.0f)
-        : D2D1::ColorF(0.62f, 0.62f, 0.62f);
+        : (dark ? D2D1::ColorF(0.48f, 0.58f, 0.72f) : D2D1::ColorF(0.62f, 0.62f, 0.62f));
+    const D2D1_COLOR_F cornerColor = selected
+        ? D2D1::ColorF(0.72f, 0.86f, 1.0f)
+        : (dark ? D2D1::ColorF(0.20f, 0.52f, 1.0f) : D2D1::ColorF(0.88f, 0.92f, 0.98f));
     const float scale = size / kBaseIconSize;
 
     const D2D1_RECT_F body = D2D1::RectF(x + 2.0f * scale, y + 1.0f * scale, x + 12.0f * scale, y + size);
     render.fillRoundedRect(D2D1::RoundedRect(body, 1.5f * scale, 1.5f * scale), fillColor);
     render.drawRoundedRect(D2D1::RoundedRect(body, 1.5f * scale, 1.5f * scale), strokeColor);
+    render.fillRoundedRect(
+        D2D1::RoundedRect(
+            D2D1::RectF(x + 8.0f * scale, y + 1.0f * scale, x + 12.0f * scale, y + 5.0f * scale),
+            1.0f * scale,
+            1.0f * scale),
+        cornerColor);
     render.drawLine(
         D2D1::Point2F(x + 4.0f * scale, y + 6.0f * scale),
         D2D1::Point2F(x + 10.0f * scale, y + 6.0f * scale),
@@ -107,13 +153,13 @@ void drawFileIcon(RenderContext& render, float x, float y, float size, bool sele
         lineColor);
 }
 
-void drawNodeIcon(RenderContext& render, const FileNode& node, float x, float y, float size, bool selected) {
+void drawNodeIcon(RenderContext& render, const FileNode& node, float x, float y, float size, bool selected, ThemeMode mode) {
     if (node.kind == FileKind::Folder) {
-        drawFolderIcon(render, x, y, size, selected);
+        drawFolderIcon(render, x, y, size, selected, mode);
         return;
     }
 
-    drawFileIcon(render, x, y, size, selected);
+    drawFileIcon(render, x, y, size, selected, mode);
 }
 
 std::wstring lowercase(std::wstring_view text) {
@@ -139,8 +185,11 @@ FinderListView::FinderListView(FileTree* tree) : tree_(tree) {
 }
 
 void FinderListView::setStyle(ListViewStyle style) {
-    style.fontSize = (std::clamp)(style.fontSize, kMinFontSize, kMaxFontSize);
-    style.iconSize = (std::clamp)(style.iconSize, kMinIconSize, kMaxIconSize);
+    style.fontSize = (std::clamp)(style.fontSize, kListMinFontSize, kListMaxFontSize);
+    style.iconSize = (std::clamp)(style.iconSize, kListMinIconSize, kListMaxIconSize);
+    style.modifiedColumnWidth = (std::clamp)(style.modifiedColumnWidth, kMinModifiedColumnWidth, kMaxModifiedColumnWidth);
+    style.sizeColumnWidth = (std::clamp)(style.sizeColumnWidth, kMinSizeColumnWidth, kMaxSizeColumnWidth);
+    style.kindColumnWidth = (std::clamp)(style.kindColumnWidth, kMinKindColumnWidth, kMaxKindColumnWidth);
     style_ = style;
     clampScroll();
 }
@@ -339,7 +388,7 @@ float FinderListView::rowHeight() const {
 }
 
 float FinderListView::iconSize() const {
-    return (std::clamp)(style_.iconSize, kMinIconSize, kMaxIconSize);
+    return (std::clamp)(style_.iconSize, kListMinIconSize, kListMaxIconSize);
 }
 
 int FinderListView::selectedRowIndex() const {
@@ -496,9 +545,9 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
     }
 
     const float contentWidth = contentRight - contentLeft;
-    const float dateWidth = contentWidth >= 520.0f ? 150.0f : 0.0f;
-    const float sizeWidth = contentWidth >= 420.0f ? 80.0f : 0.0f;
-    const float kindWidth = contentWidth >= 360.0f ? 120.0f : 0.0f;
+    const float dateWidth = contentWidth >= 520.0f ? style_.modifiedColumnWidth : 0.0f;
+    const float sizeWidth = contentWidth >= 420.0f ? style_.sizeColumnWidth : 0.0f;
+    const float kindWidth = contentWidth >= 360.0f ? style_.kindColumnWidth : 0.0f;
     const float kindX = contentRight - kindWidth;
     const float sizeX = kindX - sizeWidth;
     const float dateX = sizeX - dateWidth;
@@ -531,29 +580,33 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
         if (selected) {
             render.fillRoundedRect(
                 D2D1::RoundedRect(rowRect, 5.0f, 5.0f),
-                D2D1::ColorF(0.00f, 0.42f, 0.88f));
+                rowSelectionColor(style_.themeMode));
         } else if (i % 2 == 1) {
             render.fillRoundedRect(
                 D2D1::RoundedRect(rowRect, 5.0f, 5.0f),
-                D2D1::ColorF(0.965f, 0.965f, 0.965f));
+                rowStripeColor(style_.themeMode));
         }
 
-        const D2D1_COLOR_F textColor = selected
-            ? D2D1::ColorF(1.0f, 1.0f, 1.0f)
-            : D2D1::ColorF(0.10f, 0.10f, 0.10f);
-        const D2D1_COLOR_F mutedColor = selected
-            ? D2D1::ColorF(1.0f, 1.0f, 1.0f)
-            : D2D1::ColorF(0.42f, 0.42f, 0.42f);
+        const D2D1_COLOR_F textColor = primaryTextColor(style_.themeMode, selected);
+        const D2D1_COLOR_F mutedColor = mutedTextColor(style_.themeMode, selected);
         const float disclosureX = bounds.left + kNameStartOffset + static_cast<float>(visible.depth) * kIndentPerDepth;
         const float iconX = disclosureX + kDisclosureWidth;
         const float iconY = y + (height - icon) * 0.5f;
         const float nameX = iconX + icon + kIconTextGap;
 
+        for (int depth = 1; depth <= visible.depth; ++depth) {
+            const float guideX = bounds.left + kNameStartOffset + static_cast<float>(depth - 1) * kIndentPerDepth + 8.0f;
+            render.drawLine(
+                D2D1::Point2F(guideX, y + 4.0f),
+                D2D1::Point2F(guideX, y + height - 4.0f),
+                isDark(style_.themeMode) ? D2D1::ColorF(0.18f, 0.22f, 0.30f) : D2D1::ColorF(0.88f, 0.88f, 0.88f),
+                1.0f);
+        }
         if (isExpandableFolder(node) && disclosureX + kDisclosureWidth <= nameRight) {
             drawDisclosure(render, node, disclosureX, y, height, mutedColor);
         }
         if (iconX + icon <= nameRight) {
-            drawNodeIcon(render, node, iconX, iconY, icon, selected);
+            drawNodeIcon(render, node, iconX, iconY, icon, selected, style_.themeMode);
         }
         drawTextIfWide(render, node.name, D2D1::RectF(nameX, y + 2.0f, nameRight, y + height + 2.0f), render.textFormat(), textColor);
         if (dateWidth > 0.0f) {

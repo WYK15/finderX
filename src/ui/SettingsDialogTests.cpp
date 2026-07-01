@@ -23,6 +23,7 @@ bool nearlyEqual(float left, float right) {
 
 int main() {
     using finderx::AppSettings;
+    using finderx::ThemeMode;
     using finderx::addFavorite;
     using finderx::kMaxIconSize;
     using finderx::ui::SettingsDialogValues;
@@ -30,18 +31,46 @@ int main() {
 
     {
         AppSettings settings;
-        applySettingsDialogValues(SettingsDialogValues{L"16", L"20"}, settings);
+        applySettingsDialogValues(SettingsDialogValues{L"16", L"20", L"", L"Microsoft YaHei UI"}, settings);
         require(nearlyEqual(settings.fontSize, 16.0f), "font text 16 should apply font size 16");
         require(nearlyEqual(settings.iconSize, 20.0f), "icon text 20 should apply icon size 20");
+        require(settings.fontFamily == L"Microsoft YaHei UI", "font family text should apply font family");
+    }
+
+    {
+        AppSettings settings;
+        settings.themeMode = ThemeMode::Dark;
+        applySettingsDialogValues(SettingsDialogValues{L"", L"", L"light"}, settings);
+        require(settings.themeMode == ThemeMode::Light, "theme text light should apply light theme");
+        applySettingsDialogValues(SettingsDialogValues{L"", L"", L"dark"}, settings);
+        require(settings.themeMode == ThemeMode::Dark, "theme text dark should apply dark theme");
+    }
+
+    {
+        AppSettings settings;
+        settings.themeMode = ThemeMode::Dark;
+        applySettingsDialogValues(SettingsDialogValues{L"", L"", L"unknown"}, settings);
+        require(settings.themeMode == ThemeMode::Dark, "invalid theme text should keep previous theme");
+    }
+
+    {
+        AppSettings settings;
+        require(!settings.showHiddenAndSystemItems, "hidden/system setting should default off");
+        applySettingsDialogValues(SettingsDialogValues{L"", L"", L"", L"", true}, settings);
+        require(settings.showHiddenAndSystemItems, "checked hidden/system setting should apply");
+        applySettingsDialogValues(SettingsDialogValues{L"", L"", L"", L"", false}, settings);
+        require(!settings.showHiddenAndSystemItems, "unchecked hidden/system setting should apply");
     }
 
     {
         AppSettings settings;
         settings.fontSize = 15.0f;
         settings.iconSize = 18.0f;
+        settings.fontFamily = L"Segoe UI";
         applySettingsDialogValues(SettingsDialogValues{L"large", L"19"}, settings);
         require(nearlyEqual(settings.fontSize, 15.0f), "invalid font text should keep previous font size");
         require(nearlyEqual(settings.iconSize, 19.0f), "valid icon text should still apply icon size");
+        require(settings.fontFamily == L"Segoe UI", "empty font family text should keep previous font family");
     }
 
     {

@@ -32,10 +32,15 @@ struct ChromeState {
     std::vector<SidebarItem> sidebarItems;
     std::wstring searchText;
     bool searchFocused = false;
+    bool searchCaretVisible = false;
     std::vector<std::wstring> tabTitles;
     std::size_t activeTabIndex = 0;
     SortColumn sortColumn = SortColumn::Name;
     SortDirection sortDirection = SortDirection::Ascending;
+    ThemeMode themeMode = ThemeMode::Dark;
+    float modifiedColumnWidth = kDefaultModifiedColumnWidth;
+    float sizeColumnWidth = kDefaultSizeColumnWidth;
+    float kindColumnWidth = kDefaultKindColumnWidth;
 };
 
 class SidebarModel {

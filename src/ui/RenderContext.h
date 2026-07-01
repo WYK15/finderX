@@ -8,6 +8,7 @@
 #include <dwrite.h>
 #include <wrl/client.h>
 
+#include <string>
 #include <string_view>
 
 namespace finderx {
@@ -26,7 +27,9 @@ public:
     D2D1_SIZE_F sizeDips() const;
     D2D1_POINT_2F clientPointToDips(POINT point) const;
     bool setFontSize(float fontSize);
+    bool setFontFamily(std::wstring fontFamily);
     float fontSize() const;
+    const std::wstring& fontFamily() const;
     IDWriteTextFormat* textFormat() const;
     IDWriteTextFormat* headerTextFormat() const;
 
@@ -49,6 +52,7 @@ private:
     Microsoft::WRL::ComPtr<IDWriteTextFormat> headerTextFormat_;
     Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> brush_;
     float fontSize_ = 13.0f;
+    std::wstring fontFamily_ = L"Segoe UI";
 };
 
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "model/FileTree.h"
+#include "settings/AppSettings.h"
 #include "ui/RenderContext.h"
 
 #include <d2d1.h>
@@ -20,6 +21,10 @@ struct ListInteractionResult {
 struct ListViewStyle {
     float fontSize = 13.0f;
     float iconSize = 14.0f;
+    ThemeMode themeMode = ThemeMode::Dark;
+    float modifiedColumnWidth = kDefaultModifiedColumnWidth;
+    float sizeColumnWidth = kDefaultSizeColumnWidth;
+    float kindColumnWidth = kDefaultKindColumnWidth;
 };
 
 class FinderListView {

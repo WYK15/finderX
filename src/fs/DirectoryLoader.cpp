@@ -76,17 +76,21 @@ std::wstring driveRootForHomePath() {
     return L"C:";
 }
 
+bool isHiddenOrSystemEntry(DWORD attributes) {
+    return (attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) != 0;
+}
+
 } // namespace
 
 bool DirectoryLoadResult::ok() const {
     return error == ERROR_SUCCESS;
 }
 
-std::vector<FileNode> DirectoryLoader::loadChildren(const std::wstring& directoryPath) const {
-    return loadChildrenWithStatus(directoryPath).children;
+std::vector<FileNode> DirectoryLoader::loadChildren(const std::wstring& directoryPath, bool includeHiddenAndSystem) const {
+    return loadChildrenWithStatus(directoryPath, includeHiddenAndSystem).children;
 }
 
-DirectoryLoadResult DirectoryLoader::loadChildrenWithStatus(const std::wstring& directoryPath) const {
+DirectoryLoadResult DirectoryLoader::loadChildrenWithStatus(const std::wstring& directoryPath, bool includeHiddenAndSystem) const {
     DirectoryLoadResult result;
     WIN32_FIND_DATAW data{};
     const std::wstring pattern = joinSearchPattern(directoryPath);
@@ -99,6 +103,9 @@ DirectoryLoadResult DirectoryLoader::loadChildrenWithStatus(const std::wstring& 
     do {
         const std::wstring name = data.cFileName;
         if (isSkippableDirectoryEntry(name)) {
+            continue;
+        }
+        if (!includeHiddenAndSystem && isHiddenOrSystemEntry(data.dwFileAttributes)) {
             continue;
         }
 

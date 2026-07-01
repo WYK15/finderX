@@ -17,6 +17,9 @@ struct SettingsDialogState {
 constexpr wchar_t kDialogClassName[] = L"FinderXSettingsDialog";
 constexpr int kFontEditId = 101;
 constexpr int kIconEditId = 102;
+constexpr int kThemeComboId = 103;
+constexpr int kFontFamilyComboId = 104;
+constexpr int kShowHiddenAndSystemId = 105;
 constexpr int kFavoritesListId = 201;
 constexpr int kFavoriteLabelEditId = 202;
 constexpr int kFavoritePathEditId = 203;
@@ -26,7 +29,7 @@ constexpr int kFavoriteRemoveId = 206;
 constexpr int kOkId = IDOK;
 constexpr int kCancelId = IDCANCEL;
 constexpr int kDialogWidth = 328;
-constexpr int kDialogHeight = 456;
+constexpr int kDialogHeight = 552;
 
 std::wstring shortcutHelpText() {
     return L"Keyboard shortcuts:\r\n"
@@ -111,7 +114,8 @@ bool tryParseFloat(const std::wstring& text, float& value) {
 }
 
 bool settingsEqual(const AppSettings& left, const AppSettings& right) {
-    if (left.fontSize != right.fontSize || left.iconSize != right.iconSize
+    if (left.fontSize != right.fontSize || left.fontFamily != right.fontFamily || left.iconSize != right.iconSize
+        || left.themeMode != right.themeMode || left.showHiddenAndSystemItems != right.showHiddenAndSystemItems
         || left.sortColumn != right.sortColumn || left.sortDirection != right.sortDirection
         || left.favorites.size() != right.favorites.size()) {
         return false;
@@ -124,6 +128,44 @@ bool settingsEqual(const AppSettings& left, const AppSettings& right) {
         }
     }
     return true;
+}
+
+void populateFontFamilyCombo(HWND combo, const std::wstring& selectedFontFamily) {
+    static constexpr const wchar_t* kFontFamilies[] = {
+        L"Segoe UI",
+        L"Microsoft YaHei UI",
+        L"Microsoft YaHei",
+        L"SimSun",
+        L"Consolas",
+        L"Arial",
+    };
+
+    for (const wchar_t* fontFamily : kFontFamilies) {
+        SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(fontFamily));
+    }
+
+    LRESULT selected = SendMessageW(combo, CB_FINDSTRINGEXACT, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(selectedFontFamily.c_str()));
+    if (selected == CB_ERR && !selectedFontFamily.empty()) {
+        selected = SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(selectedFontFamily.c_str()));
+    }
+    SendMessageW(combo, CB_SETCURSEL, selected == CB_ERR ? 0 : static_cast<WPARAM>(selected), 0);
+}
+
+std::wstring comboSelectedText(HWND combo) {
+    const LRESULT selected = SendMessageW(combo, CB_GETCURSEL, 0, 0);
+    if (selected == CB_ERR) {
+        return {};
+    }
+
+    const LRESULT length = SendMessageW(combo, CB_GETLBTEXTLEN, static_cast<WPARAM>(selected), 0);
+    if (length <= 0) {
+        return {};
+    }
+
+    std::wstring text(static_cast<std::size_t>(length) + 1, L'\0');
+    SendMessageW(combo, CB_GETLBTEXT, static_cast<WPARAM>(selected), reinterpret_cast<LPARAM>(text.data()));
+    text.resize(static_cast<std::size_t>(length));
+    return text;
 }
 
 void populateFavoritesList(HWND hwnd, const AppSettings& settings, int selectedIndex) {
@@ -247,7 +289,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              L"Icon size:",
                                              WS_CHILD | WS_VISIBLE,
                                              16,
-                                             52,
+                                             86,
                                              88,
                                              22,
                                              hwnd,
@@ -257,17 +299,81 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             formatSettingValue(state->initialSettings.iconSize).c_str(),
                                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                             112,
-                                            48,
+                                            82,
                                             184,
                                             24,
                                             hwnd,
                                             kIconEditId);
+        HWND fontFamilyLabel = createDialogControl(0,
+                                                   L"STATIC",
+                                                   L"Font:",
+                                                   WS_CHILD | WS_VISIBLE,
+                                                   16,
+                                                   52,
+                                                   88,
+                                                   22,
+                                                   hwnd,
+                                                   0);
+        HWND fontFamilyCombo = createDialogControl(0,
+                                                   L"COMBOBOX",
+                                                   L"",
+                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
+                                                   112,
+                                                   48,
+                                                   184,
+                                                   160,
+                                                   hwnd,
+                                                   kFontFamilyComboId);
+        if (fontFamilyCombo) {
+            populateFontFamilyCombo(fontFamilyCombo, state->initialSettings.fontFamily);
+        }
+        HWND themeLabel = createDialogControl(0,
+                                              L"STATIC",
+                                              L"Theme:",
+                                              WS_CHILD | WS_VISIBLE,
+                                              16,
+                                              120,
+                                              88,
+                                              22,
+                                              hwnd,
+                                              0);
+        HWND themeCombo = createDialogControl(0,
+                                              L"COMBOBOX",
+                                              L"",
+                                              WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
+                                              112,
+                                              116,
+                                              184,
+                                              120,
+                                              hwnd,
+                                              kThemeComboId);
+        if (themeCombo) {
+            SendMessageW(themeCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"light"));
+            SendMessageW(themeCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"dark"));
+            SendMessageW(themeCombo, CB_SETCURSEL, state->initialSettings.themeMode == ThemeMode::Light ? 0 : 1, 0);
+        }
+        HWND showHiddenAndSystem = createDialogControl(0,
+                                                       L"BUTTON",
+                                                       L"Show hidden and system items",
+                                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                                       112,
+                                                       140,
+                                                       184,
+                                                       22,
+                                                       hwnd,
+                                                       kShowHiddenAndSystemId);
+        if (showHiddenAndSystem) {
+            SendMessageW(showHiddenAndSystem,
+                         BM_SETCHECK,
+                         state->initialSettings.showHiddenAndSystemItems ? BST_CHECKED : BST_UNCHECKED,
+                         0);
+        }
         HWND favoritesLabel = createDialogControl(0,
                                                   L"STATIC",
                                                   L"Favorites:",
                                                   WS_CHILD | WS_VISIBLE,
                                                   16,
-                                                  72,
+                                                  168,
                                                   88,
                                                   18,
                                                   hwnd,
@@ -277,7 +383,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                  L"",
                                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY,
                                                  16,
-                                                 92,
+                                                 188,
                                                  280,
                                                  96,
                                                  hwnd,
@@ -287,7 +393,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"Name:",
                                                      WS_CHILD | WS_VISIBLE,
                                                      16,
-                                                     202,
+                                                     298,
                                                      48,
                                                      18,
                                                      hwnd,
@@ -297,7 +403,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"",
                                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                                      72,
-                                                     198,
+                                                     294,
                                                      224,
                                                      24,
                                                      hwnd,
@@ -307,7 +413,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"Path:",
                                                      WS_CHILD | WS_VISIBLE,
                                                      16,
-                                                     234,
+                                                     330,
                                                      48,
                                                      18,
                                                      hwnd,
@@ -317,7 +423,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     L"",
                                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_READONLY,
                                                     72,
-                                                    230,
+                                                    326,
                                                     224,
                                                     24,
                                                     hwnd,
@@ -327,7 +433,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               L"Up",
                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                               72,
-                                              264,
+                                              360,
                                               64,
                                               28,
                                               hwnd,
@@ -337,7 +443,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                 L"Down",
                                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                 144,
-                                                264,
+                                                360,
                                                 68,
                                                 28,
                                                 hwnd,
@@ -347,7 +453,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"Remove",
                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                   220,
-                                                  264,
+                                                  360,
                                                   76,
                                                   28,
                                                   hwnd,
@@ -357,7 +463,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              shortcutHelpText().c_str(),
                                              WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
                                              16,
-                                             306,
+                                             402,
                                              280,
                                              72,
                                              hwnd,
@@ -367,7 +473,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                       L"OK",
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                       136,
-                                      392,
+                                      488,
                                       76,
                                       28,
                                       hwnd,
@@ -377,12 +483,12 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                           L"Cancel",
                                           WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                           220,
-                                          392,
+                                          488,
                                           76,
                                           28,
                                           hwnd,
                                           kCancelId);
-        if (!fontLabel || !fontEdit || !iconLabel || !iconEdit || !favoritesLabel || !favoritesList
+        if (!fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !iconLabel || !iconEdit || !themeLabel || !themeCombo || !showHiddenAndSystem || !favoritesLabel || !favoritesList
             || !favoriteNameLabel || !favoriteLabelEdit || !favoritePathLabel || !favoritePathEdit
             || !favoriteUp || !favoriteDown || !favoriteRemove || !shortcuts || !ok || !cancel) {
             return -1;
@@ -457,6 +563,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             syncSelectedFavoriteLabel(hwnd, *state);
             state->values.fontSizeText = getEditText(GetDlgItem(hwnd, kFontEditId));
             state->values.iconSizeText = getEditText(GetDlgItem(hwnd, kIconEditId));
+            state->values.themeModeText = comboSelectedText(GetDlgItem(hwnd, kThemeComboId));
+            state->values.fontFamilyText = comboSelectedText(GetDlgItem(hwnd, kFontFamilyComboId));
+            state->values.showHiddenAndSystemItems = SendMessageW(GetDlgItem(hwnd, kShowHiddenAndSystemId), BM_GETCHECK, 0, 0) == BST_CHECKED;
             applySettingsDialogValues(state->values, state->resultSettings);
             state->accepted = true;
             DestroyWindow(hwnd);
@@ -507,8 +616,17 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
     if (tryParseFloat(values.fontSizeText, parsed)) {
         settings.fontSize = parsed;
     }
+    if (!values.fontFamilyText.empty()) {
+        settings.fontFamily = values.fontFamilyText;
+    }
+    settings.showHiddenAndSystemItems = values.showHiddenAndSystemItems;
     if (tryParseFloat(values.iconSizeText, parsed)) {
         settings.iconSize = parsed;
+    }
+    if (values.themeModeText == L"light") {
+        settings.themeMode = ThemeMode::Light;
+    } else if (values.themeModeText == L"dark") {
+        settings.themeMode = ThemeMode::Dark;
     }
 
     clampSettings(settings);

@@ -42,6 +42,19 @@ void testHeaderColumnsHitUsingDrawnGeometry() {
             "kind header should hit in kind column");
 }
 
+void testHeaderColumnSeparatorsHitResizeTargets() {
+    FinderChrome chrome;
+    const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
+    ChromeState state;
+
+    require(chrome.hitTest(633.0f, 96.0f, rects, state).kind == ChromeHitKind::ResizeModifiedColumn,
+            "modified column separator should start modified column resize");
+    require(chrome.hitTest(783.0f, 96.0f, rects, state).kind == ChromeHitKind::ResizeSizeColumn,
+            "size column separator should start size column resize");
+    require(chrome.hitTest(863.0f, 96.0f, rects, state).kind == ChromeHitKind::ResizeKindColumn,
+            "kind column separator should start kind column resize");
+}
+
 void testTabCloseHitTargetDoesNotActivateTab() {
     FinderChrome chrome;
     const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
@@ -73,20 +86,33 @@ void testPathbarSegmentsReturnNavigationTargets() {
     require(driveHit.path == L"D:\\",
             "drive path segment should navigate to drive root");
 
-    const ChromeHitResult alphaHit = chrome.hitTest(244.0f, 684.0f, rects, state);
+    const ChromeHitResult alphaHit = chrome.hitTest(260.0f, 684.0f, rects, state);
     require(alphaHit.kind == ChromeHitKind::PathSegment,
             "middle path segment should be hittable");
     require(alphaHit.path == L"D:\\alpha",
             "middle path segment should navigate to accumulated directory");
 
-    const ChromeHitResult betaHit = chrome.hitTest(288.0f, 684.0f, rects, state);
+    const ChromeHitResult betaHit = chrome.hitTest(340.0f, 684.0f, rects, state);
     require(betaHit.kind == ChromeHitKind::PathSegment,
             "last path segment should be hittable");
     require(betaHit.path == L"D:\\alpha\\beta",
             "last path segment should navigate to full path");
 
-    require(chrome.hitTest(222.0f, 684.0f, rects, state).kind == ChromeHitKind::None,
+    require(chrome.hitTest(232.0f, 684.0f, rects, state).kind == ChromeHitKind::None,
             "path chevron should not navigate");
+}
+
+void testPathbarGivesDocumentsEnoughSegmentWidth() {
+    FinderChrome chrome;
+    const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
+    ChromeState state;
+    state.pathText = L"C:\\Users\\Administrator\\Documents";
+
+    const ChromeHitResult hit = chrome.hitTest(535.0f, 684.0f, rects, state);
+    require(hit.kind == ChromeHitKind::PathSegment,
+            "documents segment should use content width rather than a fixed narrow estimate");
+    require(hit.path == L"C:\\Users\\Administrator\\Documents",
+            "documents segment should navigate to the full Documents path");
 }
 
 void testPathbarBlankAreaStartsAddressEditing() {
@@ -99,7 +125,7 @@ void testPathbarBlankAreaStartsAddressEditing() {
     require(blankHit.kind == ChromeHitKind::AddressField,
             "pathbar blank area should start address editing");
 
-    const ChromeHitResult segmentHit = chrome.hitTest(244.0f, 684.0f, rects, state);
+    const ChromeHitResult segmentHit = chrome.hitTest(260.0f, 684.0f, rects, state);
     require(segmentHit.kind == ChromeHitKind::PathSegment,
             "path segment should keep precedence over address editing");
 }
@@ -138,8 +164,10 @@ void testPathbarIgnoresStatusTextAndVirtualLocations() {
 int main() {
     testToolbarSortAndSettingsHitTargetsSitBeforeSearch();
     testHeaderColumnsHitUsingDrawnGeometry();
+    testHeaderColumnSeparatorsHitResizeTargets();
     testTabCloseHitTargetDoesNotActivateTab();
     testPathbarSegmentsReturnNavigationTargets();
+    testPathbarGivesDocumentsEnoughSegmentWidth();
     testPathbarBlankAreaStartsAddressEditing();
     testAddressEditingStillHitsAddressField();
     testPathbarIgnoresStatusTextAndVirtualLocations();

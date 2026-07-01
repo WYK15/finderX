@@ -171,6 +171,9 @@ static void runTests() {
     std::filesystem::remove_all(tempRoot);
     std::filesystem::create_directories(tempRoot / "FolderA");
     std::filesystem::create_directories(tempRoot / "folderb");
+    std::filesystem::create_directories(tempRoot / "HiddenFolder");
+    require(SetFileAttributesW((tempRoot / "HiddenFolder").wstring().c_str(), FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN),
+            "hidden directory fixture should be marked hidden");
     {
         std::ofstream file(tempRoot / "file-b.txt");
         file << "hello";
@@ -179,6 +182,12 @@ static void runTests() {
         std::ofstream file(tempRoot / "File-A.txt");
         file << "hello";
     }
+    {
+        std::ofstream file(tempRoot / "desktop.ini");
+        file << "hidden system";
+    }
+    require(SetFileAttributesW((tempRoot / "desktop.ini").wstring().c_str(), FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_ARCHIVE),
+            "hidden system file fixture should be marked hidden and system");
 
     DirectoryLoader loader;
     const auto loadedWithStatus = loader.loadChildrenWithStatus(tempRoot.wstring());
@@ -204,6 +213,16 @@ static void runTests() {
 
     const auto wrapperLoaded = loader.loadChildren(tempRoot.wstring());
     require(wrapperLoaded.size() == loaded.size(), "loadChildren should return status result children");
+
+    const auto loadedIncludingHidden = loader.loadChildrenWithStatus(tempRoot.wstring(), true);
+    require(loadedIncludingHidden.ok(), "loader status should be ok when including hidden and system items");
+    require(loadedIncludingHidden.children.size() == 6, "including hidden and system should enumerate all temp directory children");
+    require(std::any_of(loadedIncludingHidden.children.begin(), loadedIncludingHidden.children.end(), [](const FileNode& node) {
+        return node.name == L"HiddenFolder";
+    }), "including hidden and system should include hidden directory");
+    require(std::any_of(loadedIncludingHidden.children.begin(), loadedIncludingHidden.children.end(), [](const FileNode& node) {
+        return node.name == L"desktop.ini";
+    }), "including hidden and system should include hidden system file");
 
     const auto missing = loader.loadChildrenWithStatus((tempRoot / "missing").wstring());
     require(missing.children.empty(), "missing directory should have no children");

@@ -176,6 +176,34 @@ bool extractNumber(const std::string& text, const std::string& key, float& value
     return true;
 }
 
+bool extractBool(const std::string& text, const std::string& key, bool& value) {
+    const std::string marker = "\"" + key + "\"";
+    const std::size_t keyPos = text.find(marker);
+    if (keyPos == std::string::npos) {
+        return false;
+    }
+
+    const std::size_t colon = text.find(':', keyPos + marker.size());
+    if (colon == std::string::npos) {
+        return false;
+    }
+
+    std::size_t start = colon + 1;
+    while (start < text.size() && std::isspace(static_cast<unsigned char>(text[start]))) {
+        ++start;
+    }
+
+    if (text.compare(start, 4, "true") == 0) {
+        value = true;
+        return true;
+    }
+    if (text.compare(start, 5, "false") == 0) {
+        value = false;
+        return true;
+    }
+    return false;
+}
+
 bool extractString(const std::string& text, const std::string& key, std::wstring& value) {
     const std::string marker = "\"" + key + "\"";
     const std::size_t keyPos = text.find(marker);
@@ -245,6 +273,16 @@ SortColumn parseSortColumn(const std::wstring& value) {
 
 SortDirection parseSortDirection(const std::wstring& value) {
     return value == L"descending" ? SortDirection::Descending : SortDirection::Ascending;
+}
+
+ThemeMode parseThemeMode(const std::wstring& value, ThemeMode fallback) {
+    if (value == L"light") {
+        return ThemeMode::Light;
+    }
+    if (value == L"dark") {
+        return ThemeMode::Dark;
+    }
+    return fallback;
 }
 
 struct FavoritesParseResult {
@@ -330,7 +368,13 @@ AppSettings makeDefaultSettings(const std::wstring& homePath) {
 
 void clampSettings(AppSettings& settings) {
     settings.fontSize = (std::clamp)(settings.fontSize, kMinFontSize, kMaxFontSize);
+    if (settings.fontFamily.empty()) {
+        settings.fontFamily = kDefaultFontFamily;
+    }
     settings.iconSize = (std::clamp)(settings.iconSize, kMinIconSize, kMaxIconSize);
+    settings.modifiedColumnWidth = (std::clamp)(settings.modifiedColumnWidth, kMinModifiedColumnWidth, kMaxModifiedColumnWidth);
+    settings.sizeColumnWidth = (std::clamp)(settings.sizeColumnWidth, kMinSizeColumnWidth, kMaxSizeColumnWidth);
+    settings.kindColumnWidth = (std::clamp)(settings.kindColumnWidth, kMinKindColumnWidth, kMaxKindColumnWidth);
 }
 
 bool addFavorite(AppSettings& settings, std::wstring label, std::wstring path) {
@@ -410,19 +454,38 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
 
     AppSettings loaded = result.settings;
     float number = 0.0f;
+    std::wstring stringValue;
     if (extractNumber(text, "fontSize", number)) {
         loaded.fontSize = number;
+    }
+    if (extractString(text, "fontFamily", stringValue) && !stringValue.empty()) {
+        loaded.fontFamily = std::move(stringValue);
     }
     if (extractNumber(text, "iconSize", number)) {
         loaded.iconSize = number;
     }
+    if (extractNumber(text, "modifiedColumnWidth", number)) {
+        loaded.modifiedColumnWidth = number;
+    }
+    if (extractNumber(text, "sizeColumnWidth", number)) {
+        loaded.sizeColumnWidth = number;
+    }
+    if (extractNumber(text, "kindColumnWidth", number)) {
+        loaded.kindColumnWidth = number;
+    }
 
-    std::wstring stringValue;
     if (extractString(text, "sortColumn", stringValue)) {
         loaded.sortColumn = parseSortColumn(stringValue);
     }
     if (extractString(text, "sortDirection", stringValue)) {
         loaded.sortDirection = parseSortDirection(stringValue);
+    }
+    if (extractString(text, "themeMode", stringValue)) {
+        loaded.themeMode = parseThemeMode(stringValue, loaded.themeMode);
+    }
+    bool boolValue = false;
+    if (extractBool(text, "showHiddenAndSystemItems", boolValue)) {
+        loaded.showHiddenAndSystemItems = boolValue;
     }
 
     FavoritesParseResult favorites = parseFavorites(text);
@@ -456,7 +519,13 @@ bool saveSettings(const AppSettings& settings, const std::filesystem::path& path
 
     stream << "{\n";
     stream << "  \"fontSize\": " << clamped.fontSize << ",\n";
+    stream << "  \"fontFamily\": \"" << escapeJsonString(clamped.fontFamily) << "\",\n";
     stream << "  \"iconSize\": " << clamped.iconSize << ",\n";
+    stream << "  \"modifiedColumnWidth\": " << clamped.modifiedColumnWidth << ",\n";
+    stream << "  \"sizeColumnWidth\": " << clamped.sizeColumnWidth << ",\n";
+    stream << "  \"kindColumnWidth\": " << clamped.kindColumnWidth << ",\n";
+    stream << "  \"themeMode\": \"" << escapeJsonString(themeModeName(clamped.themeMode)) << "\",\n";
+    stream << "  \"showHiddenAndSystemItems\": " << (clamped.showHiddenAndSystemItems ? "true" : "false") << ",\n";
     stream << "  \"sortColumn\": \"" << escapeJsonString(sortColumnName(clamped.sortColumn)) << "\",\n";
     stream << "  \"sortDirection\": \"" << escapeJsonString(sortDirectionName(clamped.sortDirection)) << "\",\n";
     stream << "  \"favorites\": [\n";
@@ -495,6 +564,16 @@ std::wstring sortDirectionName(SortDirection direction) {
     case SortDirection::Ascending:
     default:
         return L"ascending";
+    }
+}
+
+std::wstring themeModeName(ThemeMode mode) {
+    switch (mode) {
+    case ThemeMode::Light:
+        return L"light";
+    case ThemeMode::Dark:
+    default:
+        return L"dark";
     }
 }
 
