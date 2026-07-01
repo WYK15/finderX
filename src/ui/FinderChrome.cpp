@@ -457,6 +457,8 @@ const ChromeState& defaultChromeState() {
         L"Macintosh HD > Users > leo > home > environments > androidEnv > platform-tools",
         L"",
         false,
+        L"",
+        false,
         false,
         {
             {L"Applications", L"", SidebarItemRole::Favorite, true, false},
@@ -739,7 +741,22 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     }
 
     const D2D1_RECT_F pathRect = pathTextRect(rects);
-    if (state.statusText.empty()) {
+    if (state.addressEditing) {
+        render.fillRoundedRect(
+            D2D1::RoundedRect(pathRect, 6.0f, 6.0f),
+            D2D1::ColorF(1.0f, 1.0f, 1.0f));
+        render.drawRoundedRect(
+            D2D1::RoundedRect(pathRect, 6.0f, 6.0f),
+            D2D1::ColorF(0.10f, 0.45f, 0.92f),
+            1.2f);
+        drawTextClipped(
+            render,
+            state.addressText,
+            D2D1::RectF(pathRect.left + 8.0f, pathRect.top, pathRect.right - 8.0f, pathRect.bottom),
+            window,
+            render.textFormat(),
+            D2D1::ColorF(0.16f, 0.16f, 0.16f));
+    } else if (state.statusText.empty()) {
         drawPathSegments(render, clampRect(pathRect, window), state.pathText);
     } else {
         drawTextClipped(
@@ -829,6 +846,10 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
         if (item.available && containsPoint(rowRect, x, y)) {
             return {ChromeHitKind::SidebarItem, row.index, 0};
         }
+    }
+
+    if (state.addressEditing && containsPoint(rects.pathbar, x, y)) {
+        return {ChromeHitKind::AddressField, 0, 0, {}};
     }
 
     if (state.statusText.empty() && containsPoint(rects.pathbar, x, y)) {

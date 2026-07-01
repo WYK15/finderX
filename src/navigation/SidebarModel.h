@@ -25,6 +25,8 @@ struct ChromeState {
     std::wstring title;
     std::wstring pathText;
     std::wstring statusText;
+    bool addressEditing = false;
+    std::wstring addressText;
     bool canGoBack = false;
     bool canGoForward = false;
     std::vector<SidebarItem> sidebarItems;

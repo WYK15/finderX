@@ -104,6 +104,19 @@ void testPathbarBlankAreaStartsAddressEditing() {
             "path segment should keep precedence over address editing");
 }
 
+void testAddressEditingStillHitsAddressField() {
+    FinderChrome chrome;
+    const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
+    ChromeState state;
+    state.pathText = L"D:\\alpha";
+    state.addressEditing = true;
+    state.addressText = L"D:\\alpha\\typed";
+
+    const ChromeHitResult hit = chrome.hitTest(244.0f, 684.0f, rects, state);
+    require(hit.kind == ChromeHitKind::AddressField,
+            "address editing should make the whole pathbar an address field");
+}
+
 void testPathbarIgnoresStatusTextAndVirtualLocations() {
     FinderChrome chrome;
     const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
@@ -128,6 +141,7 @@ int main() {
     testTabCloseHitTargetDoesNotActivateTab();
     testPathbarSegmentsReturnNavigationTargets();
     testPathbarBlankAreaStartsAddressEditing();
+    testAddressEditingStillHitsAddressField();
     testPathbarIgnoresStatusTextAndVirtualLocations();
     std::cout << "FinderChromeTests passed\n";
 }
