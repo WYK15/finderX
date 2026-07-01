@@ -9,6 +9,8 @@
 #include "ui/RenameDialog.h"
 #include "ui/SettingsDialog.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <utility>
 
 #include <windowsx.h>
@@ -188,6 +190,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         case ChromeHitKind::Tab:
             activateTab(chromeHit.tabIndex);
             return 0;
+        case ChromeHitKind::CloseTab:
+            closeTab(chromeHit.tabIndex);
+            return 0;
         case ChromeHitKind::NewTab:
             createTabAtPath(hasActiveTab() && activeTab().locationKind != TabState::LocationKind::ThisPc
                 ? activeTab().history.currentPath()
@@ -293,6 +298,13 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             createTabAtPath(hasActiveTab() && activeTab().locationKind != TabState::LocationKind::ThisPc
                 ? activeTab().history.currentPath()
                 : homePath_);
+            return 0;
+        }
+
+        if (controlDown && wParam == L'W') {
+            if (hasActiveTab()) {
+                closeTab(activeTabIndex_);
+            }
             return 0;
         }
 
@@ -436,6 +448,44 @@ void MainWindow::activateTab(std::size_t index) {
     }
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::closeTab(std::size_t index) {
+    if (index >= tabs_.size()) {
+        return;
+    }
+
+    contextNode_ = kInvalidNodeId;
+    contextNodePath_.clear();
+    contextFavoritePath_.clear();
+
+    if (tabs_.size() == 1) {
+        if (!createTabAtPath(homePath_)) {
+            return;
+        }
+        tabs_.erase(tabs_.begin() + static_cast<std::ptrdiff_t>(index));
+        activeTabIndex_ = 0;
+    } else {
+        tabs_.erase(tabs_.begin() + static_cast<std::ptrdiff_t>(index));
+        ensureActiveTabAfterClose(index);
+    }
+
+    if (hasActiveTab() && activeTab().locationKind == TabState::LocationKind::Directory) {
+        startDirectoryWatcher(activeTab().history.currentPath());
+    } else {
+        stopDirectoryWatcher();
+    }
+    refreshChromeState();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::ensureActiveTabAfterClose(std::size_t closedIndex) {
+    if (tabs_.empty()) {
+        activeTabIndex_ = 0;
+        return;
+    }
+
+    activeTabIndex_ = (std::min)(closedIndex, tabs_.size() - 1);
 }
 
 bool MainWindow::navigateToThisPc(HistoryMode mode) {

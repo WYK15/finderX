@@ -63,6 +63,8 @@ private:
     void initializeFileTree();
     bool createTabAtPath(const std::wstring& path);
     void activateTab(std::size_t index);
+    void closeTab(std::size_t index);
+    void ensureActiveTabAfterClose(std::size_t closedIndex);
     bool navigateToThisPc(HistoryMode mode);
     bool navigateToLocation(std::wstring path, HistoryMode mode);
     bool navigateToDirectory(std::wstring path, HistoryMode mode);

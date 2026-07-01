@@ -197,6 +197,14 @@ D2D1_RECT_F tabRect(std::size_t index, float right) {
     return D2D1::RectF(left, kTabTop, (std::min)(left + kTabWidth, right), kTabTop + kTabHeight);
 }
 
+D2D1_RECT_F tabCloseRect(const D2D1_RECT_F& tab) {
+    if (tab.right - tab.left <= 72.0f) {
+        return D2D1::RectF();
+    }
+
+    return D2D1::RectF(tab.right - 28.0f, tab.top + 6.0f, tab.right - 8.0f, tab.bottom - 6.0f);
+}
+
 D2D1_RECT_F newTabRect(std::size_t tabCount, float right) {
     const float left = kTabLeftPadding + (static_cast<float>(tabCount) * (kTabWidth + kTabGap));
     if (left >= right) {
@@ -470,10 +478,27 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         drawTextClipped(
             render,
             state.tabTitles[index],
-            D2D1::RectF(rect.left + 12.0f, rect.top + 5.0f, rect.right - 10.0f, rect.bottom - 3.0f),
+            D2D1::RectF(rect.left + 12.0f, rect.top + 5.0f, rect.right - 32.0f, rect.bottom - 3.0f),
             rect,
             render.textFormat(),
             active ? D2D1::ColorF(0.12f, 0.12f, 0.12f) : D2D1::ColorF(0.42f, 0.42f, 0.42f));
+
+        const D2D1_RECT_F closeRect = tabCloseRect(rect);
+        if (hasArea(closeRect)) {
+            const D2D1_COLOR_F closeColor = active
+                ? D2D1::ColorF(0.34f, 0.34f, 0.34f)
+                : D2D1::ColorF(0.48f, 0.48f, 0.48f);
+            render.drawLine(
+                D2D1::Point2F(closeRect.left + 6.0f, closeRect.top + 5.0f),
+                D2D1::Point2F(closeRect.right - 6.0f, closeRect.bottom - 5.0f),
+                closeColor,
+                1.2f);
+            render.drawLine(
+                D2D1::Point2F(closeRect.right - 6.0f, closeRect.top + 5.0f),
+                D2D1::Point2F(closeRect.left + 6.0f, closeRect.bottom - 5.0f),
+                closeColor,
+                1.2f);
+        }
     }
 
     const D2D1_RECT_F plusRect = newTabRect(visibleTabCount, rects.pathbar.right);
@@ -688,6 +713,10 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
             break;
         }
         visibleTabCount = index + 1;
+        const D2D1_RECT_F closeRect = tabCloseRect(rect);
+        if (hasArea(closeRect) && containsPoint(closeRect, x, y)) {
+            return {ChromeHitKind::CloseTab, 0, index};
+        }
         if (containsPoint(rect, x, y)) {
             return {ChromeHitKind::Tab, 0, index};
         }

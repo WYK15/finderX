@@ -42,10 +42,30 @@ void testHeaderColumnsHitUsingDrawnGeometry() {
             "kind header should hit in kind column");
 }
 
+void testTabCloseHitTargetDoesNotActivateTab() {
+    FinderChrome chrome;
+    const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
+    ChromeState state;
+    state.tabTitles = {L"First", L"Second"};
+
+    const ChromeHitResult closeHit = chrome.hitTest(313.0f, 20.0f, rects, state);
+    require(closeHit.kind == ChromeHitKind::CloseTab,
+            "tab close target should hit close tab action");
+    require(closeHit.tabIndex == 0,
+            "tab close target should report first tab index");
+
+    const ChromeHitResult bodyHit = chrome.hitTest(220.0f, 20.0f, rects, state);
+    require(bodyHit.kind == ChromeHitKind::Tab,
+            "tab body should still activate tab");
+    require(bodyHit.tabIndex == 0,
+            "tab body should report first tab index");
+}
+
 } // namespace
 
 int main() {
     testToolbarSortAndSettingsHitTargetsSitBeforeSearch();
     testHeaderColumnsHitUsingDrawnGeometry();
+    testTabCloseHitTargetDoesNotActivateTab();
     std::cout << "FinderChromeTests passed\n";
 }

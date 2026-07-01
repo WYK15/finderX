@@ -24,6 +24,7 @@ enum class ChromeHitKind {
     SearchField,
     SidebarItem,
     Tab,
+    CloseTab,
     NewTab,
     SortMenu,
     Settings,
