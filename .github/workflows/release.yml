@@ -17,7 +17,7 @@ permissions:
 jobs:
   msi:
     name: Build MSI
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
 
     steps:
       - name: Checkout
@@ -48,7 +48,7 @@ jobs:
           "FINDERX_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Configure
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 "-DFINDERX_VERSION=${{ env.FINDERX_VERSION }}"
+        run: cmake -S . -B build -G "Visual Studio 18 2026" -A x64 "-DFINDERX_VERSION=${{ env.FINDERX_VERSION }}"
 
       - name: Build
         run: cmake --build build --config Release

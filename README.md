@@ -95,7 +95,7 @@ dotnet tool install --global wix --version 4.0.6
 Then configure, build, test, and package:
 
 ```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64 "-DFINDERX_VERSION=0.1.0"
+cmake -S . -B build -G "Visual Studio 18 2026" -A x64 "-DFINDERX_VERSION=0.1.0"
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 cpack --config build\CPackConfig.cmake -C Release -G WIX
