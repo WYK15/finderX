@@ -833,10 +833,14 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
 
     if (state.statusText.empty() && containsPoint(rects.pathbar, x, y)) {
         const D2D1_RECT_F pathRect = pathTextRect(rects);
-        for (const PathSegmentLayout& segment : pathSegmentLayouts(pathRect, state.pathText)) {
+        const std::vector<PathSegmentLayout> segments = pathSegmentLayouts(pathRect, state.pathText);
+        for (const PathSegmentLayout& segment : segments) {
             if (!segment.targetPath.empty() && containsPoint(segment.rect, x, y)) {
                 return {ChromeHitKind::PathSegment, 0, 0, segment.targetPath};
             }
+        }
+        if (!segments.empty() && x > segments.back().rect.right) {
+            return {ChromeHitKind::AddressField, 0, 0, {}};
         }
     }
 

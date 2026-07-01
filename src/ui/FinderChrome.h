@@ -33,7 +33,8 @@ enum class ChromeHitKind {
     HeaderModified,
     HeaderSize,
     HeaderKind,
-    PathSegment
+    PathSegment,
+    AddressField
 };
 
 struct ChromeHitResult {

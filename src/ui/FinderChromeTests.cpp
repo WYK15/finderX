@@ -89,6 +89,21 @@ void testPathbarSegmentsReturnNavigationTargets() {
             "path chevron should not navigate");
 }
 
+void testPathbarBlankAreaStartsAddressEditing() {
+    FinderChrome chrome;
+    const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
+    ChromeState state;
+    state.pathText = L"D:\\alpha\\beta";
+
+    const ChromeHitResult blankHit = chrome.hitTest(930.0f, 684.0f, rects, state);
+    require(blankHit.kind == ChromeHitKind::AddressField,
+            "pathbar blank area should start address editing");
+
+    const ChromeHitResult segmentHit = chrome.hitTest(244.0f, 684.0f, rects, state);
+    require(segmentHit.kind == ChromeHitKind::PathSegment,
+            "path segment should keep precedence over address editing");
+}
+
 void testPathbarIgnoresStatusTextAndVirtualLocations() {
     FinderChrome chrome;
     const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
@@ -112,6 +127,7 @@ int main() {
     testHeaderColumnsHitUsingDrawnGeometry();
     testTabCloseHitTargetDoesNotActivateTab();
     testPathbarSegmentsReturnNavigationTargets();
+    testPathbarBlankAreaStartsAddressEditing();
     testPathbarIgnoresStatusTextAndVirtualLocations();
     std::cout << "FinderChromeTests passed\n";
 }
