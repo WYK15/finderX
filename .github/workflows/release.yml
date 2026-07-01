@@ -34,6 +34,7 @@ jobs:
           dotnet tool install --global wix --version 4.0.6
           "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           wix --version
+          wix extension add --global WixToolset.UI.wixext/4.0.6
 
       - name: Resolve version
         shell: pwsh
