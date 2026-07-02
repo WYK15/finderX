@@ -351,6 +351,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
                 && distanceSquared(pointerStart_, pointerCurrent_) >= kDragStartThreshold * kDragStartThreshold) {
                 if (isActiveDirectoryLocation() && !draggedNodes_.empty()) {
                     pointerMode_ = PointerMode::MovingItems;
+                    updateDragTarget(activeTab().listView.nodeAtPoint(pointerCurrent_.x, pointerCurrent_.y, rects.list));
                 } else {
                     pointerMode_ = PointerMode::None;
                     draggedNodes_.clear();
@@ -366,7 +367,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             }
 
             if (pointerMode_ == PointerMode::MovingItems && hasActiveTab()) {
-                dragTargetNode_ = activeTab().listView.nodeAtPoint(pointerCurrent_.x, pointerCurrent_.y, rects.list);
+                updateDragTarget(activeTab().listView.nodeAtPoint(pointerCurrent_.x, pointerCurrent_.y, rects.list));
                 InvalidateRect(hwnd_, nullptr, FALSE);
                 return 0;
             }
@@ -1501,9 +1502,31 @@ void MainWindow::moveDraggedItemsTo(NodeId destinationNode) {
     refreshCurrentDirectorySelecting(std::span<const std::wstring>{});
 }
 
+void MainWindow::updateDragTarget(NodeId destinationNode) {
+    dragTargetNode_ = destinationNode;
+    if (!hasActiveTab()) {
+        return;
+    }
+
+    if (canMoveDraggedItemsTo(destinationNode)) {
+        setStatusText(L"Move to " + activeTab().tree.node(destinationNode).name);
+    } else {
+        setStatusText(L"Cannot move here");
+    }
+}
+
 void MainWindow::finishPointerInteraction(D2D1_POINT_2F point) {
     pointerCurrent_ = point;
-    const PointerMode mode = pointerMode_;
+    PointerMode mode = pointerMode_;
+    if (mode == PointerMode::PendingMove
+        && distanceSquared(pointerStart_, pointerCurrent_) >= kDragStartThreshold * kDragStartThreshold
+        && isActiveDirectoryLocation()
+        && !draggedNodes_.empty()) {
+        mode = PointerMode::MovingItems;
+    }
+    if (mode == PointerMode::MovingItems && hasActiveTab()) {
+        dragTargetNode_ = activeTab().listView.nodeAtPoint(point.x, point.y, currentLayout().list);
+    }
     pointerMode_ = PointerMode::None;
     rubberBandAdditive_ = false;
     ReleaseCapture();

@@ -117,6 +117,7 @@ private:
     void finishPointerInteraction(D2D1_POINT_2F point);
     void moveDraggedItemsTo(NodeId destinationNode);
     bool canMoveDraggedItemsTo(NodeId destinationNode) const;
+    void updateDragTarget(NodeId destinationNode);
     D2D1_RECT_F currentRubberBandRect() const;
     void applySort(std::vector<FileNode>& nodes) const;
     ListViewStyle currentListViewStyle() const;
