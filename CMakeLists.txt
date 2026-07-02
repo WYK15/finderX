@@ -41,6 +41,7 @@ add_library(finderx_fs
     src/fs/FileSorter.cpp
     src/fs/FileCreation.cpp
     src/fs/DriveEnumerator.cpp
+    src/fs/ZipOperations.cpp
 )
 
 target_include_directories(finderx_fs PUBLIC src)
@@ -83,6 +84,15 @@ target_link_libraries(finderx_drive_enumerator_tests PRIVATE finderx_fs)
 finderx_enable_utf8(finderx_drive_enumerator_tests)
 finderx_enable_windows_unicode(finderx_drive_enumerator_tests)
 add_test(NAME finderx_drive_enumerator_tests COMMAND finderx_drive_enumerator_tests)
+
+add_executable(finderx_zip_operations_tests
+    src/fs/ZipOperationsTests.cpp
+)
+
+target_link_libraries(finderx_zip_operations_tests PRIVATE finderx_fs)
+finderx_enable_utf8(finderx_zip_operations_tests)
+finderx_enable_windows_unicode(finderx_zip_operations_tests)
+add_test(NAME finderx_zip_operations_tests COMMAND finderx_zip_operations_tests)
 
 add_executable(finderx_file_sorter_tests
     src/fs/FileSorterTests.cpp

@@ -3,6 +3,7 @@
 #include "fs/DriveEnumerator.h"
 #include "fs/FileCreation.h"
 #include "fs/FileSorter.h"
+#include "fs/ZipOperations.h"
 #include "settings/AppSettings.h"
 #include "shell/ShellActions.h"
 #include "shell/ShellFileOperations.h"
@@ -43,6 +44,8 @@ constexpr UINT kCommandSortAscending = 1017;
 constexpr UINT kCommandSortDescending = 1018;
 constexpr UINT kCommandAddFavorite = 1019;
 constexpr UINT kCommandRemoveFavorite = 1020;
+constexpr UINT kCommandCompressZip = 1021;
+constexpr UINT kCommandExtractZip = 1022;
 constexpr UINT_PTR kDirectoryWatcherTimerId = 2001;
 constexpr UINT_PTR kDirectoryRefreshTimerId = 2002;
 constexpr UINT_PTR kSearchCaretTimerId = 2003;
@@ -490,6 +493,12 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     return DefWindowProcW(hwnd_, message, wParam, lParam);
 }
 
+bool allZipPaths(const std::vector<std::wstring>& paths) {
+    return !paths.empty() && std::all_of(paths.begin(), paths.end(), [](const std::wstring& path) {
+        return isZipArchivePath(path);
+    });
+}
+
 LayoutRects MainWindow::currentLayout() const {
     const D2D1_SIZE_F renderSize = render_.sizeDips();
     if (renderSize.width > 0.0f && renderSize.height > 0.0f) {
@@ -770,6 +779,7 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
     }
 
     const std::vector<NodeId> targets = commandTargetNodes(true);
+    const std::vector<std::wstring> targetPaths = pathsForNodes(targets);
     const bool singleTarget = targets.size() == 1;
     const bool directoryLocation = isActiveDirectoryLocation();
     if (hasTarget) {
@@ -780,6 +790,10 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
             }
             AppendMenuW(menu, MF_STRING, kCommandCopy, L"Copy");
             AppendMenuW(menu, MF_STRING, kCommandCut, L"Cut");
+            AppendMenuW(menu, MF_STRING, kCommandCompressZip, L"Compress to ZIP");
+            if (allZipPaths(targetPaths)) {
+                AppendMenuW(menu, MF_STRING, kCommandExtractZip, L"Extract Here");
+            }
             if (fileOperationState_.hasPendingOperation()) {
                 AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
             }
@@ -887,6 +901,12 @@ void MainWindow::handleCommand(WPARAM wParam) {
         break;
     case kCommandMoveToTrash:
         moveContextNodeToTrash();
+        break;
+    case kCommandCompressZip:
+        compressContextNodesToZip();
+        break;
+    case kCommandExtractZip:
+        extractContextZipHere();
         break;
     case kCommandReveal:
         revealContextNode();
@@ -1086,6 +1106,56 @@ void MainWindow::pasteIntoCurrentDirectory() {
 
     fileOperationState_.markPasteSucceeded();
     refreshCurrentDirectory();
+}
+
+void MainWindow::compressContextNodesToZip() {
+    if (!isActiveDirectoryLocation()) {
+        setStatusText(L"Cannot compress here");
+        return;
+    }
+
+    const std::vector<NodeId> targets = commandTargetNodes(true);
+    const std::vector<std::wstring> paths = pathsForNodes(targets);
+    if (paths.empty()) {
+        return;
+    }
+
+    setStatusText(L"Compressing...");
+    const ZipOperationResult result = compressToZip(activeTab().history.currentPath(), paths);
+    if (!result.success) {
+        setStatusText(result.message.empty() ? L"Cannot create zip archive" : result.message);
+        return;
+    }
+
+    refreshCurrentDirectorySelecting(result.outputPath);
+}
+
+void MainWindow::extractContextZipHere() {
+    if (!isActiveDirectoryLocation()) {
+        setStatusText(L"Cannot extract here");
+        return;
+    }
+
+    const std::vector<NodeId> targets = commandTargetNodes(true);
+    const std::vector<std::wstring> paths = pathsForNodes(targets);
+    if (!allZipPaths(paths)) {
+        setStatusText(L"Select a zip archive");
+        return;
+    }
+
+    std::vector<std::wstring> outputPaths;
+    outputPaths.reserve(paths.size());
+    setStatusText(L"Extracting...");
+    for (const std::wstring& path : paths) {
+        const ZipOperationResult result = extractZipHere(activeTab().history.currentPath(), path);
+        if (!result.success) {
+            setStatusText(result.message.empty() ? L"Cannot extract zip archive" : result.message);
+            return;
+        }
+        outputPaths.push_back(result.outputPath);
+    }
+
+    refreshCurrentDirectorySelecting(outputPaths);
 }
 
 void MainWindow::createFolderInCurrentDirectory() {

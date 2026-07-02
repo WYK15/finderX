@@ -93,6 +93,8 @@ private:
     void copyContextNode();
     void cutContextNode();
     void pasteIntoCurrentDirectory();
+    void compressContextNodesToZip();
+    void extractContextZipHere();
     void createFolderInCurrentDirectory();
     void createFileInCurrentDirectory();
     void addPathToFavorites(const std::wstring& path);
