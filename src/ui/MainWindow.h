@@ -115,9 +115,12 @@ private:
     void revealContextNode();
     void copyContextNodePath();
     void finishPointerInteraction(D2D1_POINT_2F point);
-    void moveDraggedItemsTo(NodeId destinationNode);
+    void moveDraggedItemsToPath(const std::wstring& destinationPath);
     bool canMoveDraggedItemsTo(NodeId destinationNode) const;
+    bool canMoveDraggedItemsToPath(const std::wstring& destinationPath) const;
     void updateDragTarget(NodeId destinationNode);
+    void updateDragTargetPath(std::wstring destinationPath, std::wstring destinationName);
+    void updateDragTargetAtPoint(D2D1_POINT_2F point, const LayoutRects& rects);
     D2D1_RECT_F currentRubberBandRect() const;
     std::wstring currentDragFeedbackText() const;
     void drawDragFeedback();
@@ -184,6 +187,7 @@ private:
     bool rubberBandAdditive_ = false;
     std::vector<NodeId> draggedNodes_;
     NodeId dragTargetNode_ = kInvalidNodeId;
+    std::wstring dragTargetPath_;
     std::wstring dragFeedbackText_;
 };
 

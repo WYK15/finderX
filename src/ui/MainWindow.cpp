@@ -319,6 +319,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             rubberBandAdditive_ = controlDown;
             draggedNodes_.clear();
             dragTargetNode_ = kInvalidNodeId;
+            dragTargetPath_.clear();
             dragFeedbackText_.clear();
             if (!rubberBandAdditive_) {
                 activeTab().listView.clearSelection();
@@ -341,6 +342,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             rubberBandAdditive_ = false;
             draggedNodes_ = activeTab().listView.selectedNodes();
             dragTargetNode_ = kInvalidNodeId;
+            dragTargetPath_.clear();
             SetCapture(hwnd_);
         }
         if (result.changed) {
@@ -358,11 +360,12 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
                 && distanceSquared(pointerStart_, pointerCurrent_) >= kDragStartThreshold * kDragStartThreshold) {
                 if (isActiveDirectoryLocation() && !draggedNodes_.empty()) {
                     pointerMode_ = PointerMode::MovingItems;
-                    updateDragTarget(activeTab().listView.nodeAtPoint(pointerCurrent_.x, pointerCurrent_.y, rects.list));
+                    updateDragTargetAtPoint(pointerCurrent_, rects);
                 } else {
                     pointerMode_ = PointerMode::None;
                     draggedNodes_.clear();
                     dragTargetNode_ = kInvalidNodeId;
+                    dragTargetPath_.clear();
                     dragFeedbackText_.clear();
                     ReleaseCapture();
                 }
@@ -375,7 +378,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             }
 
             if (pointerMode_ == PointerMode::MovingItems && hasActiveTab()) {
-                updateDragTarget(activeTab().listView.nodeAtPoint(pointerCurrent_.x, pointerCurrent_.y, rects.list));
+                updateDragTargetAtPoint(pointerCurrent_, rects);
                 InvalidateRect(hwnd_, nullptr, FALSE);
                 return 0;
             }
@@ -431,7 +434,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             break;
         }
         if (pointerMode_ == PointerMode::MovingItems) {
-            SetCursor(LoadCursorW(nullptr, canMoveDraggedItemsTo(dragTargetNode_) ? IDC_HAND : IDC_NO));
+            SetCursor(LoadCursorW(nullptr, canMoveDraggedItemsToPath(dragTargetPath_) ? IDC_HAND : IDC_NO));
             return TRUE;
         }
         if (columnResizeTarget_ != ColumnResizeTarget::None) {
@@ -1517,12 +1520,25 @@ bool MainWindow::canMoveDraggedItemsTo(NodeId destinationNode) const {
         return false;
     }
 
+    return canMoveDraggedItemsToPath(destination.path);
+}
+
+bool MainWindow::canMoveDraggedItemsToPath(const std::wstring& destination) const {
+    if (!isActiveDirectoryLocation() || destination.empty()) {
+        return false;
+    }
+
     const std::vector<std::wstring> sourcePaths = pathsForNodes(draggedNodes_);
     if (sourcePaths.empty()) {
         return false;
     }
 
-    const std::filesystem::path destinationPath(destination.path);
+    const DWORD destinationAttributes = GetFileAttributesW(destination.c_str());
+    if (destinationAttributes == INVALID_FILE_ATTRIBUTES || (destinationAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
+        return false;
+    }
+
+    const std::filesystem::path destinationPath(destination);
     for (const std::wstring& sourcePath : sourcePaths) {
         if (sourcePath.empty()) {
             return false;
@@ -1535,7 +1551,7 @@ bool MainWindow::canMoveDraggedItemsTo(NodeId destinationNode) const {
 
         const DWORD attributes = GetFileAttributesW(sourcePath.c_str());
         if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0
-            && isSameOrChildPath(destination.path, sourcePath)) {
+            && isSameOrChildPath(destination, sourcePath)) {
             return false;
         }
     }
@@ -1543,15 +1559,14 @@ bool MainWindow::canMoveDraggedItemsTo(NodeId destinationNode) const {
     return true;
 }
 
-void MainWindow::moveDraggedItemsTo(NodeId destinationNode) {
-    if (!canMoveDraggedItemsTo(destinationNode)) {
+void MainWindow::moveDraggedItemsToPath(const std::wstring& destinationPath) {
+    if (!canMoveDraggedItemsToPath(destinationPath)) {
         setStatusText(L"Cannot move items here");
         return;
     }
 
-    const std::wstring destination = activeTab().tree.node(destinationNode).path;
     const std::vector<std::wstring> sourcePaths = pathsForNodes(draggedNodes_);
-    shell::FileOperationResult result = shell::moveToDirectory(hwnd_, sourcePaths, destination);
+    shell::FileOperationResult result = shell::moveToDirectory(hwnd_, sourcePaths, destinationPath);
     if (!result.success) {
         setStatusText(result.message.empty() ? L"Cannot move items" : result.message);
         return;
@@ -1562,6 +1577,7 @@ void MainWindow::moveDraggedItemsTo(NodeId destinationNode) {
 
 void MainWindow::updateDragTarget(NodeId destinationNode) {
     dragTargetNode_ = destinationNode;
+    dragTargetPath_.clear();
     if (!hasActiveTab()) {
         dragFeedbackText_.clear();
         return;
@@ -1569,8 +1585,44 @@ void MainWindow::updateDragTarget(NodeId destinationNode) {
 
     const bool canMove = canMoveDraggedItemsTo(destinationNode);
     const std::wstring destinationName = canMove ? activeTab().tree.node(destinationNode).name : L"";
+    if (canMove) {
+        dragTargetPath_ = activeTab().tree.node(destinationNode).path;
+    }
     dragFeedbackText_ = ui::dragFeedbackText(canMove, draggedNodes_.size(), destinationName);
     setStatusText(dragFeedbackText_);
+}
+
+void MainWindow::updateDragTargetPath(std::wstring destinationPath, std::wstring destinationName) {
+    dragTargetNode_ = kInvalidNodeId;
+    const bool canMove = canMoveDraggedItemsToPath(destinationPath);
+    dragTargetPath_ = canMove ? std::move(destinationPath) : L"";
+    dragFeedbackText_ = ui::dragFeedbackText(canMove, draggedNodes_.size(), destinationName);
+    setStatusText(dragFeedbackText_);
+}
+
+void MainWindow::updateDragTargetAtPoint(D2D1_POINT_2F point, const LayoutRects& rects) {
+    if (!hasActiveTab()) {
+        updateDragTarget(kInvalidNodeId);
+        return;
+    }
+
+    const NodeId targetNode = activeTab().listView.nodeAtPoint(point.x, point.y, rects.list);
+    if (targetNode != kInvalidNodeId) {
+        updateDragTarget(targetNode);
+        return;
+    }
+
+    if (containsPoint(rects.list, point) && isActiveDirectoryLocation()) {
+        const std::wstring currentPath = activeTab().history.currentPath();
+        std::wstring name = fileNameFromPath(currentPath);
+        if (name.empty()) {
+            name = currentPath;
+        }
+        updateDragTargetPath(currentPath, std::move(name));
+        return;
+    }
+
+    updateDragTarget(kInvalidNodeId);
 }
 
 void MainWindow::finishPointerInteraction(D2D1_POINT_2F point) {
@@ -1583,18 +1635,19 @@ void MainWindow::finishPointerInteraction(D2D1_POINT_2F point) {
         mode = PointerMode::MovingItems;
     }
     if (mode == PointerMode::MovingItems && hasActiveTab()) {
-        dragTargetNode_ = activeTab().listView.nodeAtPoint(point.x, point.y, currentLayout().list);
+        updateDragTargetAtPoint(point, currentLayout());
     }
     pointerMode_ = PointerMode::None;
     rubberBandAdditive_ = false;
     ReleaseCapture();
 
     if (mode == PointerMode::MovingItems) {
-        moveDraggedItemsTo(dragTargetNode_);
+        moveDraggedItemsToPath(dragTargetPath_);
     }
 
     draggedNodes_.clear();
     dragTargetNode_ = kInvalidNodeId;
+    dragTargetPath_.clear();
     dragFeedbackText_.clear();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
