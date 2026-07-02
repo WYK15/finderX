@@ -43,7 +43,7 @@ try {
     $contentWidth = $maxX - $minX + 1
     $contentHeight = $maxY - $minY + 1
 
-    if ($contentWidth -lt 880 -or $contentHeight -lt 840) {
+    if ($contentWidth -lt 960 -or $contentHeight -lt 920) {
         throw "FinderX.png icon subject is too small: ${contentWidth}x${contentHeight}"
     }
 } finally {
