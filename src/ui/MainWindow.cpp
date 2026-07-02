@@ -12,6 +12,8 @@
 #include "ui/SettingsDialog.h"
 #include "ui/TabManager.h"
 
+#include "resource.h"
+
 #include <algorithm>
 #include <cstddef>
 #include <string_view>
@@ -73,6 +75,8 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
     windowClass.cbSize = sizeof(windowClass);
     windowClass.lpfnWndProc = MainWindow::WndProc;
     windowClass.hInstance = instance;
+    windowClass.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_FINDERX));
+    windowClass.hIconSm = LoadIconW(instance, MAKEINTRESOURCEW(IDI_FINDERX));
     windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     windowClass.hbrBackground = nullptr;
     windowClass.lpszClassName = kWindowClassName;

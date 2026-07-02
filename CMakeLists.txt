@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(FinderX LANGUAGES CXX)
+project(FinderX LANGUAGES CXX RC)
 
 set(FINDERX_VERSION "0.1.0" CACHE STRING "FinderX package version")
 
@@ -9,6 +9,23 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 enable_testing()
+
+add_test(
+    NAME finderx_app_resources
+    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VerifyAppResources.cmake"
+)
+
+find_program(FINDERX_POWERSHELL NAMES pwsh powershell)
+if(FINDERX_POWERSHELL)
+    add_test(
+        NAME finderx_icon_transparency
+        COMMAND ${FINDERX_POWERSHELL}
+            -NoProfile
+            -ExecutionPolicy Bypass
+            -File "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VerifyIconTransparency.ps1"
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/FinderX.png"
+    )
+endif()
 
 function(finderx_enable_utf8 target)
     if(MSVC)
@@ -216,6 +233,7 @@ set(FINDERX_APP_SOURCES
     src/ui/RenameDialog.cpp
     src/ui/SettingsDialog.cpp
     src/ui/RenderContext.cpp
+    resources/FinderX.rc
 )
 
 set(FINDERX_APP_SOURCES_EXIST TRUE)
@@ -230,7 +248,7 @@ if(FINDERX_APP_SOURCES_EXIST)
         ${FINDERX_APP_SOURCES}
     )
 
-    target_include_directories(FinderX PRIVATE src)
+    target_include_directories(FinderX PRIVATE src resources)
     target_link_libraries(FinderX PRIVATE
         finderx_model
         finderx_fs
@@ -267,6 +285,7 @@ set(CPACK_WIX_VERSION 4)
 set(CPACK_WIX_UPGRADE_GUID "48D5AA78-8EEF-4DC2-A2F3-EDA36CF1B7E4")
 set(CPACK_WIX_PROGRAM_MENU_FOLDER "FinderX")
 set(CPACK_WIX_ARCHITECTURE "x64")
+set(CPACK_WIX_PRODUCT_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/FinderX.ico")
 set(CPACK_WIX_EXTENSIONS WixToolset.UI.wixext)
 set(CPACK_WIX_CUSTOM_XMLNS "ui=http://wixtoolset.org/schemas/v4/wxs/ui")
 
