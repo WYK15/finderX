@@ -187,6 +187,17 @@ finderx_enable_utf8(finderx_directory_refresh_debouncer_tests)
 finderx_enable_windows_unicode(finderx_directory_refresh_debouncer_tests)
 add_test(NAME finderx_directory_refresh_debouncer_tests COMMAND finderx_directory_refresh_debouncer_tests)
 
+add_executable(finderx_shell_actions_tests
+    src/shell/ShellActionsTests.cpp
+    src/shell/ShellActions.cpp
+)
+
+target_include_directories(finderx_shell_actions_tests PRIVATE src)
+target_link_libraries(finderx_shell_actions_tests PRIVATE ole32 shell32)
+finderx_enable_utf8(finderx_shell_actions_tests)
+finderx_enable_windows_unicode(finderx_shell_actions_tests)
+add_test(NAME finderx_shell_actions_tests COMMAND finderx_shell_actions_tests)
+
 add_executable(finderx_dpi_scaling_tests
     src/ui/DpiScalingTests.cpp
 )
@@ -274,6 +285,7 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "FinderX Windows file manager")
 set(CPACK_PACKAGE_VERSION "${FINDERX_VERSION}")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "FinderX")
 set(CPACK_PACKAGE_EXECUTABLES "FinderX" "FinderX")
+set(CPACK_CREATE_DESKTOP_LINKS "FinderX")
 set(CPACK_VERBATIM_VARIABLES YES)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
     configure_file("${CMAKE_CURRENT_SOURCE_DIR}/LICENSE" "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt" COPYONLY)

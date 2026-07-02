@@ -19,3 +19,8 @@ file(READ "${CMAKE_CURRENT_LIST_DIR}/../src/ui/MainWindow.cpp" main_window_cpp)
 if(NOT main_window_cpp MATCHES "IDI_FINDERX")
     message(FATAL_ERROR "MainWindow.cpp does not load the FinderX app icon")
 endif()
+
+file(READ "${CMAKE_CURRENT_LIST_DIR}/../CMakeLists.txt" finderx_cmake)
+if(NOT finderx_cmake MATCHES "CPACK_CREATE_DESKTOP_LINKS[ \t]+\"FinderX\"")
+    message(FATAL_ERROR "CMakeLists.txt does not request a FinderX desktop shortcut")
+endif()

@@ -114,6 +114,30 @@ int main() {
     }
 
     {
+        FileTree tree = FileTree::sample();
+        FinderListView view(&tree);
+        const std::vector<VisibleRow> rows = tree.flatten();
+
+        const D2D1_RECT_F selectionRect = D2D1::RectF(10.0f, rowY(1), 500.0f, rowY(3) + 8.0f);
+        require(view.selectNodesIntersecting(selectionRect, bounds, false), "rubber band should change selection");
+        const NodeId expected[] = {rows[1].nodeId, rows[2].nodeId, rows[3].nodeId};
+        requireSelectedNodes(view, expected, "rubber band should select intersecting visible rows");
+        require(view.selectedNode() == rows[3].nodeId, "rubber band should focus last intersecting row");
+    }
+
+    {
+        FileTree tree = FileTree::sample();
+        FinderListView view(&tree);
+        const std::vector<VisibleRow> rows = tree.flatten();
+
+        view.selectNode(rows[0].nodeId);
+        const D2D1_RECT_F selectionRect = D2D1::RectF(10.0f, rowY(2), 500.0f, rowY(3) + 8.0f);
+        require(view.selectNodesIntersecting(selectionRect, bounds, true), "additive rubber band should change selection");
+        const NodeId expected[] = {rows[0].nodeId, rows[2].nodeId, rows[3].nodeId};
+        requireSelectedNodes(view, expected, "additive rubber band should preserve existing selection");
+    }
+
+    {
         FileTree tree(L"C:\\Root", L"Root");
         FileNode emptyFolder;
         emptyFolder.name = L"Empty";

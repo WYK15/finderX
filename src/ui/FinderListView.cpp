@@ -284,6 +284,66 @@ bool FinderListView::selectNodes(std::span<const NodeId> ids) {
     return changed;
 }
 
+bool FinderListView::selectNodesIntersecting(const D2D1_RECT_F& selectionRect, const D2D1_RECT_F& bounds, bool additive) {
+    if (!tree_) {
+        return false;
+    }
+
+    rebuildRows();
+    ensureSelection();
+    viewportHeight_ = (std::max)(0.0f, bounds.bottom - bounds.top);
+    clampScroll();
+
+    const D2D1_RECT_F normalized = D2D1::RectF(
+        (std::min)(selectionRect.left, selectionRect.right),
+        (std::min)(selectionRect.top, selectionRect.bottom),
+        (std::max)(selectionRect.left, selectionRect.right),
+        (std::max)(selectionRect.top, selectionRect.bottom));
+
+    std::vector<NodeId> next;
+    if (additive) {
+        next = selectedNodes_;
+    }
+
+    const float height = rowHeight();
+    const float rowLeft = bounds.left + kHorizontalInset;
+    const float rowRight = bounds.right - kHorizontalInset;
+    for (std::size_t i = 0; i < rows_.size(); ++i) {
+        const float rowTop = bounds.top + kTopPadding - scrollY_ + static_cast<float>(i) * height;
+        const float rowBottom = rowTop + height;
+        const bool intersects = normalized.left <= rowRight
+            && normalized.right >= rowLeft
+            && normalized.top <= rowBottom
+            && normalized.bottom >= rowTop;
+        if (!intersects) {
+            continue;
+        }
+
+        const NodeId id = rows_[i].nodeId;
+        if (std::find(next.begin(), next.end(), id) == next.end()) {
+            next.push_back(id);
+        }
+    }
+
+    std::sort(next.begin(), next.end(), [this](NodeId lhs, NodeId rhs) {
+        return rowIndex(lhs) < rowIndex(rhs);
+    });
+
+    const bool changed = next != selectedNodes_;
+    selectedNodes_ = std::move(next);
+    if (selectedNodes_.empty()) {
+        selected_ = kInvalidNodeId;
+        anchor_ = kInvalidNodeId;
+        return changed;
+    }
+
+    selected_ = selectedNodes_.back();
+    if (rowIndex(anchor_) < 0) {
+        anchor_ = selected_;
+    }
+    return changed;
+}
+
 bool FinderListView::selectAllVisible() {
     if (!tree_) {
         return false;

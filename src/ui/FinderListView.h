@@ -44,6 +44,7 @@ public:
     NodeId nodeAtPoint(float x, float y, const D2D1_RECT_F& bounds);
     bool selectNode(NodeId id);
     bool selectNodes(std::span<const NodeId> ids);
+    bool selectNodesIntersecting(const D2D1_RECT_F& selectionRect, const D2D1_RECT_F& bounds, bool additive);
     bool selectAllVisible();
     bool clearSelection();
     void setFilterText(std::wstring text);

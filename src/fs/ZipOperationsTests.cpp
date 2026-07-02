@@ -73,6 +73,17 @@ void testDefaultExtractDirectoryUsesZipStem() {
     std::filesystem::remove_all(root);
 }
 
+void testDefaultExtractDirectoryUsesZipParentDirectory() {
+    const std::filesystem::path root = tempDirectory(L"finderx-zip-extract-parent-");
+    const std::filesystem::path nested = root / L"nested";
+    std::filesystem::create_directories(nested);
+
+    const std::wstring target = defaultZipExtractDirectory(root.wstring(), (nested / L"backup.zip").wstring());
+    require(target == (nested / L"backup").wstring(), "extract directory should use zip parent directory");
+
+    std::filesystem::remove_all(root);
+}
+
 void testCompressAndExtractRoundTrip() {
     const std::filesystem::path root = tempDirectory(L"finderx-zip-roundtrip-");
     const std::wstring current = root.wstring();
@@ -100,6 +111,7 @@ int main() {
     testDefaultArchivePathUsesSelectedName();
     testDefaultArchivePathAvoidsExistingFiles();
     testDefaultExtractDirectoryUsesZipStem();
+    testDefaultExtractDirectoryUsesZipParentDirectory();
     testCompressAndExtractRoundTrip();
     std::cout << "ZipOperationsTests passed\n";
 }

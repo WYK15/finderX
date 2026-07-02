@@ -16,6 +16,8 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cmath>
+#include <filesystem>
 #include <string_view>
 #include <utility>
 
@@ -48,11 +50,14 @@ constexpr UINT kCommandAddFavorite = 1019;
 constexpr UINT kCommandRemoveFavorite = 1020;
 constexpr UINT kCommandCompressZip = 1021;
 constexpr UINT kCommandExtractZip = 1022;
+constexpr UINT kCommandOpenInNewTab = 1023;
+constexpr UINT kCommandCreateShortcut = 1024;
 constexpr UINT_PTR kDirectoryWatcherTimerId = 2001;
 constexpr UINT_PTR kDirectoryRefreshTimerId = 2002;
 constexpr UINT_PTR kSearchCaretTimerId = 2003;
 constexpr UINT kDirectoryWatcherPollMs = 500;
 constexpr UINT kSearchCaretBlinkMs = 500;
+constexpr float kDragStartThreshold = 6.0f;
 constexpr DWORD kDirectoryChangeFilter = FILE_NOTIFY_CHANGE_FILE_NAME
     | FILE_NOTIFY_CHANGE_DIR_NAME
     | FILE_NOTIFY_CHANGE_LAST_WRITE
@@ -66,6 +71,38 @@ bool containsPoint(const D2D1_RECT_F& rect, D2D1_POINT_2F point) {
 std::size_t pathDepth(std::wstring_view path) {
     return static_cast<std::size_t>(std::count(path.begin(), path.end(), L'\\')
         + std::count(path.begin(), path.end(), L'/'));
+}
+
+float distanceSquared(D2D1_POINT_2F left, D2D1_POINT_2F right) {
+    const float dx = left.x - right.x;
+    const float dy = left.y - right.y;
+    return dx * dx + dy * dy;
+}
+
+bool isSameOrChildPath(const std::wstring& path, const std::wstring& possibleParent) {
+    std::error_code error;
+    const std::filesystem::path canonicalPath = std::filesystem::weakly_canonical(path, error);
+    if (error) {
+        return false;
+    }
+    const std::filesystem::path canonicalParent = std::filesystem::weakly_canonical(possibleParent, error);
+    if (error) {
+        return false;
+    }
+
+    auto pathIt = canonicalPath.begin();
+    auto parentIt = canonicalParent.begin();
+    for (; parentIt != canonicalParent.end(); ++parentIt, ++pathIt) {
+        if (pathIt == canonicalPath.end()
+            || CompareStringOrdinal(pathIt->c_str(), -1, parentIt->c_str(), -1, TRUE) != CSTR_EQUAL) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool pathsEquivalent(const std::filesystem::path& left, const std::filesystem::path& right) {
+    return CompareStringOrdinal(left.c_str(), -1, right.c_str(), -1, TRUE) == CSTR_EQUAL;
 }
 
 }
@@ -268,15 +305,73 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
         blurSearch();
         blurAddress();
+        const NodeId mouseDownNode = activeTab().listView.nodeAtPoint(x, y, rects.list);
+        if (mouseDownNode == kInvalidNodeId && containsPoint(rects.list, dipPoint)) {
+            pointerMode_ = PointerMode::RubberBand;
+            pointerStart_ = dipPoint;
+            pointerCurrent_ = dipPoint;
+            rubberBandAdditive_ = controlDown;
+            draggedNodes_.clear();
+            dragTargetNode_ = kInvalidNodeId;
+            if (!rubberBandAdditive_) {
+                activeTab().listView.clearSelection();
+            }
+            SetCapture(hwnd_);
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return 0;
+        }
+
         const ListInteractionResult result = activeTab().listView.onMouseDown(x, y, rects.list, controlDown, shiftDown);
         loadChildrenIfNeeded(result.expandedFolder);
         activateNode(result.activatedNode);
+        if (mouseDownNode != kInvalidNodeId
+            && result.activatedNode == kInvalidNodeId
+            && result.expandedFolder == kInvalidNodeId
+            && !shiftDown) {
+            pointerMode_ = PointerMode::PendingMove;
+            pointerStart_ = dipPoint;
+            pointerCurrent_ = dipPoint;
+            rubberBandAdditive_ = false;
+            draggedNodes_ = activeTab().listView.selectedNodes();
+            dragTargetNode_ = kInvalidNodeId;
+            SetCapture(hwnd_);
+        }
         if (result.changed) {
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
         return 0;
     }
     case WM_MOUSEMOVE: {
+        if (pointerMode_ != PointerMode::None) {
+            const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            pointerCurrent_ = render_.clientPointToDips(clientPoint);
+            const LayoutRects rects = currentLayout();
+
+            if (pointerMode_ == PointerMode::PendingMove
+                && distanceSquared(pointerStart_, pointerCurrent_) >= kDragStartThreshold * kDragStartThreshold) {
+                if (isActiveDirectoryLocation() && !draggedNodes_.empty()) {
+                    pointerMode_ = PointerMode::MovingItems;
+                } else {
+                    pointerMode_ = PointerMode::None;
+                    draggedNodes_.clear();
+                    dragTargetNode_ = kInvalidNodeId;
+                    ReleaseCapture();
+                }
+            }
+
+            if (pointerMode_ == PointerMode::RubberBand && hasActiveTab()) {
+                activeTab().listView.selectNodesIntersecting(currentRubberBandRect(), rects.list, rubberBandAdditive_);
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return 0;
+            }
+
+            if (pointerMode_ == PointerMode::MovingItems && hasActiveTab()) {
+                dragTargetNode_ = activeTab().listView.nodeAtPoint(pointerCurrent_.x, pointerCurrent_.y, rects.list);
+                InvalidateRect(hwnd_, nullptr, FALSE);
+                return 0;
+            }
+        }
+
         if (columnResizeTarget_ == ColumnResizeTarget::None) {
             break;
         }
@@ -303,7 +398,13 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         InvalidateRect(hwnd_, nullptr, FALSE);
         return 0;
     }
-    case WM_LBUTTONUP:
+    case WM_LBUTTONUP: {
+        if (pointerMode_ != PointerMode::None) {
+            const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            const D2D1_POINT_2F dipPoint = render_.clientPointToDips(clientPoint);
+            finishPointerInteraction(dipPoint);
+            return 0;
+        }
         if (columnResizeTarget_ != ColumnResizeTarget::None) {
             columnResizeTarget_ = ColumnResizeTarget::None;
             ReleaseCapture();
@@ -315,9 +416,14 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
         break;
+    }
     case WM_SETCURSOR: {
         if (LOWORD(lParam) != HTCLIENT) {
             break;
+        }
+        if (pointerMode_ == PointerMode::MovingItems) {
+            SetCursor(LoadCursorW(nullptr, canMoveDraggedItemsTo(dragTargetNode_) ? IDC_HAND : IDC_NO));
+            return TRUE;
         }
         if (columnResizeTarget_ != ColumnResizeTarget::None) {
             SetCursor(LoadCursorW(nullptr, IDC_SIZEWE));
@@ -789,6 +895,10 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
     if (hasTarget) {
         AppendMenuW(menu, MF_STRING, kCommandOpen, L"Open");
         if (directoryLocation) {
+            if (singleTarget && targets.front() < tab.tree.nodes().size()
+                && tab.tree.node(targets.front()).kind == FileKind::Folder) {
+                AppendMenuW(menu, MF_STRING, kCommandOpenInNewTab, L"Open in New Tab");
+            }
             if (singleTarget) {
                 AppendMenuW(menu, MF_STRING, kCommandRename, L"Rename");
             }
@@ -804,6 +914,9 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
             if (singleTarget && targets.front() < tab.tree.nodes().size()
                 && tab.tree.node(targets.front()).kind == FileKind::Folder) {
                 AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
+            }
+            if (singleTarget) {
+                AppendMenuW(menu, MF_STRING, kCommandCreateShortcut, L"Create Shortcut");
             }
         }
         if (singleTarget && targets.front() < tab.tree.nodes().size()
@@ -911,6 +1024,12 @@ void MainWindow::handleCommand(WPARAM wParam) {
         break;
     case kCommandExtractZip:
         extractContextZipHere();
+        break;
+    case kCommandOpenInNewTab:
+        openContextNodeInNewTab();
+        break;
+    case kCommandCreateShortcut:
+        createShortcutForContextNode();
         break;
     case kCommandReveal:
         revealContextNode();
@@ -1162,6 +1281,41 @@ void MainWindow::extractContextZipHere() {
     refreshCurrentDirectorySelecting(outputPaths);
 }
 
+void MainWindow::openContextNodeInNewTab() {
+    const NodeId target = commandTargetNode();
+    if (target == kInvalidNodeId || target >= activeTab().tree.nodes().size()) {
+        return;
+    }
+
+    const FileNode& node = activeTab().tree.node(target);
+    if (node.kind != FileKind::Folder || node.path.empty()) {
+        return;
+    }
+
+    createTabAtPath(node.path);
+}
+
+void MainWindow::createShortcutForContextNode() {
+    if (!isActiveDirectoryLocation()) {
+        setStatusText(L"Cannot create shortcut here");
+        return;
+    }
+
+    const std::vector<NodeId> targets = commandTargetNodes(false);
+    if (targets.size() != 1 || targets.front() >= activeTab().tree.nodes().size()) {
+        return;
+    }
+
+    const std::wstring targetPath = activeTab().tree.node(targets.front()).path;
+    std::wstring shortcutPath;
+    if (!shell::createShortcutBesidePath(hwnd_, targetPath, shortcutPath)) {
+        setStatusText(L"Cannot create shortcut");
+        return;
+    }
+
+    refreshCurrentDirectorySelecting(shortcutPath);
+}
+
 void MainWindow::createFolderInCurrentDirectory() {
     if (!isActiveDirectoryLocation()) {
         setStatusText(L"Cannot create folder here");
@@ -1283,6 +1437,84 @@ void MainWindow::copyContextNodePath() {
     if (!shell::copyPathToClipboard(hwnd_, tab.tree.node(target).path)) {
         setStatusText(L"Cannot copy path");
     }
+}
+
+D2D1_RECT_F MainWindow::currentRubberBandRect() const {
+    return D2D1::RectF(
+        (std::min)(pointerStart_.x, pointerCurrent_.x),
+        (std::min)(pointerStart_.y, pointerCurrent_.y),
+        (std::max)(pointerStart_.x, pointerCurrent_.x),
+        (std::max)(pointerStart_.y, pointerCurrent_.y));
+}
+
+bool MainWindow::canMoveDraggedItemsTo(NodeId destinationNode) const {
+    if (!isActiveDirectoryLocation() || destinationNode == kInvalidNodeId || destinationNode >= activeTab().tree.nodes().size()) {
+        return false;
+    }
+
+    const TabState& tab = activeTab();
+    const FileNode& destination = tab.tree.node(destinationNode);
+    if (destination.kind != FileKind::Folder || destination.path.empty()) {
+        return false;
+    }
+
+    const std::vector<std::wstring> sourcePaths = pathsForNodes(draggedNodes_);
+    if (sourcePaths.empty()) {
+        return false;
+    }
+
+    const std::filesystem::path destinationPath(destination.path);
+    for (const std::wstring& sourcePath : sourcePaths) {
+        if (sourcePath.empty()) {
+            return false;
+        }
+
+        const std::filesystem::path source(sourcePath);
+        if (pathsEquivalent(source, destinationPath) || pathsEquivalent(source.parent_path(), destinationPath)) {
+            return false;
+        }
+
+        const DWORD attributes = GetFileAttributesW(sourcePath.c_str());
+        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0
+            && isSameOrChildPath(destination.path, sourcePath)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void MainWindow::moveDraggedItemsTo(NodeId destinationNode) {
+    if (!canMoveDraggedItemsTo(destinationNode)) {
+        setStatusText(L"Cannot move items here");
+        return;
+    }
+
+    const std::wstring destination = activeTab().tree.node(destinationNode).path;
+    const std::vector<std::wstring> sourcePaths = pathsForNodes(draggedNodes_);
+    shell::FileOperationResult result = shell::moveToDirectory(hwnd_, sourcePaths, destination);
+    if (!result.success) {
+        setStatusText(result.message.empty() ? L"Cannot move items" : result.message);
+        return;
+    }
+
+    refreshCurrentDirectorySelecting(std::span<const std::wstring>{});
+}
+
+void MainWindow::finishPointerInteraction(D2D1_POINT_2F point) {
+    pointerCurrent_ = point;
+    const PointerMode mode = pointerMode_;
+    pointerMode_ = PointerMode::None;
+    rubberBandAdditive_ = false;
+    ReleaseCapture();
+
+    if (mode == PointerMode::MovingItems) {
+        moveDraggedItemsTo(dragTargetNode_);
+    }
+
+    draggedNodes_.clear();
+    dragTargetNode_ = kInvalidNodeId;
+    InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void MainWindow::applySort(std::vector<FileNode>& nodes) const {
@@ -1941,6 +2173,20 @@ void MainWindow::paint() {
     chrome_.draw(render_, rects, chromeState_);
     if (hasActiveTab()) {
         activeTab().listView.draw(render_, rects.list);
+        if (pointerMode_ == PointerMode::RubberBand) {
+            const D2D1_RECT_F band = currentRubberBandRect();
+            render_.fillRoundedRect(
+                D2D1::RoundedRect(band, 3.0f, 3.0f),
+                settings_.themeMode == ThemeMode::Dark
+                    ? D2D1::ColorF(0.20f, 0.55f, 1.0f, 0.18f)
+                    : D2D1::ColorF(0.10f, 0.45f, 1.0f, 0.14f));
+            render_.drawRoundedRect(
+                D2D1::RoundedRect(band, 3.0f, 3.0f),
+                settings_.themeMode == ThemeMode::Dark
+                    ? D2D1::ColorF(0.44f, 0.72f, 1.0f, 0.75f)
+                    : D2D1::ColorF(0.14f, 0.44f, 0.90f, 0.65f),
+                1.0f);
+        }
     }
     const bool targetLost = render_.endDraw();
 

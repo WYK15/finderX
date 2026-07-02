@@ -41,6 +41,13 @@ private:
         Kind
     };
 
+    enum class PointerMode {
+        None,
+        PendingMove,
+        MovingItems,
+        RubberBand
+    };
+
     struct TabState {
         enum class LocationKind {
             Directory,
@@ -95,6 +102,8 @@ private:
     void pasteIntoCurrentDirectory();
     void compressContextNodesToZip();
     void extractContextZipHere();
+    void openContextNodeInNewTab();
+    void createShortcutForContextNode();
     void createFolderInCurrentDirectory();
     void createFileInCurrentDirectory();
     void addPathToFavorites(const std::wstring& path);
@@ -105,6 +114,10 @@ private:
     std::wstring powerShellTargetDirectory() const;
     void revealContextNode();
     void copyContextNodePath();
+    void finishPointerInteraction(D2D1_POINT_2F point);
+    void moveDraggedItemsTo(NodeId destinationNode);
+    bool canMoveDraggedItemsTo(NodeId destinationNode) const;
+    D2D1_RECT_F currentRubberBandRect() const;
     void applySort(std::vector<FileNode>& nodes) const;
     ListViewStyle currentListViewStyle() const;
     void applyListStyle(TabState& tab) const;
@@ -162,6 +175,12 @@ private:
     ColumnResizeTarget columnResizeTarget_ = ColumnResizeTarget::None;
     float columnResizeStartX_ = 0.0f;
     float columnResizeStartWidth_ = 0.0f;
+    PointerMode pointerMode_ = PointerMode::None;
+    D2D1_POINT_2F pointerStart_{};
+    D2D1_POINT_2F pointerCurrent_{};
+    bool rubberBandAdditive_ = false;
+    std::vector<NodeId> draggedNodes_;
+    NodeId dragTargetNode_ = kInvalidNodeId;
 };
 
 }

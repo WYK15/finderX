@@ -133,7 +133,12 @@ std::wstring defaultZipExtractDirectory(const std::wstring& currentDirectory, co
     if (currentDirectory.empty() || zipPath.empty()) {
         return L"";
     }
-    return nextAvailablePath(currentDirectory, fileStem(zipPath), L"");
+    std::filesystem::path zipFile(zipPath);
+    std::wstring outputDirectory = zipFile.parent_path().wstring();
+    if (outputDirectory.empty()) {
+        outputDirectory = currentDirectory;
+    }
+    return nextAvailablePath(outputDirectory, fileStem(zipPath), L"");
 }
 
 ZipOperationResult compressToZip(const std::wstring& currentDirectory, std::span<const std::wstring> sourcePaths) {
@@ -170,7 +175,11 @@ ZipOperationResult extractZipHere(const std::wstring& currentDirectory, const st
     }
 
     const std::wstring command = L"tar.exe -xf " + quoteArgument(zipPath) + L" -C " + quoteArgument(result.outputPath);
-    if (!runProcess(command, currentDirectory)) {
+    std::wstring workingDirectory = std::filesystem::path(zipPath).parent_path().wstring();
+    if (workingDirectory.empty()) {
+        workingDirectory = currentDirectory;
+    }
+    if (!runProcess(command, workingDirectory)) {
         result.message = L"Cannot extract zip archive";
         return result;
     }
