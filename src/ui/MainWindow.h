@@ -119,6 +119,8 @@ private:
     bool canMoveDraggedItemsTo(NodeId destinationNode) const;
     void updateDragTarget(NodeId destinationNode);
     D2D1_RECT_F currentRubberBandRect() const;
+    std::wstring currentDragFeedbackText() const;
+    void drawDragFeedback();
     void applySort(std::vector<FileNode>& nodes) const;
     ListViewStyle currentListViewStyle() const;
     void applyListStyle(TabState& tab) const;
@@ -182,6 +184,7 @@ private:
     bool rubberBandAdditive_ = false;
     std::vector<NodeId> draggedNodes_;
     NodeId dragTargetNode_ = kInvalidNodeId;
+    std::wstring dragFeedbackText_;
 };
 
 }

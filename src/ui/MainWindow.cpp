@@ -8,6 +8,7 @@
 #include "shell/ShellActions.h"
 #include "shell/ShellFileOperations.h"
 #include "ui/DirectoryWatcherConfig.h"
+#include "ui/DragFeedback.h"
 #include "ui/RenameDialog.h"
 #include "ui/SettingsDialog.h"
 #include "ui/TabManager.h"
@@ -58,6 +59,11 @@ constexpr UINT_PTR kSearchCaretTimerId = 2003;
 constexpr UINT kDirectoryWatcherPollMs = 500;
 constexpr UINT kSearchCaretBlinkMs = 500;
 constexpr float kDragStartThreshold = 6.0f;
+constexpr float kDragFeedbackOffsetX = 16.0f;
+constexpr float kDragFeedbackOffsetY = 18.0f;
+constexpr float kDragFeedbackHeight = 30.0f;
+constexpr float kDragFeedbackMinWidth = 116.0f;
+constexpr float kDragFeedbackMaxWidth = 220.0f;
 constexpr DWORD kDirectoryChangeFilter = FILE_NOTIFY_CHANGE_FILE_NAME
     | FILE_NOTIFY_CHANGE_DIR_NAME
     | FILE_NOTIFY_CHANGE_LAST_WRITE
@@ -313,6 +319,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             rubberBandAdditive_ = controlDown;
             draggedNodes_.clear();
             dragTargetNode_ = kInvalidNodeId;
+            dragFeedbackText_.clear();
             if (!rubberBandAdditive_) {
                 activeTab().listView.clearSelection();
             }
@@ -356,6 +363,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
                     pointerMode_ = PointerMode::None;
                     draggedNodes_.clear();
                     dragTargetNode_ = kInvalidNodeId;
+                    dragFeedbackText_.clear();
                     ReleaseCapture();
                 }
             }
@@ -1448,6 +1456,56 @@ D2D1_RECT_F MainWindow::currentRubberBandRect() const {
         (std::max)(pointerStart_.y, pointerCurrent_.y));
 }
 
+std::wstring MainWindow::currentDragFeedbackText() const {
+    return dragFeedbackText_;
+}
+
+void MainWindow::drawDragFeedback() {
+    if (pointerMode_ != PointerMode::MovingItems || dragFeedbackText_.empty()) {
+        return;
+    }
+
+    const D2D1_SIZE_F size = render_.sizeDips();
+    const float textWidth = (std::min)(
+        kDragFeedbackMaxWidth,
+        (std::max)(kDragFeedbackMinWidth, 28.0f + static_cast<float>(dragFeedbackText_.size()) * 7.0f));
+    float left = pointerCurrent_.x + kDragFeedbackOffsetX;
+    float top = pointerCurrent_.y + kDragFeedbackOffsetY;
+    if (left + textWidth > size.width - 8.0f) {
+        left = (std::max)(8.0f, pointerCurrent_.x - textWidth - kDragFeedbackOffsetX);
+    }
+    if (top + kDragFeedbackHeight > size.height - 8.0f) {
+        top = (std::max)(8.0f, pointerCurrent_.y - kDragFeedbackHeight - kDragFeedbackOffsetY);
+    }
+
+    const D2D1_RECT_F rect = D2D1::RectF(left, top, left + textWidth, top + kDragFeedbackHeight);
+    render_.fillRoundedRect(
+        D2D1::RoundedRect(D2D1::RectF(rect.left + 2.0f, rect.top + 3.0f, rect.right + 2.0f, rect.bottom + 3.0f), 7.0f, 7.0f),
+        settings_.themeMode == ThemeMode::Dark
+            ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.24f)
+            : D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.14f));
+    render_.fillRoundedRect(
+        D2D1::RoundedRect(rect, 7.0f, 7.0f),
+        settings_.themeMode == ThemeMode::Dark
+            ? D2D1::ColorF(0.13f, 0.16f, 0.22f, 0.94f)
+            : D2D1::ColorF(0.97f, 0.98f, 1.0f, 0.96f));
+    render_.drawRoundedRect(
+        D2D1::RoundedRect(rect, 7.0f, 7.0f),
+        settings_.themeMode == ThemeMode::Dark
+            ? D2D1::ColorF(0.35f, 0.48f, 0.68f, 0.85f)
+            : D2D1::ColorF(0.62f, 0.70f, 0.82f, 0.90f),
+        1.0f);
+
+    const D2D1_COLOR_F textColor = settings_.themeMode == ThemeMode::Dark
+        ? D2D1::ColorF(0.90f, 0.94f, 1.0f)
+        : D2D1::ColorF(0.12f, 0.16f, 0.22f);
+    render_.drawText(
+        dragFeedbackText_,
+        D2D1::RectF(rect.left + 12.0f, rect.top + 5.0f, rect.right - 10.0f, rect.bottom),
+        render_.textFormat(),
+        textColor);
+}
+
 bool MainWindow::canMoveDraggedItemsTo(NodeId destinationNode) const {
     if (!isActiveDirectoryLocation() || destinationNode == kInvalidNodeId || destinationNode >= activeTab().tree.nodes().size()) {
         return false;
@@ -1505,14 +1563,14 @@ void MainWindow::moveDraggedItemsTo(NodeId destinationNode) {
 void MainWindow::updateDragTarget(NodeId destinationNode) {
     dragTargetNode_ = destinationNode;
     if (!hasActiveTab()) {
+        dragFeedbackText_.clear();
         return;
     }
 
-    if (canMoveDraggedItemsTo(destinationNode)) {
-        setStatusText(L"Move to " + activeTab().tree.node(destinationNode).name);
-    } else {
-        setStatusText(L"Cannot move here");
-    }
+    const bool canMove = canMoveDraggedItemsTo(destinationNode);
+    const std::wstring destinationName = canMove ? activeTab().tree.node(destinationNode).name : L"";
+    dragFeedbackText_ = ui::dragFeedbackText(canMove, draggedNodes_.size(), destinationName);
+    setStatusText(dragFeedbackText_);
 }
 
 void MainWindow::finishPointerInteraction(D2D1_POINT_2F point) {
@@ -1537,6 +1595,7 @@ void MainWindow::finishPointerInteraction(D2D1_POINT_2F point) {
 
     draggedNodes_.clear();
     dragTargetNode_ = kInvalidNodeId;
+    dragFeedbackText_.clear();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -2210,6 +2269,7 @@ void MainWindow::paint() {
                     : D2D1::ColorF(0.14f, 0.44f, 0.90f, 0.65f),
                 1.0f);
         }
+        drawDragFeedback();
     }
     const bool targetLost = render_.endDraw();
 
