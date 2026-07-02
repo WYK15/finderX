@@ -32,6 +32,9 @@ void testDefaults() {
     require(settings.modifiedColumnWidth == 150.0f, "default modified column width should be 150");
     require(settings.sizeColumnWidth == 80.0f, "default size column width should be 80");
     require(settings.kindColumnWidth == 120.0f, "default kind column width should be 120");
+    require(settings.windowWidth == 1188, "default window width should be 1188");
+    require(settings.windowHeight == 768, "default window height should be 768");
+    require(!settings.rememberWindowSize, "default should not remember window size");
     require(settings.themeMode == ThemeMode::Dark, "default theme should be dark");
     require(!settings.showHiddenAndSystemItems, "default should hide hidden and system items");
     require(settings.sortColumn == SortColumn::Name, "default sort column should be name");
@@ -54,24 +57,32 @@ void testClamping() {
     settings.modifiedColumnWidth = 20.0f;
     settings.sizeColumnWidth = 20.0f;
     settings.kindColumnWidth = 20.0f;
+    settings.windowWidth = 100;
+    settings.windowHeight = 100;
     clampSettings(settings);
     require(settings.fontSize == kMinFontSize, "font size should clamp to min");
     require(settings.iconSize == kMaxIconSize, "icon size should clamp to max");
     require(settings.modifiedColumnWidth == kMinModifiedColumnWidth, "modified column width should clamp to min");
     require(settings.sizeColumnWidth == kMinSizeColumnWidth, "size column width should clamp to min");
     require(settings.kindColumnWidth == kMinKindColumnWidth, "kind column width should clamp to min");
+    require(settings.windowWidth == kMinWindowWidth, "window width should clamp to min");
+    require(settings.windowHeight == kMinWindowHeight, "window height should clamp to min");
 
     settings.fontSize = 30.0f;
     settings.iconSize = 2.0f;
     settings.modifiedColumnWidth = 999.0f;
     settings.sizeColumnWidth = 999.0f;
     settings.kindColumnWidth = 999.0f;
+    settings.windowWidth = 99999;
+    settings.windowHeight = 99999;
     clampSettings(settings);
     require(settings.fontSize == kMaxFontSize, "font size should clamp to max");
     require(settings.iconSize == kMinIconSize, "icon size should clamp to min");
     require(settings.modifiedColumnWidth == kMaxModifiedColumnWidth, "modified column width should clamp to max");
     require(settings.sizeColumnWidth == kMaxSizeColumnWidth, "size column width should clamp to max");
     require(settings.kindColumnWidth == kMaxKindColumnWidth, "kind column width should clamp to max");
+    require(settings.windowWidth == kMaxWindowWidth, "window width should clamp to max");
+    require(settings.windowHeight == kMaxWindowHeight, "window height should clamp to max");
 }
 
 void testFavoriteOperations() {
@@ -128,6 +139,9 @@ void testSaveLoadRoundTrip() {
     settings.modifiedColumnWidth = 188.0f;
     settings.sizeColumnWidth = 96.0f;
     settings.kindColumnWidth = 164.0f;
+    settings.windowWidth = 1440;
+    settings.windowHeight = 900;
+    settings.rememberWindowSize = true;
     settings.themeMode = ThemeMode::Light;
     settings.showHiddenAndSystemItems = true;
     settings.sortColumn = SortColumn::Modified;
@@ -143,6 +157,9 @@ void testSaveLoadRoundTrip() {
     require(loaded.settings.modifiedColumnWidth == 188.0f, "modified column width should round trip");
     require(loaded.settings.sizeColumnWidth == 96.0f, "size column width should round trip");
     require(loaded.settings.kindColumnWidth == 164.0f, "kind column width should round trip");
+    require(loaded.settings.windowWidth == 1440, "window width should round trip");
+    require(loaded.settings.windowHeight == 900, "window height should round trip");
+    require(loaded.settings.rememberWindowSize, "remember window size should round trip");
     require(loaded.settings.themeMode == ThemeMode::Light, "theme mode should round trip");
     require(loaded.settings.showHiddenAndSystemItems, "hidden/system visibility should round trip");
     require(loaded.settings.sortColumn == SortColumn::Modified, "sort column should round trip");

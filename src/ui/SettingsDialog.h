@@ -14,6 +14,9 @@ struct SettingsDialogValues {
     std::wstring themeModeText;
     std::wstring fontFamilyText;
     bool showHiddenAndSystemItems = false;
+    std::wstring windowWidthText;
+    std::wstring windowHeightText;
+    bool rememberWindowSize = false;
 };
 
 bool promptForSettings(HWND owner, AppSettings& settings);

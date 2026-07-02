@@ -375,6 +375,8 @@ void clampSettings(AppSettings& settings) {
     settings.modifiedColumnWidth = (std::clamp)(settings.modifiedColumnWidth, kMinModifiedColumnWidth, kMaxModifiedColumnWidth);
     settings.sizeColumnWidth = (std::clamp)(settings.sizeColumnWidth, kMinSizeColumnWidth, kMaxSizeColumnWidth);
     settings.kindColumnWidth = (std::clamp)(settings.kindColumnWidth, kMinKindColumnWidth, kMaxKindColumnWidth);
+    settings.windowWidth = (std::clamp)(settings.windowWidth, kMinWindowWidth, kMaxWindowWidth);
+    settings.windowHeight = (std::clamp)(settings.windowHeight, kMinWindowHeight, kMaxWindowHeight);
 }
 
 bool addFavorite(AppSettings& settings, std::wstring label, std::wstring path) {
@@ -473,6 +475,12 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
     if (extractNumber(text, "kindColumnWidth", number)) {
         loaded.kindColumnWidth = number;
     }
+    if (extractNumber(text, "windowWidth", number)) {
+        loaded.windowWidth = static_cast<int>(number);
+    }
+    if (extractNumber(text, "windowHeight", number)) {
+        loaded.windowHeight = static_cast<int>(number);
+    }
 
     if (extractString(text, "sortColumn", stringValue)) {
         loaded.sortColumn = parseSortColumn(stringValue);
@@ -486,6 +494,9 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
     bool boolValue = false;
     if (extractBool(text, "showHiddenAndSystemItems", boolValue)) {
         loaded.showHiddenAndSystemItems = boolValue;
+    }
+    if (extractBool(text, "rememberWindowSize", boolValue)) {
+        loaded.rememberWindowSize = boolValue;
     }
 
     FavoritesParseResult favorites = parseFavorites(text);
@@ -524,6 +535,9 @@ bool saveSettings(const AppSettings& settings, const std::filesystem::path& path
     stream << "  \"modifiedColumnWidth\": " << clamped.modifiedColumnWidth << ",\n";
     stream << "  \"sizeColumnWidth\": " << clamped.sizeColumnWidth << ",\n";
     stream << "  \"kindColumnWidth\": " << clamped.kindColumnWidth << ",\n";
+    stream << "  \"windowWidth\": " << clamped.windowWidth << ",\n";
+    stream << "  \"windowHeight\": " << clamped.windowHeight << ",\n";
+    stream << "  \"rememberWindowSize\": " << (clamped.rememberWindowSize ? "true" : "false") << ",\n";
     stream << "  \"themeMode\": \"" << escapeJsonString(themeModeName(clamped.themeMode)) << "\",\n";
     stream << "  \"showHiddenAndSystemItems\": " << (clamped.showHiddenAndSystemItems ? "true" : "false") << ",\n";
     stream << "  \"sortColumn\": \"" << escapeJsonString(sortColumnName(clamped.sortColumn)) << "\",\n";

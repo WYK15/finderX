@@ -114,6 +114,10 @@ bool pathsEquivalent(const std::filesystem::path& left, const std::filesystem::p
 }
 
 bool MainWindow::create(HINSTANCE instance, int showCommand) {
+    homePath_ = defaultHomeDirectory();
+    settings_ = loadSettings(homePath_).settings;
+    clampSettings(settings_);
+
     WNDCLASSEXW windowClass{};
     windowClass.cbSize = sizeof(windowClass);
     windowClass.lpfnWndProc = MainWindow::WndProc;
@@ -135,8 +139,8 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
-        1188,
-        768,
+        settings_.windowWidth,
+        settings_.windowHeight,
         nullptr,
         nullptr,
         instance,
@@ -604,6 +608,17 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case WM_DESTROY:
+        if (settings_.rememberWindowSize) {
+            WINDOWPLACEMENT placement{};
+            placement.length = sizeof(placement);
+            if (GetWindowPlacement(hwnd_, &placement)) {
+                const RECT& rect = placement.rcNormalPosition;
+                settings_.windowWidth = rect.right - rect.left;
+                settings_.windowHeight = rect.bottom - rect.top;
+                clampSettings(settings_);
+                saveSettings(settings_);
+            }
+        }
         stopDirectoryWatcher();
         KillTimer(hwnd_, kSearchCaretTimerId);
         PostQuitMessage(0);
@@ -640,8 +655,10 @@ LayoutRects MainWindow::currentLayout() const {
 }
 
 void MainWindow::initializeFileTree() {
-    homePath_ = defaultHomeDirectory();
-    settings_ = loadSettings(homePath_).settings;
+    if (homePath_.empty()) {
+        homePath_ = defaultHomeDirectory();
+    }
+    clampSettings(settings_);
     applyVisualSettings();
     createTabAtPath(homePath_);
 }

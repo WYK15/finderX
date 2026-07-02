@@ -31,10 +31,12 @@ int main() {
 
     {
         AppSettings settings;
-        applySettingsDialogValues(SettingsDialogValues{L"16", L"20", L"", L"Microsoft YaHei UI"}, settings);
+        applySettingsDialogValues(SettingsDialogValues{L"16", L"20", L"", L"Microsoft YaHei UI", false, L"1440", L"900"}, settings);
         require(nearlyEqual(settings.fontSize, 16.0f), "font text 16 should apply font size 16");
         require(nearlyEqual(settings.iconSize, 20.0f), "icon text 20 should apply icon size 20");
         require(settings.fontFamily == L"Microsoft YaHei UI", "font family text should apply font family");
+        require(settings.windowWidth == 1440, "window width text should apply");
+        require(settings.windowHeight == 900, "window height text should apply");
     }
 
     {
@@ -64,12 +66,25 @@ int main() {
 
     {
         AppSettings settings;
+        require(!settings.rememberWindowSize, "remember window size should default off");
+        applySettingsDialogValues(SettingsDialogValues{L"", L"", L"", L"", false, L"", L"", true}, settings);
+        require(settings.rememberWindowSize, "checked remember window size should apply");
+        applySettingsDialogValues(SettingsDialogValues{L"", L"", L"", L"", false, L"", L"", false}, settings);
+        require(!settings.rememberWindowSize, "unchecked remember window size should apply");
+    }
+
+    {
+        AppSettings settings;
         settings.fontSize = 15.0f;
         settings.iconSize = 18.0f;
+        settings.windowWidth = 1280;
+        settings.windowHeight = 720;
         settings.fontFamily = L"Segoe UI";
-        applySettingsDialogValues(SettingsDialogValues{L"large", L"19"}, settings);
+        applySettingsDialogValues(SettingsDialogValues{L"large", L"19", L"", L"", false, L"wide", L"tall"}, settings);
         require(nearlyEqual(settings.fontSize, 15.0f), "invalid font text should keep previous font size");
         require(nearlyEqual(settings.iconSize, 19.0f), "valid icon text should still apply icon size");
+        require(settings.windowWidth == 1280, "invalid window width should keep previous width");
+        require(settings.windowHeight == 720, "invalid window height should keep previous height");
         require(settings.fontFamily == L"Segoe UI", "empty font family text should keep previous font family");
     }
 

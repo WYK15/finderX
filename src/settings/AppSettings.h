@@ -23,6 +23,12 @@ inline constexpr float kMinSizeColumnWidth = 56.0f;
 inline constexpr float kMaxSizeColumnWidth = 160.0f;
 inline constexpr float kMinKindColumnWidth = 80.0f;
 inline constexpr float kMaxKindColumnWidth = 260.0f;
+inline constexpr int kDefaultWindowWidth = 1188;
+inline constexpr int kDefaultWindowHeight = 768;
+inline constexpr int kMinWindowWidth = 900;
+inline constexpr int kMinWindowHeight = 560;
+inline constexpr int kMaxWindowWidth = 3840;
+inline constexpr int kMaxWindowHeight = 2160;
 
 enum class SortColumn {
     Name,
@@ -53,6 +59,9 @@ struct AppSettings {
     float modifiedColumnWidth = kDefaultModifiedColumnWidth;
     float sizeColumnWidth = kDefaultSizeColumnWidth;
     float kindColumnWidth = kDefaultKindColumnWidth;
+    int windowWidth = kDefaultWindowWidth;
+    int windowHeight = kDefaultWindowHeight;
+    bool rememberWindowSize = false;
     ThemeMode themeMode = ThemeMode::Dark;
     bool showHiddenAndSystemItems = false;
     SortColumn sortColumn = SortColumn::Name;

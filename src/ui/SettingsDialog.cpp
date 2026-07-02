@@ -20,6 +20,9 @@ constexpr int kIconEditId = 102;
 constexpr int kThemeComboId = 103;
 constexpr int kFontFamilyComboId = 104;
 constexpr int kShowHiddenAndSystemId = 105;
+constexpr int kWindowWidthEditId = 106;
+constexpr int kWindowHeightEditId = 107;
+constexpr int kRememberWindowSizeId = 108;
 constexpr int kFavoritesListId = 201;
 constexpr int kFavoriteLabelEditId = 202;
 constexpr int kFavoritePathEditId = 203;
@@ -29,7 +32,7 @@ constexpr int kFavoriteRemoveId = 206;
 constexpr int kOkId = IDOK;
 constexpr int kCancelId = IDCANCEL;
 constexpr int kDialogWidth = 328;
-constexpr int kDialogHeight = 552;
+constexpr int kDialogHeight = 628;
 
 std::wstring shortcutHelpText() {
     return L"Keyboard shortcuts:\r\n"
@@ -115,6 +118,8 @@ bool tryParseFloat(const std::wstring& text, float& value) {
 
 bool settingsEqual(const AppSettings& left, const AppSettings& right) {
     if (left.fontSize != right.fontSize || left.fontFamily != right.fontFamily || left.iconSize != right.iconSize
+        || left.windowWidth != right.windowWidth || left.windowHeight != right.windowHeight
+        || left.rememberWindowSize != right.rememberWindowSize
         || left.themeMode != right.themeMode || left.showHiddenAndSystemItems != right.showHiddenAndSystemItems
         || left.sortColumn != right.sortColumn || left.sortDirection != right.sortDirection
         || left.favorites.size() != right.favorites.size()) {
@@ -368,12 +373,68 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                          state->initialSettings.showHiddenAndSystemItems ? BST_CHECKED : BST_UNCHECKED,
                          0);
         }
+        HWND windowWidthLabel = createDialogControl(0,
+                                                    L"STATIC",
+                                                    L"Window width:",
+                                                    WS_CHILD | WS_VISIBLE,
+                                                    16,
+                                                    174,
+                                                    88,
+                                                    22,
+                                                    hwnd,
+                                                    0);
+        HWND windowWidthEdit = createDialogControl(WS_EX_CLIENTEDGE,
+                                                   L"EDIT",
+                                                   std::to_wstring(state->initialSettings.windowWidth).c_str(),
+                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                                   112,
+                                                   170,
+                                                   184,
+                                                   24,
+                                                   hwnd,
+                                                   kWindowWidthEditId);
+        HWND windowHeightLabel = createDialogControl(0,
+                                                     L"STATIC",
+                                                     L"Window height:",
+                                                     WS_CHILD | WS_VISIBLE,
+                                                     16,
+                                                     208,
+                                                     88,
+                                                     22,
+                                                     hwnd,
+                                                     0);
+        HWND windowHeightEdit = createDialogControl(WS_EX_CLIENTEDGE,
+                                                    L"EDIT",
+                                                    std::to_wstring(state->initialSettings.windowHeight).c_str(),
+                                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                                    112,
+                                                    204,
+                                                    184,
+                                                    24,
+                                                    hwnd,
+                                                    kWindowHeightEditId);
+        HWND rememberWindowSize = createDialogControl(0,
+                                                      L"BUTTON",
+                                                      L"Remember last window size",
+                                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                                      112,
+                                                      232,
+                                                      184,
+                                                      22,
+                                                      hwnd,
+                                                      kRememberWindowSizeId);
+        if (rememberWindowSize) {
+            SendMessageW(rememberWindowSize,
+                         BM_SETCHECK,
+                         state->initialSettings.rememberWindowSize ? BST_CHECKED : BST_UNCHECKED,
+                         0);
+        }
         HWND favoritesLabel = createDialogControl(0,
                                                   L"STATIC",
                                                   L"Favorites:",
                                                   WS_CHILD | WS_VISIBLE,
                                                   16,
-                                                  168,
+                                                  260,
                                                   88,
                                                   18,
                                                   hwnd,
@@ -383,7 +444,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                  L"",
                                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY,
                                                  16,
-                                                 188,
+                                                 280,
                                                  280,
                                                  96,
                                                  hwnd,
@@ -393,7 +454,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"Name:",
                                                      WS_CHILD | WS_VISIBLE,
                                                      16,
-                                                     298,
+                                                     390,
                                                      48,
                                                      18,
                                                      hwnd,
@@ -403,7 +464,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"",
                                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                                      72,
-                                                     294,
+                                                     386,
                                                      224,
                                                      24,
                                                      hwnd,
@@ -413,7 +474,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"Path:",
                                                      WS_CHILD | WS_VISIBLE,
                                                      16,
-                                                     330,
+                                                     422,
                                                      48,
                                                      18,
                                                      hwnd,
@@ -423,7 +484,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     L"",
                                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_READONLY,
                                                     72,
-                                                    326,
+                                                    418,
                                                     224,
                                                     24,
                                                     hwnd,
@@ -433,7 +494,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               L"Up",
                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                               72,
-                                              360,
+                                              452,
                                               64,
                                               28,
                                               hwnd,
@@ -443,7 +504,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                 L"Down",
                                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                 144,
-                                                360,
+                                                452,
                                                 68,
                                                 28,
                                                 hwnd,
@@ -453,7 +514,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"Remove",
                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                   220,
-                                                  360,
+                                                  452,
                                                   76,
                                                   28,
                                                   hwnd,
@@ -463,9 +524,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              shortcutHelpText().c_str(),
                                              WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
                                              16,
-                                             402,
+                                             494,
                                              280,
-                                             72,
+                                             48,
                                              hwnd,
                                              0);
         HWND ok = createDialogControl(0,
@@ -473,7 +534,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                       L"OK",
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                       136,
-                                      488,
+                                      556,
                                       76,
                                       28,
                                       hwnd,
@@ -483,12 +544,14 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                           L"Cancel",
                                           WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                           220,
-                                          488,
+                                          556,
                                           76,
                                           28,
                                           hwnd,
                                           kCancelId);
-        if (!fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !iconLabel || !iconEdit || !themeLabel || !themeCombo || !showHiddenAndSystem || !favoritesLabel || !favoritesList
+        if (!fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !iconLabel || !iconEdit || !themeLabel || !themeCombo || !showHiddenAndSystem
+            || !windowWidthLabel || !windowWidthEdit || !windowHeightLabel || !windowHeightEdit || !rememberWindowSize
+            || !favoritesLabel || !favoritesList
             || !favoriteNameLabel || !favoriteLabelEdit || !favoritePathLabel || !favoritePathEdit
             || !favoriteUp || !favoriteDown || !favoriteRemove || !shortcuts || !ok || !cancel) {
             return -1;
@@ -566,6 +629,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             state->values.themeModeText = comboSelectedText(GetDlgItem(hwnd, kThemeComboId));
             state->values.fontFamilyText = comboSelectedText(GetDlgItem(hwnd, kFontFamilyComboId));
             state->values.showHiddenAndSystemItems = SendMessageW(GetDlgItem(hwnd, kShowHiddenAndSystemId), BM_GETCHECK, 0, 0) == BST_CHECKED;
+            state->values.windowWidthText = getEditText(GetDlgItem(hwnd, kWindowWidthEditId));
+            state->values.windowHeightText = getEditText(GetDlgItem(hwnd, kWindowHeightEditId));
+            state->values.rememberWindowSize = SendMessageW(GetDlgItem(hwnd, kRememberWindowSizeId), BM_GETCHECK, 0, 0) == BST_CHECKED;
             applySettingsDialogValues(state->values, state->resultSettings);
             state->accepted = true;
             DestroyWindow(hwnd);
@@ -623,6 +689,13 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
     if (tryParseFloat(values.iconSizeText, parsed)) {
         settings.iconSize = parsed;
     }
+    if (tryParseFloat(values.windowWidthText, parsed)) {
+        settings.windowWidth = static_cast<int>(parsed);
+    }
+    if (tryParseFloat(values.windowHeightText, parsed)) {
+        settings.windowHeight = static_cast<int>(parsed);
+    }
+    settings.rememberWindowSize = values.rememberWindowSize;
     if (values.themeModeText == L"light") {
         settings.themeMode = ThemeMode::Light;
     } else if (values.themeModeText == L"dark") {
