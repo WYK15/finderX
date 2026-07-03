@@ -149,7 +149,7 @@ private:
     void blurAddress();
     void commitAddress();
     bool handleAddressCharacter(wchar_t character);
-    bool handleAddressKeyDown(WPARAM key, bool controlDown);
+    bool handleAddressKeyDown(WPARAM key, bool controlDown, bool shiftDown);
     void updateAddressSelectionAtPoint(float x);
     bool handleSearchKeyDown(WPARAM key);
     bool handleSearchChar(WPARAM character);

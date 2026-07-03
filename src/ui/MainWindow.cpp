@@ -617,7 +617,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return DefWindowProcW(hwnd_, message, wParam, lParam);
         }
 
-        if (hasActiveTab() && activeTab().addressEditor.active() && handleAddressKeyDown(wParam, controlDown)) {
+        if (hasActiveTab() && activeTab().addressEditor.active() && handleAddressKeyDown(wParam, controlDown, shiftDown)) {
             return 0;
         }
 
@@ -2124,7 +2124,7 @@ void MainWindow::commitAddress() {
     }
 }
 
-bool MainWindow::handleAddressKeyDown(WPARAM key, bool controlDown) {
+bool MainWindow::handleAddressKeyDown(WPARAM key, bool controlDown, bool shiftDown) {
     if (!hasActiveTab() || !activeTab().addressEditor.active()) {
         return false;
     }
@@ -2154,6 +2154,18 @@ bool MainWindow::handleAddressKeyDown(WPARAM key, bool controlDown) {
     }
     if (key == VK_BACK) {
         editor.backspace();
+        refreshChromeState();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+    if (key == VK_LEFT) {
+        editor.moveLeft(shiftDown);
+        refreshChromeState();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return true;
+    }
+    if (key == VK_RIGHT) {
+        editor.moveRight(shiftDown);
         refreshChromeState();
         InvalidateRect(hwnd_, nullptr, FALSE);
         return true;

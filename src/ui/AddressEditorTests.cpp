@@ -52,6 +52,29 @@ int main() {
     {
         AddressEditor editor;
         editor.begin(L"D:\\alpha");
+        editor.moveLeft(false);
+        require(editor.caret() == editor.text().size() - 1, "left arrow should move caret left");
+        require(!editor.hasSelection(), "left arrow without shift should not select text");
+        editor.moveRight(false);
+        require(editor.caret() == editor.text().size(), "right arrow should move caret right");
+    }
+
+    {
+        AddressEditor editor;
+        editor.begin(L"D:\\alpha");
+        editor.moveCaret(3, false);
+        editor.moveRight(true);
+        require(editor.hasSelection(), "shift+right should extend selection");
+        require(editor.selectionStart() == 3, "shift+right selection should start at anchor");
+        require(editor.selectionEnd() == 4, "shift+right selection should end at moved caret");
+        editor.moveLeft(false);
+        require(!editor.hasSelection(), "left arrow without shift should collapse selection");
+        require(editor.caret() == 3, "left arrow should collapse selection to the start");
+    }
+
+    {
+        AddressEditor editor;
+        editor.begin(L"D:\\alpha");
         require(editor.caretVisible(), "starting edit should show caret");
         editor.toggleCaretVisible();
         require(!editor.caretVisible(), "caret should toggle off");

@@ -71,6 +71,40 @@ void AddressEditor::moveCaret(std::size_t index, bool selecting) {
     caretVisible_ = true;
 }
 
+void AddressEditor::moveLeft(bool selecting) {
+    if (!selecting && hasSelection()) {
+        caret_ = selectionStart();
+        anchor_ = caret_;
+        caretVisible_ = true;
+        return;
+    }
+
+    if (caret_ > 0) {
+        --caret_;
+    }
+    if (!selecting) {
+        anchor_ = caret_;
+    }
+    caretVisible_ = true;
+}
+
+void AddressEditor::moveRight(bool selecting) {
+    if (!selecting && hasSelection()) {
+        caret_ = selectionEnd();
+        anchor_ = caret_;
+        caretVisible_ = true;
+        return;
+    }
+
+    if (caret_ < text_.size()) {
+        ++caret_;
+    }
+    if (!selecting) {
+        anchor_ = caret_;
+    }
+    caretVisible_ = true;
+}
+
 void AddressEditor::insertText(std::wstring_view text) {
     const std::size_t start = selectionStart();
     const std::size_t end = selectionEnd();

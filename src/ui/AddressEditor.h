@@ -22,6 +22,8 @@ public:
 
     void selectAll();
     void moveCaret(std::size_t index, bool selecting);
+    void moveLeft(bool selecting);
+    void moveRight(bool selecting);
     void insertText(std::wstring_view text);
     void backspace();
 
