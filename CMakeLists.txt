@@ -197,6 +197,17 @@ finderx_enable_utf8(finderx_drag_feedback_tests)
 finderx_enable_windows_unicode(finderx_drag_feedback_tests)
 add_test(NAME finderx_drag_feedback_tests COMMAND finderx_drag_feedback_tests)
 
+add_executable(finderx_native_title_bar_tests
+    src/ui/NativeTitleBarTests.cpp
+    src/ui/NativeTitleBar.cpp
+)
+
+target_include_directories(finderx_native_title_bar_tests PRIVATE src)
+target_link_libraries(finderx_native_title_bar_tests PRIVATE finderx_settings dwmapi)
+finderx_enable_utf8(finderx_native_title_bar_tests)
+finderx_enable_windows_unicode(finderx_native_title_bar_tests)
+add_test(NAME finderx_native_title_bar_tests COMMAND finderx_native_title_bar_tests)
+
 add_executable(finderx_address_editor_tests
     src/ui/AddressEditorTests.cpp
     src/ui/AddressEditor.cpp
@@ -274,6 +285,7 @@ set(FINDERX_APP_SOURCES
     src/ui/FinderChrome.cpp
     src/ui/FinderListView.cpp
     src/ui/MainWindow.cpp
+    src/ui/NativeTitleBar.cpp
     src/ui/RenameDialog.cpp
     src/ui/SettingsDialog.cpp
     src/ui/RenderContext.cpp
@@ -303,6 +315,7 @@ if(FINDERX_APP_SOURCES_EXIST)
         windowscodecs
         ole32
         shell32
+        dwmapi
     )
     finderx_enable_utf8(FinderX)
     finderx_enable_windows_unicode(FinderX)

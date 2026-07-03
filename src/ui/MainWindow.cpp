@@ -9,6 +9,7 @@
 #include "shell/ShellFileOperations.h"
 #include "ui/DirectoryWatcherConfig.h"
 #include "ui/DragFeedback.h"
+#include "ui/NativeTitleBar.h"
 #include "ui/RenameDialog.h"
 #include "ui/SettingsDialog.h"
 #include "ui/TabManager.h"
@@ -198,6 +199,7 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
         return false;
     }
 
+    ui::applyNativeTitleBarTheme(hwnd_, settings_.themeMode);
     initializeFileTree();
     ShowWindow(hwnd_, showCommand);
     SetFocus(hwnd_);
@@ -1751,6 +1753,7 @@ void MainWindow::applyListStyle(TabState& tab) const {
 }
 
 void MainWindow::applyVisualSettings() {
+    ui::applyNativeTitleBarTheme(hwnd_, settings_.themeMode);
     render_.setFontFamily(settings_.fontFamily);
     render_.setFontSize(settings_.fontSize);
     for (const std::unique_ptr<TabState>& tab : tabs_) {
