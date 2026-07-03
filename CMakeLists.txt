@@ -228,6 +228,17 @@ finderx_enable_utf8(finderx_dpi_scaling_tests)
 finderx_enable_windows_unicode(finderx_dpi_scaling_tests)
 add_test(NAME finderx_dpi_scaling_tests COMMAND finderx_dpi_scaling_tests)
 
+add_executable(finderx_render_context_tests
+    src/ui/RenderContextTests.cpp
+    src/ui/RenderContext.cpp
+)
+
+target_include_directories(finderx_render_context_tests PRIVATE src)
+target_link_libraries(finderx_render_context_tests PRIVATE d2d1 dwrite)
+finderx_enable_utf8(finderx_render_context_tests)
+finderx_enable_windows_unicode(finderx_render_context_tests)
+add_test(NAME finderx_render_context_tests COMMAND finderx_render_context_tests)
+
 add_executable(finderx_list_view_tests
     src/ui/FinderListViewTests.cpp
     src/ui/FinderListView.cpp

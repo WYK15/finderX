@@ -202,6 +202,28 @@ IDWriteTextFormat* RenderContext::headerTextFormat() const {
     return headerTextFormat_.Get();
 }
 
+float RenderContext::measureTextWidth(std::wstring_view text, IDWriteTextFormat* format) const {
+    if (!dwriteFactory_ || !format || text.empty()) {
+        return 0.0f;
+    }
+
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> layout;
+    if (FAILED(dwriteFactory_->CreateTextLayout(text.data(),
+                                                static_cast<UINT32>(text.size()),
+                                                format,
+                                                10000.0f,
+                                                1000.0f,
+                                                layout.GetAddressOf()))) {
+        return 0.0f;
+    }
+
+    DWRITE_TEXT_METRICS metrics{};
+    if (FAILED(layout->GetMetrics(&metrics))) {
+        return 0.0f;
+    }
+    return metrics.widthIncludingTrailingWhitespace;
+}
+
 void RenderContext::drawText(
     std::wstring_view text,
     const D2D1_RECT_F& rect,

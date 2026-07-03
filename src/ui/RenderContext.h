@@ -33,6 +33,7 @@ public:
     IDWriteTextFormat* textFormat() const;
     IDWriteTextFormat* headerTextFormat() const;
 
+    float measureTextWidth(std::wstring_view text, IDWriteTextFormat* format) const;
     void drawText(std::wstring_view text, const D2D1_RECT_F& rect, IDWriteTextFormat* format, D2D1_COLOR_F color);
     void fillRoundedRect(const D2D1_ROUNDED_RECT& rect, D2D1_COLOR_F color);
     void drawRoundedRect(const D2D1_ROUNDED_RECT& rect, D2D1_COLOR_F color, float width = 1.0f);

@@ -449,6 +449,11 @@ float approximateInlineTextWidth(std::wstring_view text) {
     return width;
 }
 
+float measuredInlineTextWidth(RenderContext& render, std::wstring_view text) {
+    const float measured = render.measureTextWidth(text, render.textFormat());
+    return measured > 0.0f || text.empty() ? measured : approximateInlineTextWidth(text);
+}
+
 std::wstring pathTargetForSegment(const std::vector<std::wstring>& segments, std::size_t index) {
     std::wstring target;
     for (std::size_t segmentIndex = 0; segmentIndex <= index && segmentIndex < segments.size(); ++segmentIndex) {
@@ -871,10 +876,10 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         if (selectionStart < selectionEnd) {
             const float selectionLeft = (std::min)(
                 addressTextRect.right,
-                addressTextRect.left + approximateInlineTextWidth(std::wstring_view(state.addressText).substr(0, selectionStart)));
+                addressTextRect.left + measuredInlineTextWidth(render, std::wstring_view(state.addressText).substr(0, selectionStart)));
             const float selectionRight = (std::min)(
                 addressTextRect.right,
-                addressTextRect.left + approximateInlineTextWidth(std::wstring_view(state.addressText).substr(0, selectionEnd)));
+                addressTextRect.left + measuredInlineTextWidth(render, std::wstring_view(state.addressText).substr(0, selectionEnd)));
             if (selectionLeft < selectionRight) {
                 render.fillRoundedRect(
                     D2D1::RoundedRect(D2D1::RectF(selectionLeft, pathRect.top + 4.0f, selectionRight, pathRect.bottom - 4.0f), 3.0f, 3.0f),
@@ -892,7 +897,7 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             const std::size_t caretIndex = (std::min)(state.addressCaretIndex, state.addressText.size());
             const float caretX = (std::min)(
                 addressTextRect.right,
-                addressTextRect.left + approximateInlineTextWidth(std::wstring_view(state.addressText).substr(0, caretIndex)) + 1.0f);
+                addressTextRect.left + measuredInlineTextWidth(render, std::wstring_view(state.addressText).substr(0, caretIndex)) + 1.0f);
             render.drawLine(
                 D2D1::Point2F(caretX, pathRect.top + 6.0f),
                 D2D1::Point2F(caretX, pathRect.bottom - 6.0f),

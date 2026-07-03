@@ -112,23 +112,31 @@ bool pathsEquivalent(const std::filesystem::path& left, const std::filesystem::p
     return CompareStringOrdinal(left.c_str(), -1, right.c_str(), -1, TRUE) == CSTR_EQUAL;
 }
 
-float addressCharacterWidth(wchar_t character) {
-    return character <= 0x007F ? 7.5f : 13.0f;
+float fallbackAddressTextWidth(std::wstring_view text) {
+    float width = 0.0f;
+    for (wchar_t character : text) {
+        width += character <= 0x007F ? 7.5f : 13.0f;
+    }
+    return width;
 }
 
-std::size_t addressIndexAtX(std::wstring_view text, float x, const LayoutRects& rects) {
+float addressTextWidth(const RenderContext& render, std::wstring_view text) {
+    const float measured = render.measureTextWidth(text, render.textFormat());
+    return measured > 0.0f || text.empty() ? measured : fallbackAddressTextWidth(text);
+}
+
+std::size_t addressIndexAtX(const RenderContext& render, std::wstring_view text, float x, const LayoutRects& rects) {
     const float textLeft = rects.pathbar.left + 22.0f;
     if (x <= textLeft) {
         return 0;
     }
 
-    float cursor = textLeft;
     for (std::size_t index = 0; index < text.size(); ++index) {
-        const float width = addressCharacterWidth(text[index]);
-        if (x < cursor + (width * 0.5f)) {
+        const float left = textLeft + addressTextWidth(render, text.substr(0, index));
+        const float right = textLeft + addressTextWidth(render, text.substr(0, index + 1));
+        if (x < left + ((right - left) * 0.5f)) {
             return index;
         }
-        cursor += width;
     }
     return text.size();
 }
@@ -2081,7 +2089,7 @@ void MainWindow::focusAddressAtPoint(float x) {
         return;
     }
 
-    activeTab().addressEditor.moveCaret(addressIndexAtX(activeTab().addressEditor.text(), x, currentLayout()), false);
+    activeTab().addressEditor.moveCaret(addressIndexAtX(render_, activeTab().addressEditor.text(), x, currentLayout()), false);
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -2171,7 +2179,7 @@ void MainWindow::updateAddressSelectionAtPoint(float x) {
         return;
     }
 
-    activeTab().addressEditor.moveCaret(addressIndexAtX(activeTab().addressEditor.text(), x, currentLayout()), true);
+    activeTab().addressEditor.moveCaret(addressIndexAtX(render_, activeTab().addressEditor.text(), x, currentLayout()), true);
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
