@@ -27,6 +27,10 @@ struct ChromeState {
     std::wstring statusText;
     bool addressEditing = false;
     std::wstring addressText;
+    std::size_t addressCaretIndex = 0;
+    std::size_t addressSelectionStart = 0;
+    std::size_t addressSelectionEnd = 0;
+    bool addressCaretVisible = false;
     bool canGoBack = false;
     bool canGoForward = false;
     std::vector<SidebarItem> sidebarItems;

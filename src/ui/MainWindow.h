@@ -5,6 +5,7 @@
 #include "model/FileTree.h"
 #include "navigation/NavigationHistory.h"
 #include "navigation/SidebarModel.h"
+#include "ui/AddressEditor.h"
 #include "ui/FileOperationState.h"
 #include "ui/DirectoryRefreshDebouncer.h"
 #include "ui/FinderChrome.h"
@@ -45,7 +46,8 @@ private:
         None,
         PendingMove,
         MovingItems,
-        RubberBand
+        RubberBand,
+        AddressSelecting
     };
 
     struct TabState {
@@ -60,8 +62,7 @@ private:
         std::wstring searchText;
         bool searchFocused = false;
         bool searchCaretVisible = false;
-        std::wstring addressText;
-        bool addressEditing = false;
+        ui::AddressEditor addressEditor;
         std::wstring statusText;
         LocationKind locationKind = LocationKind::Directory;
 
@@ -144,10 +145,12 @@ private:
     void clearSearch();
     void setSearchText(std::wstring text);
     void focusAddress();
+    void focusAddressAtPoint(float x);
     void blurAddress();
     void commitAddress();
     bool handleAddressCharacter(wchar_t character);
-    bool handleAddressKeyDown(WPARAM key);
+    bool handleAddressKeyDown(WPARAM key, bool controlDown);
+    void updateAddressSelectionAtPoint(float x);
     bool handleSearchKeyDown(WPARAM key);
     bool handleSearchChar(WPARAM character);
     void startDirectoryWatcher(const std::wstring& path);

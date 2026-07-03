@@ -554,6 +554,10 @@ const ChromeState& defaultChromeState() {
         L"",
         false,
         L"",
+        0,
+        0,
+        0,
+        false,
         false,
         false,
         {
@@ -854,6 +858,7 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
 
     const D2D1_RECT_F pathRect = pathTextRect(rects);
     if (state.addressEditing) {
+        const D2D1_RECT_F addressTextRect = D2D1::RectF(pathRect.left + 8.0f, pathRect.top, pathRect.right - 8.0f, pathRect.bottom);
         render.fillRoundedRect(
             D2D1::RoundedRect(pathRect, 6.0f, 6.0f),
             themeColor(mode, D2D1::ColorF(1.0f, 1.0f, 1.0f), D2D1::ColorF(0.095f, 0.115f, 0.160f)));
@@ -861,13 +866,39 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             D2D1::RoundedRect(pathRect, 6.0f, 6.0f),
             D2D1::ColorF(0.20f, 0.52f, 1.0f),
             1.2f);
+        const std::size_t selectionStart = (std::min)(state.addressSelectionStart, state.addressText.size());
+        const std::size_t selectionEnd = (std::min)(state.addressSelectionEnd, state.addressText.size());
+        if (selectionStart < selectionEnd) {
+            const float selectionLeft = (std::min)(
+                addressTextRect.right,
+                addressTextRect.left + approximateInlineTextWidth(std::wstring_view(state.addressText).substr(0, selectionStart)));
+            const float selectionRight = (std::min)(
+                addressTextRect.right,
+                addressTextRect.left + approximateInlineTextWidth(std::wstring_view(state.addressText).substr(0, selectionEnd)));
+            if (selectionLeft < selectionRight) {
+                render.fillRoundedRect(
+                    D2D1::RoundedRect(D2D1::RectF(selectionLeft, pathRect.top + 4.0f, selectionRight, pathRect.bottom - 4.0f), 3.0f, 3.0f),
+                    D2D1::ColorF(0.20f, 0.52f, 1.0f, 0.30f));
+            }
+        }
         drawTextClipped(
             render,
             state.addressText,
-            D2D1::RectF(pathRect.left + 8.0f, pathRect.top, pathRect.right - 8.0f, pathRect.bottom),
+            addressTextRect,
             window,
             render.textFormat(),
             textPrimary);
+        if (state.addressCaretVisible && selectionStart == selectionEnd) {
+            const std::size_t caretIndex = (std::min)(state.addressCaretIndex, state.addressText.size());
+            const float caretX = (std::min)(
+                addressTextRect.right,
+                addressTextRect.left + approximateInlineTextWidth(std::wstring_view(state.addressText).substr(0, caretIndex)) + 1.0f);
+            render.drawLine(
+                D2D1::Point2F(caretX, pathRect.top + 6.0f),
+                D2D1::Point2F(caretX, pathRect.bottom - 6.0f),
+                textPrimary,
+                1.2f);
+        }
     } else if (state.statusText.empty()) {
         drawPathSegments(render, clampRect(pathRect, window), state.pathText, mode);
     } else {

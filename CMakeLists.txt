@@ -197,6 +197,16 @@ finderx_enable_utf8(finderx_drag_feedback_tests)
 finderx_enable_windows_unicode(finderx_drag_feedback_tests)
 add_test(NAME finderx_drag_feedback_tests COMMAND finderx_drag_feedback_tests)
 
+add_executable(finderx_address_editor_tests
+    src/ui/AddressEditorTests.cpp
+    src/ui/AddressEditor.cpp
+)
+
+target_include_directories(finderx_address_editor_tests PRIVATE src)
+finderx_enable_utf8(finderx_address_editor_tests)
+finderx_enable_windows_unicode(finderx_address_editor_tests)
+add_test(NAME finderx_address_editor_tests COMMAND finderx_address_editor_tests)
+
 add_executable(finderx_shell_actions_tests
     src/shell/ShellActionsTests.cpp
     src/shell/ShellActions.cpp
@@ -247,6 +257,7 @@ set(FINDERX_APP_SOURCES
     src/app/App.cpp
     src/shell/ShellActions.cpp
     src/shell/ShellFileOperations.cpp
+    src/ui/AddressEditor.cpp
     src/ui/FileOperationState.cpp
     src/ui/DragFeedback.cpp
     src/ui/FinderChrome.cpp
