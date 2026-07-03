@@ -187,6 +187,16 @@ finderx_enable_utf8(finderx_directory_refresh_debouncer_tests)
 finderx_enable_windows_unicode(finderx_directory_refresh_debouncer_tests)
 add_test(NAME finderx_directory_refresh_debouncer_tests COMMAND finderx_directory_refresh_debouncer_tests)
 
+add_executable(finderx_context_menu_policy_tests
+    src/ui/ContextMenuPolicyTests.cpp
+    src/ui/ContextMenuPolicy.cpp
+)
+
+target_include_directories(finderx_context_menu_policy_tests PRIVATE src)
+finderx_enable_utf8(finderx_context_menu_policy_tests)
+finderx_enable_windows_unicode(finderx_context_menu_policy_tests)
+add_test(NAME finderx_context_menu_policy_tests COMMAND finderx_context_menu_policy_tests)
+
 add_executable(finderx_drag_feedback_tests
     src/ui/DragFeedbackTests.cpp
     src/ui/DragFeedback.cpp
@@ -280,6 +290,7 @@ set(FINDERX_APP_SOURCES
     src/shell/ShellActions.cpp
     src/shell/ShellFileOperations.cpp
     src/ui/AddressEditor.cpp
+    src/ui/ContextMenuPolicy.cpp
     src/ui/FileOperationState.cpp
     src/ui/DragFeedback.cpp
     src/ui/FinderChrome.cpp

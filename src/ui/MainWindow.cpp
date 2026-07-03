@@ -8,6 +8,7 @@
 #include "shell/ShellActions.h"
 #include "shell/ShellFileOperations.h"
 #include "ui/DirectoryWatcherConfig.h"
+#include "ui/ContextMenuPolicy.h"
 #include "ui/DragFeedback.h"
 #include "ui/NativeTitleBar.h"
 #include "ui/RenameDialog.h"
@@ -985,6 +986,27 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
     const std::vector<std::wstring> targetPaths = pathsForNodes(targets);
     const bool singleTarget = targets.size() == 1;
     const bool directoryLocation = isActiveDirectoryLocation();
+    const auto appendCurrentDirectoryActions = [&](bool fullDirectoryMenu) {
+        if (!directoryLocation) {
+            return;
+        }
+        if (fullDirectoryMenu && !containsFavorite(settings_, tab.history.currentPath())) {
+            AppendMenuW(menu, MF_STRING, kCommandAddFavorite, L"Add to Favorites");
+            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        }
+        AppendMenuW(menu, MF_STRING, kCommandNewFolder, L"New Folder");
+        AppendMenuW(menu, MF_STRING, kCommandNewFile, L"New File");
+        if (!fullDirectoryMenu) {
+            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+            return;
+        }
+        AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
+        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        if (fullDirectoryMenu && fileOperationState_.hasPendingOperation()) {
+            AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
+            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        }
+    };
     if (hasTarget) {
         AppendMenuW(menu, MF_STRING, kCommandOpen, L"Open");
         if (directoryLocation) {
@@ -1023,19 +1045,11 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
             AppendMenuW(menu, MF_STRING, kCommandMoveToTrash, L"Move to Trash");
         }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    } else if (directoryLocation) {
-        if (!containsFavorite(settings_, tab.history.currentPath())) {
-            AppendMenuW(menu, MF_STRING, kCommandAddFavorite, L"Add to Favorites");
-            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        if (ui::shouldShowCurrentDirectoryActions(hasTarget, directoryLocation)) {
+            appendCurrentDirectoryActions(false);
         }
-        AppendMenuW(menu, MF_STRING, kCommandNewFolder, L"New Folder");
-        AppendMenuW(menu, MF_STRING, kCommandNewFile, L"New File");
-        AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        if (fileOperationState_.hasPendingOperation()) {
-            AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
-            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        }
+    } else if (ui::shouldShowCurrentDirectoryActions(hasTarget, directoryLocation)) {
+        appendCurrentDirectoryActions(true);
     }
     AppendMenuW(menu, MF_STRING, kCommandRefresh, L"Refresh");
 
