@@ -2065,6 +2065,7 @@ void MainWindow::focusAddress() {
     TabState& tab = activeTab();
     tab.searchFocused = false;
     tab.searchCaretVisible = false;
+    tab.statusText.clear();
     KillTimer(hwnd_, kSearchCaretTimerId);
     if (!tab.addressEditor.active()) {
         tab.addressEditor.begin(tab.history.currentPath());

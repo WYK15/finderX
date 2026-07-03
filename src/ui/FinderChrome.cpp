@@ -1004,6 +1004,10 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
         return {ChromeHitKind::AddressField, 0, 0, {}};
     }
 
+    if (!state.statusText.empty() && containsPoint(rects.pathbar, x, y)) {
+        return {ChromeHitKind::AddressField, 0, 0, {}};
+    }
+
     if (state.statusText.empty() && containsPoint(rects.pathbar, x, y)) {
         const D2D1_RECT_F pathRect = pathTextRect(rects);
         const std::vector<PathSegmentLayout> segments = pathSegmentLayouts(pathRect, state.pathText);

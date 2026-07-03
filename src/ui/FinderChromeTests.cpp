@@ -150,8 +150,11 @@ void testPathbarIgnoresStatusTextAndVirtualLocations() {
     ChromeState statusState;
     statusState.pathText = L"D:\\alpha";
     statusState.statusText = L"Cannot refresh folder";
-    require(chrome.hitTest(196.0f, 684.0f, rects, statusState).kind == ChromeHitKind::None,
-            "status text should disable path segment hits");
+    const ChromeHitResult statusHit = chrome.hitTest(196.0f, 684.0f, rects, statusState);
+    require(statusHit.kind == ChromeHitKind::AddressField,
+            "status text should still allow returning to address editing");
+    require(statusHit.path.empty(),
+            "status text should not expose path segment navigation");
 
     ChromeState thisPcState;
     thisPcState.pathText = L"This PC";
