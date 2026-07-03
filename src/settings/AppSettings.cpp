@@ -285,9 +285,33 @@ ThemeMode parseThemeMode(const std::wstring& value, ThemeMode fallback) {
     return fallback;
 }
 
+ToolbarCommand parseToolbarCommand(const std::wstring& value, ToolbarCommand fallback) {
+    if (value == L"newFolder") {
+        return ToolbarCommand::NewFolder;
+    }
+    if (value == L"newFile") {
+        return ToolbarCommand::NewFile;
+    }
+    if (value == L"sort") {
+        return ToolbarCommand::Sort;
+    }
+    if (value == L"settings") {
+        return ToolbarCommand::Settings;
+    }
+    if (value == L"search") {
+        return ToolbarCommand::Search;
+    }
+    return fallback;
+}
+
 struct FavoritesParseResult {
     bool present = false;
     std::vector<FavoriteLocation> favorites;
+};
+
+struct StringArrayParseResult {
+    bool present = false;
+    std::vector<std::wstring> values;
 };
 
 std::size_t findStructuralChar(const std::string& text, char target, std::size_t start) {
@@ -355,6 +379,56 @@ FavoritesParseResult parseFavorites(const std::string& text) {
     return result;
 }
 
+StringArrayParseResult parseStringArray(const std::string& text, const std::string& key) {
+    StringArrayParseResult result;
+    const std::size_t keyPos = text.find("\"" + key + "\"");
+    if (keyPos == std::string::npos) {
+        return result;
+    }
+    result.present = true;
+
+    const std::size_t arrayStart = findStructuralChar(text, '[', keyPos);
+    if (arrayStart == std::string::npos) {
+        return result;
+    }
+    const std::size_t arrayEnd = findStructuralChar(text, ']', arrayStart + 1);
+    if (arrayEnd == std::string::npos || arrayEnd <= arrayStart) {
+        return result;
+    }
+
+    std::size_t cursor = arrayStart + 1;
+    while (cursor < arrayEnd) {
+        const std::size_t quote = text.find('"', cursor);
+        if (quote == std::string::npos || quote >= arrayEnd) {
+            break;
+        }
+
+        std::string raw;
+        bool escaping = false;
+        std::size_t index = quote + 1;
+        for (; index < arrayEnd; ++index) {
+            const char ch = text[index];
+            if (escaping) {
+                raw.push_back(ch);
+                escaping = false;
+                continue;
+            }
+            if (ch == '\\') {
+                escaping = true;
+                continue;
+            }
+            if (ch == '"') {
+                result.values.push_back(utf8ToWide(raw));
+                break;
+            }
+            raw.push_back(ch);
+        }
+        cursor = index + 1;
+    }
+
+    return result;
+}
+
 } // namespace
 
 AppSettings makeDefaultSettings(const std::wstring& homePath) {
@@ -377,6 +451,7 @@ void clampSettings(AppSettings& settings) {
     settings.kindColumnWidth = (std::clamp)(settings.kindColumnWidth, kMinKindColumnWidth, kMaxKindColumnWidth);
     settings.windowWidth = (std::clamp)(settings.windowWidth, kMinWindowWidth, kMaxWindowWidth);
     settings.windowHeight = (std::clamp)(settings.windowHeight, kMinWindowHeight, kMaxWindowHeight);
+    settings.toolbarCommands = normalizeToolbarCommands(std::move(settings.toolbarCommands));
 }
 
 bool addFavorite(AppSettings& settings, std::wstring label, std::wstring path) {
@@ -504,6 +579,14 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
         loaded.favorites = std::move(favorites.favorites);
     }
 
+    StringArrayParseResult toolbarItems = parseStringArray(text, "toolbarCommands");
+    if (toolbarItems.present) {
+        loaded.toolbarCommands.clear();
+        for (const std::wstring& value : toolbarItems.values) {
+            loaded.toolbarCommands.push_back(parseToolbarCommand(value, ToolbarCommand::Search));
+        }
+    }
+
     clampSettings(loaded);
     result.settings = std::move(loaded);
     result.loadedFromDisk = true;
@@ -542,6 +625,14 @@ bool saveSettings(const AppSettings& settings, const std::filesystem::path& path
     stream << "  \"showHiddenAndSystemItems\": " << (clamped.showHiddenAndSystemItems ? "true" : "false") << ",\n";
     stream << "  \"sortColumn\": \"" << escapeJsonString(sortColumnName(clamped.sortColumn)) << "\",\n";
     stream << "  \"sortDirection\": \"" << escapeJsonString(sortDirectionName(clamped.sortDirection)) << "\",\n";
+    stream << "  \"toolbarCommands\": [";
+    for (std::size_t index = 0; index < clamped.toolbarCommands.size(); ++index) {
+        if (index > 0) {
+            stream << ", ";
+        }
+        stream << "\"" << escapeJsonString(toolbarCommandName(clamped.toolbarCommands[index])) << "\"";
+    }
+    stream << "],\n";
     stream << "  \"favorites\": [\n";
     for (std::size_t index = 0; index < clamped.favorites.size(); ++index) {
         const FavoriteLocation& favorite = clamped.favorites[index];
@@ -589,6 +680,46 @@ std::wstring themeModeName(ThemeMode mode) {
     default:
         return L"dark";
     }
+}
+
+std::wstring toolbarCommandName(ToolbarCommand command) {
+    switch (command) {
+    case ToolbarCommand::NewFolder:
+        return L"newFolder";
+    case ToolbarCommand::NewFile:
+        return L"newFile";
+    case ToolbarCommand::Sort:
+        return L"sort";
+    case ToolbarCommand::Settings:
+        return L"settings";
+    case ToolbarCommand::Search:
+    default:
+        return L"search";
+    }
+}
+
+std::vector<ToolbarCommand> defaultToolbarCommands() {
+    return {
+        ToolbarCommand::NewFolder,
+        ToolbarCommand::NewFile,
+        ToolbarCommand::Sort,
+        ToolbarCommand::Settings,
+        ToolbarCommand::Search,
+    };
+}
+
+std::vector<ToolbarCommand> normalizeToolbarCommands(std::vector<ToolbarCommand> commands) {
+    std::vector<ToolbarCommand> normalized;
+    normalized.reserve(commands.size());
+    for (const ToolbarCommand command : commands) {
+        if (std::find(normalized.begin(), normalized.end(), command) == normalized.end()) {
+            normalized.push_back(command);
+        }
+    }
+    if (normalized.empty()) {
+        return defaultToolbarCommands();
+    }
+    return normalized;
 }
 
 } // namespace finderx

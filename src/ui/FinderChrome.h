@@ -27,6 +27,8 @@ enum class ChromeHitKind {
     Tab,
     CloseTab,
     NewTab,
+    NewFolder,
+    NewFile,
     SortMenu,
     Settings,
     HeaderName,

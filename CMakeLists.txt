@@ -187,16 +187,6 @@ finderx_enable_utf8(finderx_directory_refresh_debouncer_tests)
 finderx_enable_windows_unicode(finderx_directory_refresh_debouncer_tests)
 add_test(NAME finderx_directory_refresh_debouncer_tests COMMAND finderx_directory_refresh_debouncer_tests)
 
-add_executable(finderx_context_menu_policy_tests
-    src/ui/ContextMenuPolicyTests.cpp
-    src/ui/ContextMenuPolicy.cpp
-)
-
-target_include_directories(finderx_context_menu_policy_tests PRIVATE src)
-finderx_enable_utf8(finderx_context_menu_policy_tests)
-finderx_enable_windows_unicode(finderx_context_menu_policy_tests)
-add_test(NAME finderx_context_menu_policy_tests COMMAND finderx_context_menu_policy_tests)
-
 add_executable(finderx_drag_feedback_tests
     src/ui/DragFeedbackTests.cpp
     src/ui/DragFeedback.cpp
@@ -217,6 +207,17 @@ target_link_libraries(finderx_native_title_bar_tests PRIVATE finderx_settings dw
 finderx_enable_utf8(finderx_native_title_bar_tests)
 finderx_enable_windows_unicode(finderx_native_title_bar_tests)
 add_test(NAME finderx_native_title_bar_tests COMMAND finderx_native_title_bar_tests)
+
+add_executable(finderx_toolbar_customization_tests
+    src/ui/ToolbarCustomizationTests.cpp
+    src/ui/ToolbarCustomization.cpp
+)
+
+target_include_directories(finderx_toolbar_customization_tests PRIVATE src)
+target_link_libraries(finderx_toolbar_customization_tests PRIVATE finderx_settings)
+finderx_enable_utf8(finderx_toolbar_customization_tests)
+finderx_enable_windows_unicode(finderx_toolbar_customization_tests)
+add_test(NAME finderx_toolbar_customization_tests COMMAND finderx_toolbar_customization_tests)
 
 add_executable(finderx_address_editor_tests
     src/ui/AddressEditorTests.cpp
@@ -290,7 +291,6 @@ set(FINDERX_APP_SOURCES
     src/shell/ShellActions.cpp
     src/shell/ShellFileOperations.cpp
     src/ui/AddressEditor.cpp
-    src/ui/ContextMenuPolicy.cpp
     src/ui/FileOperationState.cpp
     src/ui/DragFeedback.cpp
     src/ui/FinderChrome.cpp
@@ -299,6 +299,8 @@ set(FINDERX_APP_SOURCES
     src/ui/NativeTitleBar.cpp
     src/ui/RenameDialog.cpp
     src/ui/SettingsDialog.cpp
+    src/ui/ToolbarCustomization.cpp
+    src/ui/ToolbarCustomizationDialog.cpp
     src/ui/RenderContext.cpp
     resources/FinderX.rc
 )

@@ -64,6 +64,11 @@ struct PathSegmentLayout {
     D2D1_RECT_F rect{};
 };
 
+struct ToolbarCommandLayout {
+    ToolbarCommand command = ToolbarCommand::Search;
+    D2D1_RECT_F rect{};
+};
+
 D2D1_COLOR_F rgb(float value) {
     return D2D1::ColorF(value, value, value);
 }
@@ -142,6 +147,46 @@ D2D1_RECT_F searchFieldRect(const D2D1_RECT_F& toolbar) {
     }
     const float searchLeft = (std::max)(toolbar.left + 420.0f, toolbar.right - 202.0f);
     return clampRect(D2D1::RectF(searchLeft, toolbar.top + 16.0f, toolbar.right - 14.0f, toolbar.top + 44.0f), toolbar);
+}
+
+bool hasToolbarCommand(const ChromeState& state, ToolbarCommand command) {
+    return std::find(state.toolbarCommands.begin(), state.toolbarCommands.end(), command) != state.toolbarCommands.end();
+}
+
+ChromeHitKind hitKindForToolbarCommand(ToolbarCommand command) {
+    switch (command) {
+    case ToolbarCommand::NewFolder:
+        return ChromeHitKind::NewFolder;
+    case ToolbarCommand::NewFile:
+        return ChromeHitKind::NewFile;
+    case ToolbarCommand::Sort:
+        return ChromeHitKind::SortMenu;
+    case ToolbarCommand::Settings:
+        return ChromeHitKind::Settings;
+    case ToolbarCommand::Search:
+    default:
+        return ChromeHitKind::SearchField;
+    }
+}
+
+std::vector<ToolbarCommandLayout> toolbarCommandLayouts(const D2D1_RECT_F& toolbar, const ChromeState& state) {
+    std::vector<ToolbarCommandLayout> layouts;
+    const bool hasSearch = hasToolbarCommand(state, ToolbarCommand::Search);
+    const D2D1_RECT_F searchRect = hasSearch ? searchFieldRect(toolbar) : D2D1::RectF();
+    const float maxRight = hasArea(searchRect) ? searchRect.left - kToolbarUtilitySearchGap : toolbar.right - 14.0f;
+    float cursor = toolbar.left + 250.0f;
+
+    for (const ToolbarCommand command : state.toolbarCommands) {
+        if (command == ToolbarCommand::Search) {
+            continue;
+        }
+        if (cursor + kToolbarUtilityButtonWidth > maxRight) {
+            break;
+        }
+        layouts.push_back({command, D2D1::RectF(cursor, toolbar.top + kToolbarButtonTop, cursor + kToolbarUtilityButtonWidth, toolbar.top + kToolbarButtonBottom)});
+        cursor += kToolbarUtilityButtonWidth + kToolbarUtilityButtonGap;
+    }
+    return layouts;
 }
 
 D2D1_RECT_F settingsButtonRect(const D2D1_RECT_F& toolbar) {
@@ -410,6 +455,45 @@ void drawSettingsGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLO
         const float dy = (index % 2 == 0) ? 7.5f : 0.0f;
         render.drawLine(D2D1::Point2F(cx - dx, cy - dy), D2D1::Point2F(cx - dx * 0.70f, cy - dy * 0.70f), color, 1.4f);
         render.drawLine(D2D1::Point2F(cx + dx, cy + dy), D2D1::Point2F(cx + dx * 0.70f, cy + dy * 0.70f), color, 1.4f);
+    }
+}
+
+void drawNewFolderGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
+    const float left = rect.left + 8.0f;
+    const float top = rect.top + 10.0f;
+    render.drawLine(D2D1::Point2F(left, top + 5.0f), D2D1::Point2F(left + 5.0f, top + 1.0f), color, 1.3f);
+    render.drawLine(D2D1::Point2F(left + 5.0f, top + 1.0f), D2D1::Point2F(left + 11.0f, top + 1.0f), color, 1.3f);
+    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(left, top + 5.0f, left + 16.0f, top + 14.0f), 2.0f, 2.0f), color, 1.3f);
+    render.drawLine(D2D1::Point2F(rect.right - 9.0f, rect.top + 9.0f), D2D1::Point2F(rect.right - 9.0f, rect.top + 17.0f), color, 1.4f);
+    render.drawLine(D2D1::Point2F(rect.right - 13.0f, rect.top + 13.0f), D2D1::Point2F(rect.right - 5.0f, rect.top + 13.0f), color, 1.4f);
+}
+
+void drawNewFileGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
+    const float left = rect.left + 9.0f;
+    const float top = rect.top + 7.0f;
+    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(left, top, left + 13.0f, top + 18.0f), 1.8f, 1.8f), color, 1.3f);
+    render.drawLine(D2D1::Point2F(left + 3.0f, top + 6.0f), D2D1::Point2F(left + 10.0f, top + 6.0f), color, 1.1f);
+    render.drawLine(D2D1::Point2F(left + 3.0f, top + 10.0f), D2D1::Point2F(left + 10.0f, top + 10.0f), color, 1.1f);
+    render.drawLine(D2D1::Point2F(rect.right - 7.0f, rect.top + 9.0f), D2D1::Point2F(rect.right - 7.0f, rect.top + 17.0f), color, 1.4f);
+    render.drawLine(D2D1::Point2F(rect.right - 11.0f, rect.top + 13.0f), D2D1::Point2F(rect.right - 3.0f, rect.top + 13.0f), color, 1.4f);
+}
+
+void drawToolbarCommandGlyph(RenderContext& render, ToolbarCommand command, const D2D1_RECT_F& rect, SortDirection sortDirection, D2D1_COLOR_F color) {
+    switch (command) {
+    case ToolbarCommand::NewFolder:
+        drawNewFolderGlyph(render, rect, color);
+        break;
+    case ToolbarCommand::NewFile:
+        drawNewFileGlyph(render, rect, color);
+        break;
+    case ToolbarCommand::Sort:
+        drawSortGlyph(render, rect, sortDirection, color);
+        break;
+    case ToolbarCommand::Settings:
+        drawSettingsGlyph(render, rect, color);
+        break;
+    case ToolbarCommand::Search:
+        break;
     }
 }
 
@@ -784,32 +868,20 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         rects.toolbar,
         render.headerTextFormat(),
         textPrimary);
-    const D2D1_RECT_F sortRect = sortButtonRect(rects.toolbar);
-    if (hasArea(sortRect)) {
+    const std::vector<ToolbarCommandLayout> toolbarLayouts = toolbarCommandLayouts(rects.toolbar, state);
+    for (const ToolbarCommandLayout& layout : toolbarLayouts) {
         render.fillRoundedRect(
-            D2D1::RoundedRect(sortRect, 7.0f, 7.0f),
+            D2D1::RoundedRect(layout.rect, 7.0f, 7.0f),
             controlFill);
         render.drawRoundedRect(
-            D2D1::RoundedRect(sortRect, 7.0f, 7.0f),
+            D2D1::RoundedRect(layout.rect, 7.0f, 7.0f),
             controlStroke,
             1.0f);
-        drawSortGlyph(render, sortRect, state.sortDirection, textSecondary);
+        drawToolbarCommandGlyph(render, layout.command, layout.rect, state.sortDirection, textSecondary);
     }
 
-    const D2D1_RECT_F settingsRect = settingsButtonRect(rects.toolbar);
-    if (hasArea(settingsRect)) {
-        render.fillRoundedRect(
-            D2D1::RoundedRect(settingsRect, 7.0f, 7.0f),
-            controlFill);
-        render.drawRoundedRect(
-            D2D1::RoundedRect(settingsRect, 7.0f, 7.0f),
-            controlStroke,
-            1.0f);
-        drawSettingsGlyph(render, settingsRect, textSecondary);
-    }
-
-    const D2D1_RECT_F searchRect = searchFieldRect(rects.toolbar);
-    if (searchRect.right - searchRect.left >= 80.0f) {
+    const D2D1_RECT_F searchRect = hasToolbarCommand(state, ToolbarCommand::Search) ? searchFieldRect(rects.toolbar) : D2D1::RectF();
+    if (hasArea(searchRect) && searchRect.right - searchRect.left >= 80.0f) {
         const bool hasSearchText = !state.searchText.empty();
         const D2D1_RECT_F searchTextRect = D2D1::RectF(searchRect.left + 11.0f, searchRect.top + 4.0f, searchRect.right - 12.0f, searchRect.bottom);
         render.fillRoundedRect(
@@ -957,17 +1029,14 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
         return {ChromeHitKind::Forward, 0, 0};
     }
 
-    const D2D1_RECT_F sortRect = sortButtonRect(rects.toolbar);
-    if (hasArea(sortRect) && containsPoint(sortRect, x, y)) {
-        return {ChromeHitKind::SortMenu, 0, 0};
+    const std::vector<ToolbarCommandLayout> toolbarLayouts = toolbarCommandLayouts(rects.toolbar, state);
+    for (const ToolbarCommandLayout& layout : toolbarLayouts) {
+        if (containsPoint(layout.rect, x, y)) {
+            return {hitKindForToolbarCommand(layout.command), 0, 0};
+        }
     }
 
-    const D2D1_RECT_F settingsRect = settingsButtonRect(rects.toolbar);
-    if (hasArea(settingsRect) && containsPoint(settingsRect, x, y)) {
-        return {ChromeHitKind::Settings, 0, 0};
-    }
-
-    const D2D1_RECT_F searchRect = searchFieldRect(rects.toolbar);
+    const D2D1_RECT_F searchRect = hasToolbarCommand(state, ToolbarCommand::Search) ? searchFieldRect(rects.toolbar) : D2D1::RectF();
     if (searchRect.right - searchRect.left >= 80.0f && containsPoint(searchRect, x, y)) {
         return {ChromeHitKind::SearchField, 0, 0};
     }

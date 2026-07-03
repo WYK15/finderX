@@ -90,6 +90,7 @@ private:
     void activateNode(NodeId nodeId);
     void openFile(const std::wstring& path);
     void showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint);
+    void showToolbarContextMenu(POINT screenPoint);
     void showSidebarContextMenu(std::size_t sidebarIndex, POINT screenPoint);
     void handleCommand(WPARAM wParam);
     NodeId commandTargetNode() const;

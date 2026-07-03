@@ -18,10 +18,11 @@ void testToolbarSortAndSettingsHitTargetsSitBeforeSearch() {
     FinderChrome chrome;
     const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
     ChromeState state;
+    state.toolbarCommands = {ToolbarCommand::Sort, ToolbarCommand::Settings, ToolbarCommand::Search};
 
-    require(chrome.hitTest(735.0f, 63.0f, rects, state).kind == ChromeHitKind::SortMenu,
+    require(chrome.hitTest(436.0f, 63.0f, rects, state).kind == ChromeHitKind::SortMenu,
             "sort toolbar button should hit before search");
-    require(chrome.hitTest(775.0f, 63.0f, rects, state).kind == ChromeHitKind::Settings,
+    require(chrome.hitTest(474.0f, 63.0f, rects, state).kind == ChromeHitKind::Settings,
             "settings toolbar button should hit before search");
     require(chrome.hitTest(900.0f, 63.0f, rects, state).kind == ChromeHitKind::SearchField,
             "search field should remain hittable");
@@ -40,6 +41,28 @@ void testHeaderColumnsHitUsingDrawnGeometry() {
             "size header should hit in size column");
     require(chrome.hitTest(900.0f, 96.0f, rects, state).kind == ChromeHitKind::HeaderKind,
             "kind header should hit in kind column");
+}
+
+void testToolbarNewItemHitTargets() {
+    FinderChrome chrome;
+    const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
+    ChromeState state;
+    state.toolbarCommands = {ToolbarCommand::NewFolder, ToolbarCommand::NewFile, ToolbarCommand::Sort, ToolbarCommand::Settings, ToolbarCommand::Search};
+
+    require(chrome.hitTest(436.0f, 63.0f, rects, state).kind == ChromeHitKind::NewFolder,
+            "new folder toolbar button should be hittable");
+    require(chrome.hitTest(474.0f, 63.0f, rects, state).kind == ChromeHitKind::NewFile,
+            "new file toolbar button should be hittable");
+}
+
+void testToolbarHiddenCommandIsNotHittable() {
+    FinderChrome chrome;
+    const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
+    ChromeState state;
+    state.toolbarCommands = {ToolbarCommand::Search};
+
+    require(chrome.hitTest(436.0f, 63.0f, rects, state).kind == ChromeHitKind::None,
+            "hidden new folder toolbar command should not be hittable");
 }
 
 void testHeaderColumnSeparatorsHitResizeTargets() {
@@ -166,6 +189,8 @@ void testPathbarIgnoresStatusTextAndVirtualLocations() {
 
 int main() {
     testToolbarSortAndSettingsHitTargetsSitBeforeSearch();
+    testToolbarNewItemHitTargets();
+    testToolbarHiddenCommandIsNotHittable();
     testHeaderColumnsHitUsingDrawnGeometry();
     testHeaderColumnSeparatorsHitResizeTargets();
     testTabCloseHitTargetDoesNotActivateTab();

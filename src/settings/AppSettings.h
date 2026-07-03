@@ -47,6 +47,14 @@ enum class ThemeMode {
     Dark
 };
 
+enum class ToolbarCommand {
+    NewFolder,
+    NewFile,
+    Sort,
+    Settings,
+    Search
+};
+
 struct FavoriteLocation {
     std::wstring label;
     std::wstring path;
@@ -66,6 +74,13 @@ struct AppSettings {
     bool showHiddenAndSystemItems = false;
     SortColumn sortColumn = SortColumn::Name;
     SortDirection sortDirection = SortDirection::Ascending;
+    std::vector<ToolbarCommand> toolbarCommands = {
+        ToolbarCommand::NewFolder,
+        ToolbarCommand::NewFile,
+        ToolbarCommand::Sort,
+        ToolbarCommand::Settings,
+        ToolbarCommand::Search,
+    };
     std::vector<FavoriteLocation> favorites;
 };
 
@@ -87,5 +102,8 @@ bool saveSettings(const AppSettings& settings, const std::filesystem::path& path
 std::wstring sortColumnName(SortColumn column);
 std::wstring sortDirectionName(SortDirection direction);
 std::wstring themeModeName(ThemeMode mode);
+std::wstring toolbarCommandName(ToolbarCommand command);
+std::vector<ToolbarCommand> defaultToolbarCommands();
+std::vector<ToolbarCommand> normalizeToolbarCommands(std::vector<ToolbarCommand> commands);
 
 } // namespace finderx

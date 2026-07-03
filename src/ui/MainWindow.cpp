@@ -8,12 +8,12 @@
 #include "shell/ShellActions.h"
 #include "shell/ShellFileOperations.h"
 #include "ui/DirectoryWatcherConfig.h"
-#include "ui/ContextMenuPolicy.h"
 #include "ui/DragFeedback.h"
 #include "ui/NativeTitleBar.h"
 #include "ui/RenameDialog.h"
 #include "ui/SettingsDialog.h"
 #include "ui/TabManager.h"
+#include "ui/ToolbarCustomizationDialog.h"
 
 #include "resource.h"
 
@@ -56,6 +56,7 @@ constexpr UINT kCommandCompressZip = 1021;
 constexpr UINT kCommandExtractZip = 1022;
 constexpr UINT kCommandOpenInNewTab = 1023;
 constexpr UINT kCommandCreateShortcut = 1024;
+constexpr UINT kCommandCustomizeToolbar = 1025;
 constexpr UINT_PTR kDirectoryWatcherTimerId = 2001;
 constexpr UINT_PTR kDirectoryRefreshTimerId = 2002;
 constexpr UINT_PTR kSearchCaretTimerId = 2003;
@@ -338,6 +339,12 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
                 ? activeTab().history.currentPath()
                 : homePath_);
             return 0;
+        case ChromeHitKind::NewFolder:
+            createFolderInCurrentDirectory();
+            return 0;
+        case ChromeHitKind::NewFile:
+            createFileInCurrentDirectory();
+            return 0;
         case ChromeHitKind::SortMenu:
             showSortMenu(screenPoint);
             return 0;
@@ -533,6 +540,10 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         ClientToScreen(hwnd_, &screenPoint);
 
         const ChromeHitResult chromeHit = chrome_.hitTest(dipPoint.x, dipPoint.y, currentLayout(), chromeState_);
+        if (containsPoint(currentLayout().toolbar, dipPoint)) {
+            showToolbarContextMenu(screenPoint);
+            return 0;
+        }
         if (chromeHit.kind == ChromeHitKind::SidebarItem) {
             showSidebarContextMenu(chromeHit.sidebarIndex, screenPoint);
             return 0;
@@ -986,23 +997,19 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
     const std::vector<std::wstring> targetPaths = pathsForNodes(targets);
     const bool singleTarget = targets.size() == 1;
     const bool directoryLocation = isActiveDirectoryLocation();
-    const auto appendCurrentDirectoryActions = [&](bool fullDirectoryMenu) {
+    const auto appendCurrentDirectoryActions = [&]() {
         if (!directoryLocation) {
             return;
         }
-        if (fullDirectoryMenu && !containsFavorite(settings_, tab.history.currentPath())) {
+        if (!containsFavorite(settings_, tab.history.currentPath())) {
             AppendMenuW(menu, MF_STRING, kCommandAddFavorite, L"Add to Favorites");
             AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         }
         AppendMenuW(menu, MF_STRING, kCommandNewFolder, L"New Folder");
         AppendMenuW(menu, MF_STRING, kCommandNewFile, L"New File");
-        if (!fullDirectoryMenu) {
-            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-            return;
-        }
         AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        if (fullDirectoryMenu && fileOperationState_.hasPendingOperation()) {
+        if (fileOperationState_.hasPendingOperation()) {
             AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
             AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         }
@@ -1045,14 +1052,21 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
             AppendMenuW(menu, MF_STRING, kCommandMoveToTrash, L"Move to Trash");
         }
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        if (ui::shouldShowCurrentDirectoryActions(hasTarget, directoryLocation)) {
-            appendCurrentDirectoryActions(false);
-        }
-    } else if (ui::shouldShowCurrentDirectoryActions(hasTarget, directoryLocation)) {
-        appendCurrentDirectoryActions(true);
+    } else if (directoryLocation) {
+        appendCurrentDirectoryActions();
     }
     AppendMenuW(menu, MF_STRING, kCommandRefresh, L"Refresh");
 
+    TrackPopupMenu(menu, TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, 0, hwnd_, nullptr);
+    DestroyMenu(menu);
+}
+
+void MainWindow::showToolbarContextMenu(POINT screenPoint) {
+    HMENU menu = CreatePopupMenu();
+    if (!menu) {
+        return;
+    }
+    AppendMenuW(menu, MF_STRING, kCommandCustomizeToolbar, L"Customize Toolbar...");
     TrackPopupMenu(menu, TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, 0, hwnd_, nullptr);
     DestroyMenu(menu);
 }
@@ -1137,6 +1151,14 @@ void MainWindow::handleCommand(WPARAM wParam) {
         break;
     case kCommandCreateShortcut:
         createShortcutForContextNode();
+        break;
+    case kCommandCustomizeToolbar:
+        if (ui::promptForToolbarCustomization(hwnd_, settings_)) {
+            clampSettings(settings_);
+            saveSettingsOrStatus();
+            refreshChromeState();
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        }
         break;
     case kCommandReveal:
         revealContextNode();
@@ -1993,6 +2015,7 @@ void MainWindow::refreshChromeState() {
         chromeState_.modifiedColumnWidth = settings_.modifiedColumnWidth;
         chromeState_.sizeColumnWidth = settings_.sizeColumnWidth;
         chromeState_.kindColumnWidth = settings_.kindColumnWidth;
+        chromeState_.toolbarCommands = settings_.toolbarCommands;
         return;
     }
 
@@ -2028,6 +2051,7 @@ void MainWindow::refreshChromeState() {
     chromeState_.modifiedColumnWidth = settings_.modifiedColumnWidth;
     chromeState_.sizeColumnWidth = settings_.sizeColumnWidth;
     chromeState_.kindColumnWidth = settings_.kindColumnWidth;
+    chromeState_.toolbarCommands = settings_.toolbarCommands;
 }
 
 void MainWindow::focusSearch() {
