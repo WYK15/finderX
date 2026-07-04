@@ -73,6 +73,7 @@ private:
     };
 
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK InlineRenameEditProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam);
     LayoutRects currentLayout() const;
     TabState& activeTab();
@@ -99,6 +100,10 @@ private:
     std::vector<std::wstring> pathsForNodes(std::span<const NodeId> nodes) const;
     void openContextNode();
     void renameContextNode();
+    void beginInlineRename(NodeId target);
+    bool commitInlineRename();
+    void cancelInlineRename();
+    void destroyInlineRenameEdit();
     void moveContextNodeToTrash();
     void copyContextNode();
     void cutContextNode();
@@ -200,6 +205,14 @@ private:
     HWND toolbarTooltip_ = nullptr;
     std::wstring toolbarTooltipText_;
     bool toolbarTooltipVisible_ = false;
+    HWND inlineRenameEdit_ = nullptr;
+    WNDPROC inlineRenameOriginalProc_ = nullptr;
+    HFONT inlineRenameFont_ = nullptr;
+    HBRUSH inlineRenameBackgroundBrush_ = nullptr;
+    COLORREF inlineRenameTextColor_ = RGB(0, 0, 0);
+    NodeId inlineRenameNode_ = kInvalidNodeId;
+    std::wstring inlineRenameOriginalPath_;
+    bool inlineRenameClosing_ = false;
 };
 
 }

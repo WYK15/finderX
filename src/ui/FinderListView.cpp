@@ -290,6 +290,54 @@ NodeId FinderListView::nodeAtPoint(float x, float y, const D2D1_RECT_F& bounds) 
     return rows_[static_cast<std::size_t>(index)].nodeId;
 }
 
+D2D1_RECT_F FinderListView::nameEditRectForNode(NodeId id, const D2D1_RECT_F& bounds) {
+    if (!tree_ || id == kInvalidNodeId || !hasArea(bounds)) {
+        return D2D1::RectF();
+    }
+
+    rebuildRows();
+    ensureSelection();
+    viewportHeight_ = (std::max)(0.0f, bounds.bottom - bounds.top);
+    clampScroll();
+
+    const int index = rowIndex(id);
+    if (index < 0) {
+        return D2D1::RectF();
+    }
+
+    const float contentLeft = bounds.left + kHorizontalInset;
+    const float contentRight = bounds.right - kHorizontalInset;
+    if (contentLeft >= contentRight) {
+        return D2D1::RectF();
+    }
+
+    const float contentWidth = contentRight - contentLeft;
+    const float dateWidth = contentWidth >= 520.0f ? style_.modifiedColumnWidth : 0.0f;
+    const float sizeWidth = contentWidth >= 420.0f ? style_.sizeColumnWidth : 0.0f;
+    const float kindWidth = contentWidth >= 360.0f ? style_.kindColumnWidth : 0.0f;
+    const float kindX = contentRight - kindWidth;
+    const float sizeX = kindX - sizeWidth;
+    const float dateX = sizeX - dateWidth;
+    const float trailingLeft = dateWidth > 0.0f
+        ? dateX
+        : (sizeWidth > 0.0f ? sizeX : (kindWidth > 0.0f ? kindX : contentRight));
+    const float nameRight = trailingLeft - 8.0f;
+    const VisibleRow& row = rows_[static_cast<std::size_t>(index)];
+    const float height = rowHeight();
+    const float icon = iconSize();
+    const float rowTop = bounds.top + kTopPadding - scrollY_ + static_cast<float>(index) * height;
+    const float disclosureX = bounds.left + kNameStartOffset + static_cast<float>(row.depth) * kIndentPerDepth;
+    const float iconX = disclosureX + kDisclosureWidth;
+    const float nameX = iconX + icon + kIconTextGap;
+    const float top = rowTop + 1.0f;
+    const float bottom = rowTop + height - 1.0f;
+    if (nameX >= nameRight || bottom <= top) {
+        return D2D1::RectF();
+    }
+
+    return D2D1::RectF(nameX, top, nameRight, bottom);
+}
+
 bool FinderListView::selectNode(NodeId id) {
     if (!tree_ || id == kInvalidNodeId) {
         return false;

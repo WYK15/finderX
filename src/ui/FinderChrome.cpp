@@ -320,7 +320,10 @@ D2D1_RECT_F tabCloseRect(const D2D1_RECT_F& tab) {
         return D2D1::RectF();
     }
 
-    return D2D1::RectF(tab.right - 28.0f, tab.top + 6.0f, tab.right - 8.0f, tab.bottom - 6.0f);
+    const float size = 22.0f;
+    const float left = tab.right - 30.0f;
+    const float top = tab.top + (tab.bottom - tab.top - size) * 0.5f;
+    return D2D1::RectF(left, top, left + size, top + size);
 }
 
 D2D1_RECT_F newTabRect(std::size_t tabCount, float sidebarRight, float right) {
@@ -897,19 +900,28 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
 
         const D2D1_RECT_F closeRect = tabCloseRect(rect);
         if (hasArea(closeRect)) {
+            const bool closeHovered = state.hasHoveredCloseTab && state.hoveredCloseTabIndex == index;
             const D2D1_COLOR_F closeColor = active
                 ? textSecondary
                 : mutedText;
+            if (closeHovered) {
+                const D2D1_COLOR_F closeHoverFill = active
+                    ? (isDarkTheme(mode) ? tokens.appActive : tokens.appSelected)
+                    : withAlpha(tokens.appHover, isDarkTheme(mode) ? 0.90f : 0.78f);
+                render.fillRoundedRect(
+                    D2D1::RoundedRect(closeRect, 4.0f, 4.0f),
+                    closeHoverFill);
+            }
             render.drawLine(
-                D2D1::Point2F(closeRect.left + 6.0f, closeRect.top + 5.0f),
-                D2D1::Point2F(closeRect.right - 6.0f, closeRect.bottom - 5.0f),
+                D2D1::Point2F(closeRect.left + 6.0f, closeRect.top + 6.0f),
+                D2D1::Point2F(closeRect.right - 6.0f, closeRect.bottom - 6.0f),
                 closeColor,
-                1.2f);
+                1.4f);
             render.drawLine(
-                D2D1::Point2F(closeRect.right - 6.0f, closeRect.top + 5.0f),
-                D2D1::Point2F(closeRect.left + 6.0f, closeRect.bottom - 5.0f),
+                D2D1::Point2F(closeRect.right - 6.0f, closeRect.top + 6.0f),
+                D2D1::Point2F(closeRect.left + 6.0f, closeRect.bottom - 6.0f),
                 closeColor,
-                1.2f);
+                1.4f);
         }
     }
 

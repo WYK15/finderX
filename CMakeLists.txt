@@ -151,10 +151,12 @@ add_test(NAME finderx_rename_dialog_tests COMMAND finderx_rename_dialog_tests)
 add_executable(finderx_settings_dialog_tests
     src/ui/SettingsDialogTests.cpp
     src/ui/SettingsDialog.cpp
+    src/ui/NativeTitleBar.cpp
+    src/ui/ThemeTokens.cpp
 )
 
 target_include_directories(finderx_settings_dialog_tests PRIVATE src)
-target_link_libraries(finderx_settings_dialog_tests PRIVATE finderx_settings)
+target_link_libraries(finderx_settings_dialog_tests PRIVATE finderx_settings dwmapi)
 finderx_enable_utf8(finderx_settings_dialog_tests)
 finderx_enable_windows_unicode(finderx_settings_dialog_tests)
 add_test(NAME finderx_settings_dialog_tests COMMAND finderx_settings_dialog_tests)

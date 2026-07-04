@@ -14,8 +14,8 @@ constexpr wchar_t kDialogClassName[] = L"FinderXRenameDialog";
 constexpr int kEditId = 101;
 constexpr int kOkId = IDOK;
 constexpr int kCancelId = IDCANCEL;
-constexpr int kDialogWidth = 392;
-constexpr int kDialogHeight = 126;
+constexpr int kDialogWidth = 460;
+constexpr int kDialogHeight = 170;
 
 std::wstring upperAscii(std::wstring value) {
     for (wchar_t& ch : value) {
@@ -134,7 +134,7 @@ LRESULT CALLBACK renameDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
                                         WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                         64,
                                         14,
-                                        300,
+                                        364,
                                         24,
                                         hwnd,
                                         kEditId);
@@ -142,20 +142,20 @@ LRESULT CALLBACK renameDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
                                       L"BUTTON",
                                       L"OK",
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                                      204,
-                                      58,
-                                      76,
-                                      28,
+                                      252,
+                                      82,
+                                      82,
+                                      30,
                                       hwnd,
                                       kOkId);
         HWND cancel = createDialogControl(0,
                                           L"BUTTON",
                                           L"Cancel",
                                           WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                                          288,
-                                          58,
-                                          76,
-                                          28,
+                                          346,
+                                          82,
+                                          82,
+                                          30,
                                           hwnd,
                                           kCancelId);
         if (!label || !edit || !ok || !cancel) {

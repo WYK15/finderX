@@ -48,6 +48,8 @@ struct ChromeState {
     std::vector<ToolbarCommand> toolbarCommands = defaultToolbarCommands();
     bool hasHoveredToolbarCommand = false;
     ToolbarCommand hoveredToolbarCommand = ToolbarCommand::Search;
+    bool hasHoveredCloseTab = false;
+    std::size_t hoveredCloseTabIndex = 0;
 };
 
 class SidebarModel {

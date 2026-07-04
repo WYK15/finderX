@@ -59,6 +59,7 @@ constexpr UINT kCommandExtractZip = 1022;
 constexpr UINT kCommandOpenInNewTab = 1023;
 constexpr UINT kCommandCreateShortcut = 1024;
 constexpr UINT kCommandCustomizeToolbar = 1025;
+constexpr UINT kInlineRenameEditId = 1101;
 constexpr UINT_PTR kDirectoryWatcherTimerId = 2001;
 constexpr UINT_PTR kDirectoryRefreshTimerId = 2002;
 constexpr UINT_PTR kSearchCaretTimerId = 2003;
@@ -128,6 +129,67 @@ float fallbackAddressTextWidth(std::wstring_view text) {
 float addressTextWidth(const RenderContext& render, std::wstring_view text) {
     const float measured = render.measureTextWidth(text, render.textFormat());
     return measured > 0.0f || text.empty() ? measured : fallbackAddressTextWidth(text);
+}
+
+int dipsToPixels(float dips, float dpi) {
+    return static_cast<int>(std::round(dpi > 0.0f ? dips * dpi / kDefaultDpi : dips));
+}
+
+RECT dipsToPixels(const D2D1_RECT_F& rect, DpiScale dpi) {
+    return RECT{
+        dipsToPixels(rect.left, dpi.x),
+        dipsToPixels(rect.top, dpi.y),
+        dipsToPixels(rect.right, dpi.x),
+        dipsToPixels(rect.bottom, dpi.y)};
+}
+
+COLORREF colorRef(D2D1_COLOR_F color) {
+    const auto channel = [](float value) {
+        return static_cast<BYTE>((std::clamp)(value, 0.0f, 1.0f) * 255.0f);
+    };
+    return RGB(channel(color.r), channel(color.g), channel(color.b));
+}
+
+std::wstring getWindowText(HWND hwnd) {
+    const int length = GetWindowTextLengthW(hwnd);
+    if (length <= 0) {
+        return {};
+    }
+
+    std::wstring text(static_cast<std::size_t>(length) + 1, L'\0');
+    GetWindowTextW(hwnd, text.data(), length + 1);
+    text.resize(static_cast<std::size_t>(length));
+    return text;
+}
+
+std::size_t renameSelectionEnd(const FileNode& node) {
+    if (node.kind == FileKind::Folder) {
+        return node.name.size();
+    }
+
+    const std::size_t dot = node.name.find_last_of(L'.');
+    if (dot == std::wstring::npos || dot == 0) {
+        return node.name.size();
+    }
+    return dot;
+}
+
+HFONT createInlineRenameFont(const AppSettings& settings, DpiScale dpi) {
+    const int height = -(std::max)(12, dipsToPixels(settings.fontSize, dpi.y));
+    return CreateFontW(height,
+                       0,
+                       0,
+                       0,
+                       FW_NORMAL,
+                       FALSE,
+                       FALSE,
+                       FALSE,
+                       DEFAULT_CHARSET,
+                       OUT_DEFAULT_PRECIS,
+                       CLIP_DEFAULT_PRECIS,
+                       CLEARTYPE_QUALITY,
+                       DEFAULT_PITCH | FF_DONTCARE,
+                       settings.fontFamily.empty() ? L"Segoe UI" : settings.fontFamily.c_str());
 }
 
 std::size_t addressIndexAtX(const RenderContext& render, std::wstring_view text, float x, const LayoutRects& rects) {
@@ -271,6 +333,25 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPA
     return DefWindowProcW(hwnd, message, wParam, lParam);
 }
 
+LRESULT CALLBACK MainWindow::InlineRenameEditProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    auto* window = reinterpret_cast<MainWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (window && message == WM_KEYDOWN) {
+        if (wParam == VK_RETURN) {
+            window->commitInlineRename();
+            return 0;
+        }
+        if (wParam == VK_ESCAPE) {
+            window->cancelInlineRename();
+            return 0;
+        }
+    }
+
+    if (window && window->inlineRenameOriginalProc_) {
+        return CallWindowProcW(window->inlineRenameOriginalProc_, hwnd, message, wParam, lParam);
+    }
+    return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
 LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_CREATE:
@@ -282,10 +363,16 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     case WM_ERASEBKGND:
         return 1;
     case WM_SIZE:
+        if (inlineRenameEdit_) {
+            cancelInlineRename();
+        }
         render_.resize(LOWORD(lParam), HIWORD(lParam));
         InvalidateRect(hwnd_, nullptr, FALSE);
         return 0;
     case WM_LBUTTONDOWN: {
+        if (inlineRenameEdit_ && !commitInlineRename()) {
+            return 0;
+        }
         SetFocus(hwnd_);
         const LayoutRects rects = currentLayout();
         const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
@@ -508,6 +595,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     }
     case WM_MOUSELEAVE:
         chromeState_.hasHoveredToolbarCommand = false;
+        chromeState_.hasHoveredCloseTab = false;
         hideToolbarTooltip();
         InvalidateRect(hwnd_, nullptr, FALSE);
         return 0;
@@ -564,6 +652,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         break;
     }
     case WM_RBUTTONDOWN: {
+        if (inlineRenameEdit_ && !commitInlineRename()) {
+            return 0;
+        }
         SetFocus(hwnd_);
         const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         const D2D1_POINT_2F dipPoint = render_.clientPointToDips(clientPoint);
@@ -601,8 +692,19 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case WM_COMMAND:
+        if (LOWORD(wParam) == kInlineRenameEditId && HIWORD(wParam) == EN_KILLFOCUS && !inlineRenameClosing_) {
+            commitInlineRename();
+            return 0;
+        }
         handleCommand(wParam);
         return 0;
+    case WM_CTLCOLOREDIT:
+        if (reinterpret_cast<HWND>(lParam) == inlineRenameEdit_ && inlineRenameBackgroundBrush_) {
+            SetTextColor(reinterpret_cast<HDC>(wParam), inlineRenameTextColor_);
+            SetBkColor(reinterpret_cast<HDC>(wParam), colorRef(themeTokens(settings_.themeMode).appInput));
+            return reinterpret_cast<LRESULT>(inlineRenameBackgroundBrush_);
+        }
+        break;
     case WM_TIMER:
         if (wParam == kDirectoryWatcherTimerId) {
             pollDirectoryWatcher();
@@ -719,6 +821,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case WM_DESTROY:
+        cancelInlineRename();
         if (settings_.rememberWindowSize) {
             WINDOWPLACEMENT placement{};
             placement.length = sizeof(placement);
@@ -1289,18 +1392,148 @@ void MainWindow::renameContextNode() {
 
     const NodeId target = targets.front();
     const FileNode& node = tab.tree.node(target);
-    std::wstring newName;
-    if (!ui::promptForRename(hwnd_, node.name, newName)) {
+    if (node.path.empty()) {
         return;
     }
 
-    const shell::FileOperationResult result = shell::renamePath(hwnd_, node.path, newName);
+    beginInlineRename(target);
+}
+
+void MainWindow::beginInlineRename(NodeId target) {
+    if (!isActiveDirectoryLocation() || target == kInvalidNodeId) {
+        return;
+    }
+
+    commitInlineRename();
+
+    TabState& tab = activeTab();
+    if (target >= tab.tree.nodes().size()) {
+        return;
+    }
+
+    tab.listView.selectNode(target);
+    const FileNode& node = tab.tree.node(target);
+    D2D1_RECT_F rectDips = tab.listView.nameEditRectForNode(target, currentLayout().list);
+    if (rectDips.left >= rectDips.right || rectDips.top >= rectDips.bottom) {
+        return;
+    }
+    rectDips.top -= 2.0f;
+    rectDips.bottom += 3.0f;
+
+    const RECT rectPixels = dipsToPixels(rectDips, render_.dpiScale());
+    const int width = (std::max)(80, static_cast<int>(rectPixels.right - rectPixels.left));
+    const int height = (std::max)(dipsToPixels(settings_.fontSize + 10.0f, render_.dpiScale().y), static_cast<int>(rectPixels.bottom - rectPixels.top));
+    const ThemeTokens tokens = themeTokens(settings_.themeMode);
+    inlineRenameTextColor_ = colorRef(tokens.ink);
+    inlineRenameBackgroundBrush_ = CreateSolidBrush(colorRef(tokens.appInput));
+    inlineRenameFont_ = createInlineRenameFont(settings_, render_.dpiScale());
+    inlineRenameEdit_ = CreateWindowExW(0,
+                                        L"EDIT",
+                                        node.name.c_str(),
+                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | WS_BORDER,
+                                        rectPixels.left,
+                                        rectPixels.top,
+                                        width,
+                                        height,
+                                        hwnd_,
+                                        reinterpret_cast<HMENU>(static_cast<INT_PTR>(kInlineRenameEditId)),
+                                        GetModuleHandleW(nullptr),
+                                        nullptr);
+    if (!inlineRenameEdit_) {
+        if (inlineRenameFont_) {
+            DeleteObject(inlineRenameFont_);
+            inlineRenameFont_ = nullptr;
+        }
+        if (inlineRenameBackgroundBrush_) {
+            DeleteObject(inlineRenameBackgroundBrush_);
+            inlineRenameBackgroundBrush_ = nullptr;
+        }
+        return;
+    }
+
+    SendMessageW(inlineRenameEdit_,
+                 WM_SETFONT,
+                 reinterpret_cast<WPARAM>(inlineRenameFont_ ? inlineRenameFont_ : GetStockObject(DEFAULT_GUI_FONT)),
+                 TRUE);
+    SendMessageW(inlineRenameEdit_, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(4, 4));
+    SetWindowLongPtrW(inlineRenameEdit_, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+    inlineRenameOriginalProc_ = reinterpret_cast<WNDPROC>(
+        SetWindowLongPtrW(inlineRenameEdit_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&MainWindow::InlineRenameEditProc)));
+    inlineRenameNode_ = target;
+    inlineRenameOriginalPath_ = node.path;
+    inlineRenameClosing_ = false;
+    SetFocus(inlineRenameEdit_);
+    SendMessageW(inlineRenameEdit_, EM_SETSEL, 0, static_cast<LPARAM>(renameSelectionEnd(node)));
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+bool MainWindow::commitInlineRename() {
+    if (!inlineRenameEdit_) {
+        return true;
+    }
+
+    if (!hasActiveTab() || inlineRenameNode_ == kInvalidNodeId || inlineRenameNode_ >= activeTab().tree.nodes().size()) {
+        destroyInlineRenameEdit();
+        return false;
+    }
+
+    const FileNode& node = activeTab().tree.node(inlineRenameNode_);
+    const std::wstring newName = getWindowText(inlineRenameEdit_);
+    if (!ui::isValidRenameName(newName)) {
+        setStatusText(L"Enter a valid file name.");
+        SetFocus(inlineRenameEdit_);
+        SendMessageW(inlineRenameEdit_, EM_SETSEL, 0, -1);
+        return false;
+    }
+
+    if (newName == node.name) {
+        destroyInlineRenameEdit();
+        return true;
+    }
+
+    const std::wstring oldPath = inlineRenameOriginalPath_.empty() ? node.path : inlineRenameOriginalPath_;
+    const shell::FileOperationResult result = shell::renamePath(hwnd_, oldPath, newName);
     if (!result.success) {
         setStatusText(result.message.empty() ? L"Cannot rename item" : result.message);
+        SetFocus(inlineRenameEdit_);
+        SendMessageW(inlineRenameEdit_, EM_SETSEL, 0, -1);
+        return false;
+    }
+
+    destroyInlineRenameEdit();
+    refreshCurrentDirectorySelecting(result.resultingPath);
+    return true;
+}
+
+void MainWindow::cancelInlineRename() {
+    destroyInlineRenameEdit();
+}
+
+void MainWindow::destroyInlineRenameEdit() {
+    if (!inlineRenameEdit_) {
         return;
     }
 
-    refreshCurrentDirectorySelecting(result.resultingPath);
+    inlineRenameClosing_ = true;
+    if (inlineRenameOriginalProc_) {
+        SetWindowLongPtrW(inlineRenameEdit_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(inlineRenameOriginalProc_));
+    }
+    DestroyWindow(inlineRenameEdit_);
+    inlineRenameEdit_ = nullptr;
+    inlineRenameOriginalProc_ = nullptr;
+    if (inlineRenameFont_) {
+        DeleteObject(inlineRenameFont_);
+        inlineRenameFont_ = nullptr;
+    }
+    if (inlineRenameBackgroundBrush_) {
+        DeleteObject(inlineRenameBackgroundBrush_);
+        inlineRenameBackgroundBrush_ = nullptr;
+    }
+    inlineRenameNode_ = kInvalidNodeId;
+    inlineRenameOriginalPath_.clear();
+    inlineRenameClosing_ = false;
+    SetFocus(hwnd_);
+    InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void MainWindow::moveContextNodeToTrash() {
@@ -2020,6 +2253,8 @@ bool MainWindow::selectNodeByPath(const std::wstring& path) {
 void MainWindow::refreshChromeState() {
     const bool hadHoveredToolbarCommand = chromeState_.hasHoveredToolbarCommand;
     const ToolbarCommand hoveredToolbarCommand = chromeState_.hoveredToolbarCommand;
+    const bool hadHoveredCloseTab = chromeState_.hasHoveredCloseTab;
+    const std::size_t hoveredCloseTabIndex = chromeState_.hoveredCloseTabIndex;
     if (!hasActiveTab()) {
         chromeState_.title.clear();
         chromeState_.pathText.clear();
@@ -2047,6 +2282,8 @@ void MainWindow::refreshChromeState() {
         chromeState_.toolbarCommands = settings_.toolbarCommands;
         chromeState_.hasHoveredToolbarCommand = hadHoveredToolbarCommand;
         chromeState_.hoveredToolbarCommand = hoveredToolbarCommand;
+        chromeState_.hasHoveredCloseTab = hadHoveredCloseTab;
+        chromeState_.hoveredCloseTabIndex = hoveredCloseTabIndex;
         return;
     }
 
@@ -2085,6 +2322,8 @@ void MainWindow::refreshChromeState() {
     chromeState_.toolbarCommands = settings_.toolbarCommands;
     chromeState_.hasHoveredToolbarCommand = hadHoveredToolbarCommand;
     chromeState_.hoveredToolbarCommand = hoveredToolbarCommand;
+    chromeState_.hasHoveredCloseTab = hadHoveredCloseTab;
+    chromeState_.hoveredCloseTabIndex = hoveredCloseTabIndex;
 }
 
 std::wstring toolbarTooltipTextForHit(ChromeHitKind kind) {
@@ -2163,14 +2402,27 @@ void MainWindow::updateToolbarHover(D2D1_POINT_2F point, POINT screenPoint) {
     const ChromeHitResult hit = chrome_.hitTest(point.x, point.y, currentLayout(), chromeState_);
     ToolbarCommand command = ToolbarCommand::Search;
     const bool hasToolbarHover = toolbarCommandForHit(hit.kind, command);
+    const bool hasCloseHover = hit.kind == ChromeHitKind::CloseTab;
     const bool changed = chromeState_.hasHoveredToolbarCommand != hasToolbarHover
-        || (hasToolbarHover && chromeState_.hoveredToolbarCommand != command);
+        || (hasToolbarHover && chromeState_.hoveredToolbarCommand != command)
+        || chromeState_.hasHoveredCloseTab != hasCloseHover
+        || (hasCloseHover && chromeState_.hoveredCloseTabIndex != hit.tabIndex);
     chromeState_.hasHoveredToolbarCommand = hasToolbarHover;
     chromeState_.hoveredToolbarCommand = command;
+    chromeState_.hasHoveredCloseTab = hasCloseHover;
+    chromeState_.hoveredCloseTabIndex = hit.tabIndex;
 
     const std::wstring text = toolbarTooltipTextForHit(hit.kind);
     if (text.empty()) {
-        hideToolbarTooltip();
+        if (toolbarTooltip_ && toolbarTooltipVisible_) {
+            TOOLINFOW tool{};
+            tool.cbSize = sizeof(tool);
+            tool.uFlags = TTF_TRACK | TTF_ABSOLUTE;
+            tool.hwnd = hwnd_;
+            tool.uId = 1;
+            SendMessageW(toolbarTooltip_, TTM_TRACKACTIVATE, FALSE, reinterpret_cast<LPARAM>(&tool));
+            toolbarTooltipVisible_ = false;
+        }
     } else {
         ensureToolbarTooltip();
         if (toolbarTooltip_) {
@@ -2194,8 +2446,9 @@ void MainWindow::updateToolbarHover(D2D1_POINT_2F point, POINT screenPoint) {
 }
 
 void MainWindow::hideToolbarTooltip() {
-    if (chromeState_.hasHoveredToolbarCommand) {
+    if (chromeState_.hasHoveredToolbarCommand || chromeState_.hasHoveredCloseTab) {
         chromeState_.hasHoveredToolbarCommand = false;
+        chromeState_.hasHoveredCloseTab = false;
         InvalidateRect(hwnd_, nullptr, FALSE);
     }
     if (!toolbarTooltip_ || !toolbarTooltipVisible_) {

@@ -1,5 +1,8 @@
 #include "ui/SettingsDialog.h"
+#include "ui/NativeTitleBar.h"
+#include "ui/ThemeTokens.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cwchar>
 
@@ -12,6 +15,9 @@ struct SettingsDialogState {
     AppSettings initialSettings;
     AppSettings resultSettings;
     bool accepted = false;
+    HBRUSH backgroundBrush = nullptr;
+    HBRUSH inputBrush = nullptr;
+    HBRUSH panelBrush = nullptr;
 };
 
 constexpr wchar_t kDialogClassName[] = L"FinderXSettingsDialog";
@@ -31,8 +37,56 @@ constexpr int kFavoriteDownId = 205;
 constexpr int kFavoriteRemoveId = 206;
 constexpr int kOkId = IDOK;
 constexpr int kCancelId = IDCANCEL;
-constexpr int kDialogWidth = 760;
-constexpr int kDialogHeight = 640;
+constexpr int kDialogWidth = 840;
+constexpr int kDialogHeight = 690;
+
+COLORREF colorRef(D2D1_COLOR_F color) {
+    const auto channel = [](float value) {
+        return static_cast<BYTE>((std::clamp)(value, 0.0f, 1.0f) * 255.0f);
+    };
+    return RGB(channel(color.r), channel(color.g), channel(color.b));
+}
+
+bool isInputControl(HWND control) {
+    if (!control) {
+        return false;
+    }
+    const int id = GetDlgCtrlID(control);
+    return id == kFontEditId
+        || id == kIconEditId
+        || id == kWindowWidthEditId
+        || id == kWindowHeightEditId
+        || id == kFavoriteLabelEditId
+        || id == kFavoritePathEditId
+        || id == kFavoritesListId
+        || id == kThemeComboId
+        || id == kFontFamilyComboId;
+}
+
+void ensureThemeBrushes(SettingsDialogState& state) {
+    if (state.backgroundBrush && state.inputBrush && state.panelBrush) {
+        return;
+    }
+    const ThemeTokens tokens = themeTokens(state.resultSettings.themeMode);
+    state.backgroundBrush = CreateSolidBrush(colorRef(tokens.app));
+    state.inputBrush = CreateSolidBrush(colorRef(tokens.appInput));
+    state.panelBrush = CreateSolidBrush(colorRef(tokens.appOverlay));
+}
+
+void deleteThemeBrushes(SettingsDialogState& state) {
+    if (state.backgroundBrush) {
+        DeleteObject(state.backgroundBrush);
+        state.backgroundBrush = nullptr;
+    }
+    if (state.inputBrush) {
+        DeleteObject(state.inputBrush);
+        state.inputBrush = nullptr;
+    }
+    if (state.panelBrush) {
+        DeleteObject(state.panelBrush);
+        state.panelBrush = nullptr;
+    }
+}
 
 std::wstring shortcutHelpText() {
     return L"Keyboard shortcuts:\r\n"
@@ -268,6 +322,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         if (!state) {
             return -1;
         }
+        ensureThemeBrushes(*state);
 
         HWND title = createDialogControl(0,
                                          L"STATIC",
@@ -285,7 +340,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             WS_CHILD | WS_VISIBLE,
                                             24,
                                             44,
-                                            660,
+                                            760,
                                             22,
                                             hwnd,
                                             0);
@@ -393,7 +448,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                  WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                  382,
                                                  78,
-                                                 342,
+                                                 422,
                                                  78,
                                                  hwnd,
                                                  0);
@@ -403,7 +458,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                                        402,
                                                        112,
-                                                       260,
+                                                       360,
                                                        22,
                                                        hwnd,
                                                        kShowHiddenAndSystemId);
@@ -419,8 +474,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                382,
                                                176,
-                                               342,
-                                               78,
+                                               422,
+                                               104,
                                                hwnd,
                                                0);
         HWND windowWidthLabel = createDialogControl(0,
@@ -468,8 +523,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                       L"Remember last window size",
                                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                                       402,
-                                                      232,
-                                                      220,
+                                                      240,
+                                                      340,
                                                       22,
                                                       hwnd,
                                                       kRememberWindowSizeId);
@@ -484,7 +539,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"Favorites",
                                                   WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                   20,
-                                                  270,
+                                                  300,
                                                   450,
                                                   268,
                                                   hwnd,
@@ -494,7 +549,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"Order and rename sidebar favorites.",
                                                   WS_CHILD | WS_VISIBLE,
                                                   40,
-                                                  300,
+                                                  330,
                                                   260,
                                                   18,
                                                   hwnd,
@@ -504,7 +559,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                  L"",
                                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY,
                                                  40,
-                                                 324,
+                                                 354,
                                                  180,
                                                  174,
                                                  hwnd,
@@ -514,7 +569,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"Display name",
                                                      WS_CHILD | WS_VISIBLE,
                                                      240,
-                                                     326,
+                                                     356,
                                                      120,
                                                      18,
                                                      hwnd,
@@ -524,7 +579,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"",
                                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                                      240,
-                                                     348,
+                                                     378,
                                                      200,
                                                      24,
                                                      hwnd,
@@ -534,7 +589,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"Target path",
                                                      WS_CHILD | WS_VISIBLE,
                                                      240,
-                                                     386,
+                                                     416,
                                                      120,
                                                      18,
                                                      hwnd,
@@ -544,7 +599,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     L"",
                                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_READONLY,
                                                     240,
-                                                    408,
+                                                    438,
                                                     200,
                                                     24,
                                                     hwnd,
@@ -554,7 +609,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               L"Up",
                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                               240,
-                                              454,
+                                              484,
                                               58,
                                               28,
                                               hwnd,
@@ -564,7 +619,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                 L"Down",
                                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                 306,
-                                                454,
+                                                484,
                                                 62,
                                                 28,
                                                 hwnd,
@@ -574,7 +629,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"Remove",
                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                   376,
-                                                  454,
+                                                  484,
                                                   64,
                                                   28,
                                                   hwnd,
@@ -584,8 +639,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"Keyboard",
                                                   WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                   492,
-                                                  270,
-                                                  232,
+                                                  300,
+                                                  312,
                                                   268,
                                                   hwnd,
                                                   0);
@@ -594,8 +649,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              shortcutHelpText().c_str(),
                                              WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL,
                                              512,
-                                             300,
-                                             190,
+                                             330,
+                                             270,
                                              198,
                                              hwnd,
                                              0);
@@ -603,8 +658,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                       L"BUTTON",
                                       L"OK",
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                                      568,
-                                      560,
+                                      648,
+                                      610,
                                       76,
                                       28,
                                       hwnd,
@@ -613,8 +668,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                           L"BUTTON",
                                           L"Cancel",
                                           WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                                          656,
-                                          560,
+                                          736,
+                                          610,
                                           76,
                                           28,
                                           hwnd,
@@ -633,6 +688,44 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         SetFocus(fontEdit);
         SendMessageW(fontEdit, EM_SETSEL, 0, -1);
         return 0;
+    }
+    case WM_CTLCOLORDLG:
+        if (state) {
+            ensureThemeBrushes(*state);
+            return reinterpret_cast<LRESULT>(state->backgroundBrush);
+        }
+        break;
+    case WM_ERASEBKGND:
+        if (state) {
+            ensureThemeBrushes(*state);
+            RECT rect{};
+            GetClientRect(hwnd, &rect);
+            FillRect(reinterpret_cast<HDC>(wParam), &rect, state->backgroundBrush);
+            return 1;
+        }
+        break;
+    case WM_CTLCOLORSTATIC:
+    case WM_CTLCOLORBTN:
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORLISTBOX: {
+        if (!state) {
+            break;
+        }
+        ensureThemeBrushes(*state);
+        const ThemeTokens tokens = themeTokens(state->resultSettings.themeMode);
+        HDC dc = reinterpret_cast<HDC>(wParam);
+        HWND control = reinterpret_cast<HWND>(lParam);
+        SetTextColor(dc, colorRef(tokens.ink));
+        SetBkMode(dc, TRANSPARENT);
+        if (message == WM_CTLCOLOREDIT || message == WM_CTLCOLORLISTBOX || isInputControl(control)) {
+            SetBkMode(dc, OPAQUE);
+            SetBkColor(dc, colorRef(tokens.appInput));
+            return reinterpret_cast<LRESULT>(state->inputBrush);
+        }
+        if (message == WM_CTLCOLORBTN) {
+            return reinterpret_cast<LRESULT>(state->panelBrush);
+        }
+        return reinterpret_cast<LRESULT>(state->backgroundBrush);
     }
     case WM_COMMAND:
         if (!state) {
@@ -723,6 +816,11 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
     case WM_CLOSE:
         DestroyWindow(hwnd);
         return 0;
+    case WM_DESTROY:
+        if (state) {
+            deleteThemeBrushes(*state);
+        }
+        return 0;
     default:
         break;
     }
@@ -736,7 +834,7 @@ bool registerSettingsDialogClass(HINSTANCE instance) {
     wc.lpfnWndProc = settingsDialogProc;
     wc.hInstance = instance;
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    wc.hbrBackground = nullptr;
     wc.lpszClassName = kDialogClassName;
 
     if (RegisterClassExW(&wc) != 0) {
@@ -804,6 +902,7 @@ bool promptForSettings(HWND owner, AppSettings& settings) {
         return false;
     }
 
+    applyNativeTitleBarTheme(dialog, settings.themeMode);
     centerDialog(dialog, owner);
 
     if (owner) {

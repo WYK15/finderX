@@ -180,6 +180,13 @@ int main() {
         const std::vector<VisibleRow> rows = tree.flatten();
 
         view.selectNode(rows[2].nodeId);
+        const D2D1_RECT_F nameRect = view.nameEditRectForNode(rows[2].nodeId, bounds);
+
+        require(nameRect.left > 40.0f, "name edit rect should begin after disclosure and icon");
+        require(nameRect.right > nameRect.left + 80.0f, "name edit rect should provide usable edit width");
+        require(nameRect.top > rowY(1), "name edit rect should align to selected row top");
+        require(nameRect.bottom > nameRect.top, "name edit rect should have positive height");
+
         view.onKeyDown(VK_DOWN, false, true);
         const NodeId expected[] = {rows[2].nodeId, rows[3].nodeId};
         requireSelectedNodes(view, expected, "Shift+Down should extend selection");
