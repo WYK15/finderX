@@ -6,6 +6,8 @@
 #include <cmath>
 #include <cwchar>
 
+#include <commdlg.h>
+
 namespace finderx::ui {
 
 namespace {
@@ -14,13 +16,21 @@ struct SettingsDialogState {
     SettingsDialogValues values;
     AppSettings initialSettings;
     AppSettings resultSettings;
+    std::wstring currentFolder;
+    int selectedPage = 0;
     bool accepted = false;
     HBRUSH backgroundBrush = nullptr;
     HBRUSH inputBrush = nullptr;
     HBRUSH panelBrush = nullptr;
+    std::vector<HWND> appearanceControls;
+    std::vector<HWND> startupControls;
+    std::vector<HWND> filesControls;
+    std::vector<HWND> shortcutsControls;
+    std::vector<HWND> contextMenuControls;
 };
 
 constexpr wchar_t kDialogClassName[] = L"FinderXSettingsDialog";
+constexpr int kCategoryListId = 90;
 constexpr int kFontEditId = 101;
 constexpr int kIconEditId = 102;
 constexpr int kThemeComboId = 103;
@@ -29,16 +39,32 @@ constexpr int kShowHiddenAndSystemId = 105;
 constexpr int kWindowWidthEditId = 106;
 constexpr int kWindowHeightEditId = 107;
 constexpr int kRememberWindowSizeId = 108;
+constexpr int kStartupFolderEditId = 109;
+constexpr int kUseCurrentFolderId = 110;
 constexpr int kFavoritesListId = 201;
 constexpr int kFavoriteLabelEditId = 202;
 constexpr int kFavoritePathEditId = 203;
 constexpr int kFavoriteUpId = 204;
 constexpr int kFavoriteDownId = 205;
 constexpr int kFavoriteRemoveId = 206;
+constexpr int kContextToolListId = 301;
+constexpr int kContextToolLabelEditId = 302;
+constexpr int kContextToolExeEditId = 303;
+constexpr int kContextToolArgsEditId = 304;
+constexpr int kContextToolFilesId = 305;
+constexpr int kContextToolFoldersId = 306;
+constexpr int kContextToolAddId = 307;
+constexpr int kContextToolUpdateId = 308;
+constexpr int kContextToolRemoveId = 309;
+constexpr int kContextToolUpId = 310;
+constexpr int kContextToolDownId = 311;
+constexpr int kContextToolBrowseId = 312;
+constexpr int kContextToolVsCodeId = 313;
+constexpr int kContextToolZedId = 314;
 constexpr int kOkId = IDOK;
 constexpr int kCancelId = IDCANCEL;
-constexpr int kDialogWidth = 840;
-constexpr int kDialogHeight = 690;
+constexpr int kDialogWidth = 900;
+constexpr int kDialogHeight = 720;
 
 COLORREF colorRef(D2D1_COLOR_F color) {
     const auto channel = [](float value) {
@@ -56,11 +82,33 @@ bool isInputControl(HWND control) {
         || id == kIconEditId
         || id == kWindowWidthEditId
         || id == kWindowHeightEditId
+        || id == kStartupFolderEditId
         || id == kFavoriteLabelEditId
         || id == kFavoritePathEditId
+        || id == kContextToolListId
+        || id == kContextToolLabelEditId
+        || id == kContextToolExeEditId
+        || id == kContextToolArgsEditId
         || id == kFavoritesListId
         || id == kThemeComboId
         || id == kFontFamilyComboId;
+}
+
+void showControls(const std::vector<HWND>& controls, bool visible) {
+    for (HWND control : controls) {
+        if (control) {
+            ShowWindow(control, visible ? SW_SHOW : SW_HIDE);
+        }
+    }
+}
+
+void showSettingsPage(SettingsDialogState& state, int page) {
+    state.selectedPage = page;
+    showControls(state.appearanceControls, page == 0);
+    showControls(state.startupControls, page == 1);
+    showControls(state.filesControls, page == 2);
+    showControls(state.shortcutsControls, page == 3);
+    showControls(state.contextMenuControls, page == 4);
 }
 
 void ensureThemeBrushes(SettingsDialogState& state) {
@@ -174,15 +222,28 @@ bool settingsEqual(const AppSettings& left, const AppSettings& right) {
     if (left.fontSize != right.fontSize || left.fontFamily != right.fontFamily || left.iconSize != right.iconSize
         || left.windowWidth != right.windowWidth || left.windowHeight != right.windowHeight
         || left.rememberWindowSize != right.rememberWindowSize
+        || left.startupFolder != right.startupFolder
         || left.themeMode != right.themeMode || left.showHiddenAndSystemItems != right.showHiddenAndSystemItems
         || left.sortColumn != right.sortColumn || left.sortDirection != right.sortDirection
-        || left.favorites.size() != right.favorites.size()) {
+        || left.favorites.size() != right.favorites.size()
+        || left.contextMenuTools.size() != right.contextMenuTools.size()) {
         return false;
     }
 
     for (std::size_t index = 0; index < left.favorites.size(); ++index) {
         if (left.favorites[index].label != right.favorites[index].label
             || left.favorites[index].path != right.favorites[index].path) {
+            return false;
+        }
+    }
+    for (std::size_t index = 0; index < left.contextMenuTools.size(); ++index) {
+        const ContextMenuTool& lhs = left.contextMenuTools[index];
+        const ContextMenuTool& rhs = right.contextMenuTools[index];
+        if (lhs.label != rhs.label
+            || lhs.executablePath != rhs.executablePath
+            || lhs.arguments != rhs.arguments
+            || lhs.appliesToFiles != rhs.appliesToFiles
+            || lhs.appliesToFolders != rhs.appliesToFolders) {
             return false;
         }
     }
@@ -287,7 +348,99 @@ void syncSelectedFavoriteLabel(HWND hwnd, SettingsDialogState& state) {
 
     renameFavorite(state.resultSettings,
                    static_cast<std::size_t>(index),
-                   getEditText(GetDlgItem(hwnd, kFavoriteLabelEditId)));
+                               getEditText(GetDlgItem(hwnd, kFavoriteLabelEditId)));
+}
+
+int selectedContextToolIndex(HWND hwnd) {
+    const LRESULT index = SendMessageW(GetDlgItem(hwnd, kContextToolListId), LB_GETCURSEL, 0, 0);
+    return index == LB_ERR ? -1 : static_cast<int>(index);
+}
+
+void populateContextToolList(HWND hwnd, const AppSettings& settings, int selectedIndex) {
+    HWND list = GetDlgItem(hwnd, kContextToolListId);
+    if (!list) {
+        return;
+    }
+    SendMessageW(list, LB_RESETCONTENT, 0, 0);
+    for (const ContextMenuTool& tool : settings.contextMenuTools) {
+        SendMessageW(list, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tool.label.c_str()));
+    }
+    if (selectedIndex >= 0 && selectedIndex < static_cast<int>(settings.contextMenuTools.size())) {
+        SendMessageW(list, LB_SETCURSEL, selectedIndex, 0);
+    }
+}
+
+void selectContextTool(HWND hwnd, SettingsDialogState& state, int index) {
+    if (index < 0 || index >= static_cast<int>(state.resultSettings.contextMenuTools.size())) {
+        SetWindowTextW(GetDlgItem(hwnd, kContextToolLabelEditId), L"");
+        SetWindowTextW(GetDlgItem(hwnd, kContextToolExeEditId), L"");
+        SetWindowTextW(GetDlgItem(hwnd, kContextToolArgsEditId), L"");
+        SendMessageW(GetDlgItem(hwnd, kContextToolFilesId), BM_SETCHECK, BST_CHECKED, 0);
+        SendMessageW(GetDlgItem(hwnd, kContextToolFoldersId), BM_SETCHECK, BST_CHECKED, 0);
+        return;
+    }
+    SendMessageW(GetDlgItem(hwnd, kContextToolListId), LB_SETCURSEL, index, 0);
+    const ContextMenuTool& tool = state.resultSettings.contextMenuTools[static_cast<std::size_t>(index)];
+    SetWindowTextW(GetDlgItem(hwnd, kContextToolLabelEditId), tool.label.c_str());
+    SetWindowTextW(GetDlgItem(hwnd, kContextToolExeEditId), tool.executablePath.c_str());
+    SetWindowTextW(GetDlgItem(hwnd, kContextToolArgsEditId), tool.arguments.c_str());
+    SendMessageW(GetDlgItem(hwnd, kContextToolFilesId), BM_SETCHECK, tool.appliesToFiles ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(GetDlgItem(hwnd, kContextToolFoldersId), BM_SETCHECK, tool.appliesToFolders ? BST_CHECKED : BST_UNCHECKED, 0);
+}
+
+ContextMenuTool contextToolFromFields(HWND hwnd) {
+    ContextMenuTool tool;
+    tool.label = getEditText(GetDlgItem(hwnd, kContextToolLabelEditId));
+    tool.executablePath = getEditText(GetDlgItem(hwnd, kContextToolExeEditId));
+    tool.arguments = getEditText(GetDlgItem(hwnd, kContextToolArgsEditId));
+    if (tool.arguments.empty()) {
+        tool.arguments = L"\"{path}\"";
+    }
+    tool.appliesToFiles = SendMessageW(GetDlgItem(hwnd, kContextToolFilesId), BM_GETCHECK, 0, 0) == BST_CHECKED;
+    tool.appliesToFolders = SendMessageW(GetDlgItem(hwnd, kContextToolFoldersId), BM_GETCHECK, 0, 0) == BST_CHECKED;
+    return tool;
+}
+
+bool browseExecutable(HWND hwnd, std::wstring& path) {
+    wchar_t buffer[MAX_PATH]{};
+    const std::wstring current = getEditText(GetDlgItem(hwnd, kContextToolExeEditId));
+    if (!current.empty() && current.size() < std::size(buffer)) {
+        std::copy(current.begin(), current.end(), buffer);
+    }
+
+    OPENFILENAMEW openFile{};
+    openFile.lStructSize = sizeof(openFile);
+    openFile.hwndOwner = hwnd;
+    openFile.lpstrFilter = L"Programs (*.exe)\0*.exe\0All files (*.*)\0*.*\0";
+    openFile.lpstrFile = buffer;
+    openFile.nMaxFile = static_cast<DWORD>(std::size(buffer));
+    openFile.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    openFile.lpstrTitle = L"Choose Program";
+    if (!GetOpenFileNameW(&openFile)) {
+        return false;
+    }
+
+    path = buffer;
+    return !path.empty();
+}
+
+void setContextToolTemplate(HWND hwnd, const wchar_t* label, const wchar_t* executableName) {
+    SetWindowTextW(GetDlgItem(hwnd, kContextToolLabelEditId), label);
+    SetWindowTextW(GetDlgItem(hwnd, kContextToolExeEditId), executableName);
+    SetWindowTextW(GetDlgItem(hwnd, kContextToolArgsEditId), L"\"{path}\"");
+    SendMessageW(GetDlgItem(hwnd, kContextToolFilesId), BM_SETCHECK, BST_CHECKED, 0);
+    SendMessageW(GetDlgItem(hwnd, kContextToolFoldersId), BM_SETCHECK, BST_CHECKED, 0);
+}
+
+void syncSelectedContextTool(HWND hwnd, SettingsDialogState& state) {
+    const int index = selectedContextToolIndex(hwnd);
+    if (index < 0 || index >= static_cast<int>(state.resultSettings.contextMenuTools.size())) {
+        return;
+    }
+    ContextMenuTool tool = contextToolFromFields(hwnd);
+    if (!tool.label.empty() && !tool.executablePath.empty()) {
+        state.resultSettings.contextMenuTools[static_cast<std::size_t>(index)] = std::move(tool);
+    }
 }
 
 void centerDialog(HWND hwnd, HWND owner) {
@@ -344,13 +497,31 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             22,
                                             hwnd,
                                             0);
+        HWND categoryList = createDialogControl(WS_EX_CLIENTEDGE,
+                                                L"LISTBOX",
+                                                L"",
+                                                WS_CHILD | WS_VISIBLE | WS_TABSTOP | LBS_NOTIFY,
+                                                24,
+                                                78,
+                                                140,
+                                                508,
+                                                hwnd,
+                                                kCategoryListId);
+        if (categoryList) {
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Appearance"));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Startup"));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Files"));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Shortcuts"));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Context Menu"));
+            SendMessageW(categoryList, LB_SETCURSEL, 0, 0);
+        }
         HWND appearanceGroup = createDialogControl(0,
                                                    L"BUTTON",
                                                    L"Appearance",
                                                    WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                                                   20,
+                                                   190,
                                                    78,
-                                                   342,
+                                                   640,
                                                    176,
                                                    hwnd,
                                                    0);
@@ -358,7 +529,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                    L"STATIC",
                                                    L"Font family",
                                                    WS_CHILD | WS_VISIBLE,
-                                                   40,
+                                                   214,
                                                    110,
                                                    110,
                                                    22,
@@ -368,9 +539,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                    L"COMBOBOX",
                                                    L"",
                                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
-                                                   168,
+                                                   342,
                                                    106,
-                                                   164,
+                                                   220,
                                                    160,
                                                    hwnd,
                                                    kFontFamilyComboId);
@@ -381,7 +552,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              L"STATIC",
                                              L"Text size",
                                              WS_CHILD | WS_VISIBLE,
-                                             40,
+                                             214,
                                              146,
                                              110,
                                              22,
@@ -391,7 +562,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             L"EDIT",
                                             formatSettingValue(state->initialSettings.fontSize).c_str(),
                                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                            168,
+                                            342,
                                             142,
                                             164,
                                             24,
@@ -401,7 +572,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              L"STATIC",
                                              L"Icon size",
                                              WS_CHILD | WS_VISIBLE,
-                                             40,
+                                             214,
                                              182,
                                              110,
                                              22,
@@ -411,7 +582,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             L"EDIT",
                                             formatSettingValue(state->initialSettings.iconSize).c_str(),
                                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                            168,
+                                            342,
                                             178,
                                             164,
                                             24,
@@ -421,7 +592,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               L"STATIC",
                                               L"Theme",
                                               WS_CHILD | WS_VISIBLE,
-                                              40,
+                                              214,
                                               218,
                                               110,
                                               22,
@@ -431,7 +602,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               L"COMBOBOX",
                                               L"",
                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
-                                              168,
+                                              342,
                                               214,
                                               164,
                                               120,
@@ -446,9 +617,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                  L"BUTTON",
                                                  L"File Browsing",
                                                  WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                                                 382,
+                                                 190,
                                                  78,
-                                                 422,
+                                                 640,
                                                  78,
                                                  hwnd,
                                                  0);
@@ -456,7 +627,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                        L"BUTTON",
                                                        L"Show hidden and system items",
                                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                                       402,
+                                                       214,
                                                        112,
                                                        360,
                                                        22,
@@ -472,17 +643,17 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                L"BUTTON",
                                                L"Window",
                                                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                                               382,
+                                               190,
                                                176,
-                                               422,
-                                               104,
+                                               640,
+                                               120,
                                                hwnd,
                                                0);
         HWND windowWidthLabel = createDialogControl(0,
                                                     L"STATIC",
                                                     L"Width",
                                                     WS_CHILD | WS_VISIBLE,
-                                                    402,
+                                                    214,
                                                     208,
                                                     48,
                                                     22,
@@ -492,7 +663,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                    L"EDIT",
                                                    std::to_wstring(state->initialSettings.windowWidth).c_str(),
                                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                                   456,
+                                                   268,
                                                    204,
                                                    74,
                                                    24,
@@ -502,7 +673,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"STATIC",
                                                      L"Height",
                                                      WS_CHILD | WS_VISIBLE,
-                                                     546,
+                                                     372,
                                                      208,
                                                      52,
                                                      22,
@@ -512,7 +683,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     L"EDIT",
                                                     std::to_wstring(state->initialSettings.windowHeight).c_str(),
                                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                                    608,
+                                                    434,
                                                     204,
                                                     74,
                                                     24,
@@ -522,7 +693,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                       L"BUTTON",
                                                       L"Remember last window size",
                                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                                      402,
+                                                      214,
                                                       240,
                                                       340,
                                                       22,
@@ -534,13 +705,46 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                          state->initialSettings.rememberWindowSize ? BST_CHECKED : BST_UNCHECKED,
                          0);
         }
+        HWND startupFolderLabel = createDialogControl(0,
+                                                      L"STATIC",
+                                                      L"Startup folder",
+                                                      WS_CHILD | WS_VISIBLE,
+                                                      214,
+                                                      266,
+                                                      110,
+                                                      22,
+                                                      hwnd,
+                                                      0);
+        HWND startupFolderEdit = createDialogControl(WS_EX_CLIENTEDGE,
+                                                     L"EDIT",
+                                                     state->initialSettings.startupFolder.c_str(),
+                                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                                     324,
+                                                     262,
+                                                     330,
+                                                     24,
+                                                     hwnd,
+                                                     kStartupFolderEditId);
+        HWND useCurrentFolder = createDialogControl(0,
+                                                    L"BUTTON",
+                                                    L"Use current",
+                                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                                                    664,
+                                                    260,
+                                                    84,
+                                                    28,
+                                                    hwnd,
+                                                    kUseCurrentFolderId);
+        if (useCurrentFolder && state->currentFolder.empty()) {
+            EnableWindow(useCurrentFolder, FALSE);
+        }
         HWND favoritesGroup = createDialogControl(0,
                                                   L"BUTTON",
                                                   L"Favorites",
                                                   WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                                                  20,
-                                                  300,
-                                                  450,
+                                                  190,
+                                                  318,
+                                                  640,
                                                   268,
                                                   hwnd,
                                                   0);
@@ -548,8 +752,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"STATIC",
                                                   L"Order and rename sidebar favorites.",
                                                   WS_CHILD | WS_VISIBLE,
-                                                  40,
-                                                  330,
+                                                  214,
+                                                  348,
                                                   260,
                                                   18,
                                                   hwnd,
@@ -558,8 +762,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                  L"LISTBOX",
                                                  L"",
                                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY,
-                                                 40,
-                                                 354,
+                                                 214,
+                                                 372,
                                                  180,
                                                  174,
                                                  hwnd,
@@ -568,8 +772,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"STATIC",
                                                      L"Display name",
                                                      WS_CHILD | WS_VISIBLE,
-                                                     240,
-                                                     356,
+                                                     442,
+                                                     374,
                                                      120,
                                                      18,
                                                      hwnd,
@@ -578,8 +782,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"EDIT",
                                                      L"",
                                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                                     240,
-                                                     378,
+                                                     442,
+                                                     396,
                                                      200,
                                                      24,
                                                      hwnd,
@@ -588,8 +792,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"STATIC",
                                                      L"Target path",
                                                      WS_CHILD | WS_VISIBLE,
-                                                     240,
-                                                     416,
+                                                     442,
+                                                     434,
                                                      120,
                                                      18,
                                                      hwnd,
@@ -598,8 +802,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     L"EDIT",
                                                     L"",
                                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_READONLY,
-                                                    240,
-                                                    438,
+                                                    442,
+                                                    456,
                                                     200,
                                                     24,
                                                     hwnd,
@@ -608,8 +812,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               L"BUTTON",
                                               L"Up",
                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                                              240,
-                                              484,
+                                              442,
+                                              502,
                                               58,
                                               28,
                                               hwnd,
@@ -618,8 +822,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                 L"BUTTON",
                                                 L"Down",
                                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                                                306,
-                                                484,
+                                                508,
+                                                502,
                                                 62,
                                                 28,
                                                 hwnd,
@@ -628,8 +832,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"BUTTON",
                                                   L"Remove",
                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                                                  376,
-                                                  484,
+                                                  578,
+                                                  502,
                                                   64,
                                                   28,
                                                   hwnd,
@@ -638,9 +842,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"BUTTON",
                                                   L"Keyboard",
                                                   WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-                                                  492,
-                                                  300,
-                                                  312,
+                                                  190,
+                                                  318,
+                                                  640,
                                                   268,
                                                   hwnd,
                                                   0);
@@ -648,18 +852,54 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              L"EDIT",
                                              shortcutHelpText().c_str(),
                                              WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL,
-                                             512,
-                                             330,
-                                             270,
+                                             214,
+                                             348,
+                                             592,
                                              198,
                                              hwnd,
                                              0);
+        HWND contextGroup = createDialogControl(0,
+                                                L"BUTTON",
+                                                L"Context Menu",
+                                                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                                190,
+                                                78,
+                                                640,
+                                                508,
+                                                hwnd,
+                                                0);
+        HWND contextList = createDialogControl(WS_EX_CLIENTEDGE,
+                                               L"LISTBOX",
+                                               L"",
+                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY,
+                                               214,
+                                               112,
+                                               200,
+                                               270,
+                                               hwnd,
+                                               kContextToolListId);
+        HWND contextLabelText = createDialogControl(0, L"STATIC", L"Menu label", WS_CHILD | WS_VISIBLE, 438, 114, 120, 20, hwnd, 0);
+        HWND contextLabelEdit = createDialogControl(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 438, 136, 350, 24, hwnd, kContextToolLabelEditId);
+        HWND contextExeText = createDialogControl(0, L"STATIC", L"Program path", WS_CHILD | WS_VISIBLE, 438, 174, 120, 20, hwnd, 0);
+        HWND contextExeEdit = createDialogControl(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 438, 196, 266, 24, hwnd, kContextToolExeEditId);
+        HWND contextBrowse = createDialogControl(0, L"BUTTON", L"Browse...", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 714, 194, 74, 28, hwnd, kContextToolBrowseId);
+        HWND contextArgsText = createDialogControl(0, L"STATIC", L"Arguments", WS_CHILD | WS_VISIBLE, 438, 234, 120, 20, hwnd, 0);
+        HWND contextArgsEdit = createDialogControl(WS_EX_CLIENTEDGE, L"EDIT", L"\"{path}\"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 438, 256, 350, 24, hwnd, kContextToolArgsEditId);
+        HWND contextFiles = createDialogControl(0, L"BUTTON", L"Show for files", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 438, 296, 150, 22, hwnd, kContextToolFilesId);
+        HWND contextFolders = createDialogControl(0, L"BUTTON", L"Show for folders", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 600, 296, 170, 22, hwnd, kContextToolFoldersId);
+        HWND contextVsCode = createDialogControl(0, L"BUTTON", L"VS Code", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 438, 334, 78, 28, hwnd, kContextToolVsCodeId);
+        HWND contextZed = createDialogControl(0, L"BUTTON", L"Zed", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 524, 334, 62, 28, hwnd, kContextToolZedId);
+        HWND contextAdd = createDialogControl(0, L"BUTTON", L"Add", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 214, 404, 62, 28, hwnd, kContextToolAddId);
+        HWND contextUpdate = createDialogControl(0, L"BUTTON", L"Update", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 284, 404, 72, 28, hwnd, kContextToolUpdateId);
+        HWND contextRemove = createDialogControl(0, L"BUTTON", L"Remove", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 364, 404, 76, 28, hwnd, kContextToolRemoveId);
+        HWND contextUp = createDialogControl(0, L"BUTTON", L"Up", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 404, 56, 28, hwnd, kContextToolUpId);
+        HWND contextDown = createDialogControl(0, L"BUTTON", L"Down", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 512, 404, 68, 28, hwnd, kContextToolDownId);
         HWND ok = createDialogControl(0,
                                       L"BUTTON",
                                       L"OK",
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                                      648,
-                                      610,
+                                      706,
+                                      640,
                                       76,
                                       28,
                                       hwnd,
@@ -668,23 +908,36 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                           L"BUTTON",
                                           L"Cancel",
                                           WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                                          736,
-                                          610,
+                                          794,
+                                          640,
                                           76,
                                           28,
                                           hwnd,
                                           kCancelId);
-        if (!title || !subtitle || !appearanceGroup || !fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !iconLabel || !iconEdit || !themeLabel || !themeCombo
+        if (!title || !subtitle || !categoryList || !appearanceGroup || !fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !iconLabel || !iconEdit || !themeLabel || !themeCombo
             || !behaviorGroup || !showHiddenAndSystem || !windowGroup
             || !windowWidthLabel || !windowWidthEdit || !windowHeightLabel || !windowHeightEdit || !rememberWindowSize
+            || !startupFolderLabel || !startupFolderEdit || !useCurrentFolder
             || !favoritesGroup || !favoritesLabel || !favoritesList
             || !favoriteNameLabel || !favoriteLabelEdit || !favoritePathLabel || !favoritePathEdit
-            || !favoriteUp || !favoriteDown || !favoriteRemove || !shortcutsGroup || !shortcuts || !ok || !cancel) {
+            || !favoriteUp || !favoriteDown || !favoriteRemove || !shortcutsGroup || !shortcuts
+            || !contextGroup || !contextList || !contextLabelText || !contextLabelEdit || !contextExeText || !contextExeEdit || !contextBrowse
+            || !contextArgsText || !contextArgsEdit || !contextFiles || !contextFolders || !contextVsCode || !contextZed || !contextAdd || !contextUpdate
+            || !contextRemove || !contextUp || !contextDown || !ok || !cancel) {
             return -1;
         }
 
+        state->appearanceControls = {appearanceGroup, fontFamilyLabel, fontFamilyCombo, fontLabel, fontEdit, iconLabel, iconEdit, themeLabel, themeCombo};
+        state->startupControls = {windowGroup, windowWidthLabel, windowWidthEdit, windowHeightLabel, windowHeightEdit, rememberWindowSize, startupFolderLabel, startupFolderEdit, useCurrentFolder};
+        state->filesControls = {behaviorGroup, showHiddenAndSystem, favoritesGroup, favoritesLabel, favoritesList, favoriteNameLabel, favoriteLabelEdit, favoritePathLabel, favoritePathEdit, favoriteUp, favoriteDown, favoriteRemove};
+        state->shortcutsControls = {shortcutsGroup, shortcuts};
+        state->contextMenuControls = {contextGroup, contextList, contextLabelText, contextLabelEdit, contextExeText, contextExeEdit, contextBrowse, contextArgsText, contextArgsEdit, contextFiles, contextFolders, contextVsCode, contextZed, contextAdd, contextUpdate, contextRemove, contextUp, contextDown};
+
         populateFavoritesList(hwnd, state->resultSettings, state->resultSettings.favorites.empty() ? -1 : 0);
         selectFavorite(hwnd, *state, state->resultSettings.favorites.empty() ? -1 : 0);
+        populateContextToolList(hwnd, state->resultSettings, state->resultSettings.contextMenuTools.empty() ? -1 : 0);
+        selectContextTool(hwnd, *state, state->resultSettings.contextMenuTools.empty() ? -1 : 0);
+        showSettingsPage(*state, 0);
         SetFocus(fontEdit);
         SendMessageW(fontEdit, EM_SETSEL, 0, -1);
         return 0;
@@ -732,8 +985,37 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             break;
         }
 
+        if (LOWORD(wParam) == kCategoryListId && HIWORD(wParam) == LBN_SELCHANGE) {
+            const LRESULT index = SendMessageW(GetDlgItem(hwnd, kCategoryListId), LB_GETCURSEL, 0, 0);
+            showSettingsPage(*state, index == LB_ERR ? 0 : static_cast<int>(index));
+            return 0;
+        }
+
         if (LOWORD(wParam) == kFavoritesListId && HIWORD(wParam) == LBN_SELCHANGE) {
             selectFavorite(hwnd, *state, selectedFavoriteIndex(hwnd));
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kContextToolListId && HIWORD(wParam) == LBN_SELCHANGE) {
+            selectContextTool(hwnd, *state, selectedContextToolIndex(hwnd));
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kContextToolBrowseId) {
+            std::wstring path;
+            if (browseExecutable(hwnd, path)) {
+                SetWindowTextW(GetDlgItem(hwnd, kContextToolExeEditId), path.c_str());
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kContextToolVsCodeId) {
+            setContextToolTemplate(hwnd, L"Open in VS Code", L"Code.exe");
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kContextToolZedId) {
+            setContextToolTemplate(hwnd, L"Open in Zed", L"zed.exe");
             return 0;
         }
 
@@ -786,8 +1068,72 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             return 0;
         }
 
+        if (LOWORD(wParam) == kUseCurrentFolderId) {
+            if (!state->currentFolder.empty()) {
+                SetWindowTextW(GetDlgItem(hwnd, kStartupFolderEditId), state->currentFolder.c_str());
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kContextToolAddId) {
+            ContextMenuTool tool = contextToolFromFields(hwnd);
+            if (!tool.label.empty() && !tool.executablePath.empty()) {
+                state->resultSettings.contextMenuTools.push_back(std::move(tool));
+                const int nextIndex = static_cast<int>(state->resultSettings.contextMenuTools.size()) - 1;
+                populateContextToolList(hwnd, state->resultSettings, nextIndex);
+                selectContextTool(hwnd, *state, nextIndex);
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kContextToolUpdateId) {
+            const int index = selectedContextToolIndex(hwnd);
+            if (index >= 0 && index < static_cast<int>(state->resultSettings.contextMenuTools.size())) {
+                ContextMenuTool tool = contextToolFromFields(hwnd);
+                if (!tool.label.empty() && !tool.executablePath.empty()) {
+                    state->resultSettings.contextMenuTools[static_cast<std::size_t>(index)] = std::move(tool);
+                    populateContextToolList(hwnd, state->resultSettings, index);
+                    selectContextTool(hwnd, *state, index);
+                }
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kContextToolRemoveId) {
+            const int index = selectedContextToolIndex(hwnd);
+            if (index >= 0 && index < static_cast<int>(state->resultSettings.contextMenuTools.size())) {
+                state->resultSettings.contextMenuTools.erase(state->resultSettings.contextMenuTools.begin() + index);
+                int nextIndex = -1;
+                if (!state->resultSettings.contextMenuTools.empty()) {
+                    nextIndex = index < static_cast<int>(state->resultSettings.contextMenuTools.size())
+                                    ? index
+                                    : static_cast<int>(state->resultSettings.contextMenuTools.size()) - 1;
+                }
+                populateContextToolList(hwnd, state->resultSettings, nextIndex);
+                selectContextTool(hwnd, *state, nextIndex);
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kContextToolUpId || LOWORD(wParam) == kContextToolDownId) {
+            syncSelectedContextTool(hwnd, *state);
+            const int index = selectedContextToolIndex(hwnd);
+            const int direction = LOWORD(wParam) == kContextToolUpId ? -1 : 1;
+            const int nextIndex = index + direction;
+            if (index >= 0
+                && nextIndex >= 0
+                && nextIndex < static_cast<int>(state->resultSettings.contextMenuTools.size())) {
+                std::swap(state->resultSettings.contextMenuTools[static_cast<std::size_t>(index)],
+                          state->resultSettings.contextMenuTools[static_cast<std::size_t>(nextIndex)]);
+                populateContextToolList(hwnd, state->resultSettings, nextIndex);
+                selectContextTool(hwnd, *state, nextIndex);
+            }
+            return 0;
+        }
+
         if (LOWORD(wParam) == kOkId) {
             syncSelectedFavoriteLabel(hwnd, *state);
+            syncSelectedContextTool(hwnd, *state);
             state->values.fontSizeText = getEditText(GetDlgItem(hwnd, kFontEditId));
             state->values.iconSizeText = getEditText(GetDlgItem(hwnd, kIconEditId));
             state->values.themeModeText = comboSelectedText(GetDlgItem(hwnd, kThemeComboId));
@@ -796,6 +1142,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             state->values.windowWidthText = getEditText(GetDlgItem(hwnd, kWindowWidthEditId));
             state->values.windowHeightText = getEditText(GetDlgItem(hwnd, kWindowHeightEditId));
             state->values.rememberWindowSize = SendMessageW(GetDlgItem(hwnd, kRememberWindowSizeId), BM_GETCHECK, 0, 0) == BST_CHECKED;
+            state->values.startupFolderText = getEditText(GetDlgItem(hwnd, kStartupFolderEditId));
             applySettingsDialogValues(state->values, state->resultSettings);
             state->accepted = true;
             DestroyWindow(hwnd);
@@ -865,6 +1212,7 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
         settings.windowHeight = static_cast<int>(parsed);
     }
     settings.rememberWindowSize = values.rememberWindowSize;
+    settings.startupFolder = values.startupFolderText;
     if (values.themeModeText == L"light") {
         settings.themeMode = ThemeMode::Light;
     } else if (values.themeModeText == L"dark") {
@@ -874,7 +1222,7 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
     clampSettings(settings);
 }
 
-bool promptForSettings(HWND owner, AppSettings& settings) {
+bool promptForSettings(HWND owner, AppSettings& settings, const std::wstring& currentFolder) {
     HINSTANCE instance = GetModuleHandleW(nullptr);
     if (!registerSettingsDialogClass(instance)) {
         return false;
@@ -883,6 +1231,7 @@ bool promptForSettings(HWND owner, AppSettings& settings) {
     SettingsDialogState state{};
     state.initialSettings = settings;
     state.resultSettings = settings;
+    state.currentFolder = currentFolder;
 
     const DWORD exStyle = WS_EX_CONTROLPARENT | WS_EX_DLGMODALFRAME;
     const DWORD style = WS_POPUP | WS_CAPTION | WS_SYSMENU;

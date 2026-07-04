@@ -156,7 +156,7 @@ add_executable(finderx_settings_dialog_tests
 )
 
 target_include_directories(finderx_settings_dialog_tests PRIVATE src)
-target_link_libraries(finderx_settings_dialog_tests PRIVATE finderx_settings dwmapi)
+target_link_libraries(finderx_settings_dialog_tests PRIVATE finderx_settings dwmapi comdlg32)
 finderx_enable_utf8(finderx_settings_dialog_tests)
 finderx_enable_windows_unicode(finderx_settings_dialog_tests)
 add_test(NAME finderx_settings_dialog_tests COMMAND finderx_settings_dialog_tests)
@@ -359,6 +359,7 @@ if(FINDERX_APP_SOURCES_EXIST)
         shell32
         comctl32
         dwmapi
+        comdlg32
     )
     finderx_enable_utf8(FinderX)
     finderx_enable_windows_unicode(FinderX)

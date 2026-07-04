@@ -63,6 +63,14 @@ struct FavoriteLocation {
     std::wstring path;
 };
 
+struct ContextMenuTool {
+    std::wstring label;
+    std::wstring executablePath;
+    std::wstring arguments = L"\"{path}\"";
+    bool appliesToFiles = true;
+    bool appliesToFolders = true;
+};
+
 struct AppSettings {
     float fontSize = kDefaultFontSize;
     std::wstring fontFamily = kDefaultFontFamily;
@@ -74,6 +82,7 @@ struct AppSettings {
     int windowWidth = kDefaultWindowWidth;
     int windowHeight = kDefaultWindowHeight;
     bool rememberWindowSize = false;
+    std::wstring startupFolder;
     ThemeMode themeMode = ThemeMode::Dark;
     bool showHiddenAndSystemItems = false;
     SortColumn sortColumn = SortColumn::Name;
@@ -86,6 +95,7 @@ struct AppSettings {
         ToolbarCommand::Search,
     };
     std::vector<FavoriteLocation> favorites;
+    std::vector<ContextMenuTool> contextMenuTools;
 };
 
 struct SettingsLoadResult {

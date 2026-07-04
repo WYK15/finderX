@@ -36,6 +36,7 @@ void testDefaults() {
     require(settings.windowWidth == 1188, "default window width should be 1188");
     require(settings.windowHeight == 768, "default window height should be 768");
     require(!settings.rememberWindowSize, "default should not remember window size");
+    require(settings.startupFolder.empty(), "default startup folder should be empty");
     require(settings.themeMode == ThemeMode::Dark, "default theme should be dark");
     require(!settings.showHiddenAndSystemItems, "default should hide hidden and system items");
     require(settings.sortColumn == SortColumn::Name, "default sort column should be name");
@@ -151,11 +152,13 @@ void testSaveLoadRoundTrip() {
     settings.windowWidth = 1440;
     settings.windowHeight = 900;
     settings.rememberWindowSize = true;
+    settings.startupFolder = L"D:\\Work";
     settings.themeMode = ThemeMode::Light;
     settings.showHiddenAndSystemItems = true;
     settings.sortColumn = SortColumn::Modified;
     settings.sortDirection = SortDirection::Descending;
     settings.toolbarCommands = {ToolbarCommand::Search, ToolbarCommand::NewFile, ToolbarCommand::NewFolder};
+    settings.contextMenuTools.push_back({L"Open in VS Code", L"C:\\Tools\\Code.exe", L"\"{path}\"", true, true});
     require(addFavorite(settings, L"Projects", L"D:\\Projects"), "custom favorite should be added before save");
 
     require(saveSettings(settings, path), "settings should save");
@@ -171,6 +174,7 @@ void testSaveLoadRoundTrip() {
     require(loaded.settings.windowWidth == 1440, "window width should round trip");
     require(loaded.settings.windowHeight == 900, "window height should round trip");
     require(loaded.settings.rememberWindowSize, "remember window size should round trip");
+    require(loaded.settings.startupFolder == L"D:\\Work", "startup folder should round trip");
     require(loaded.settings.themeMode == ThemeMode::Light, "theme mode should round trip");
     require(loaded.settings.showHiddenAndSystemItems, "hidden/system visibility should round trip");
     require(loaded.settings.sortColumn == SortColumn::Modified, "sort column should round trip");
@@ -179,6 +183,12 @@ void testSaveLoadRoundTrip() {
     require(loaded.settings.toolbarCommands[0] == ToolbarCommand::Search, "toolbar command order should round trip");
     require(loaded.settings.toolbarCommands[1] == ToolbarCommand::NewFile, "toolbar new file command should round trip");
     require(loaded.settings.toolbarCommands[2] == ToolbarCommand::NewFolder, "toolbar new folder command should round trip");
+    require(loaded.settings.contextMenuTools.size() == 1, "context menu tools should round trip");
+    require(loaded.settings.contextMenuTools[0].label == L"Open in VS Code", "context menu tool label should round trip");
+    require(loaded.settings.contextMenuTools[0].executablePath == L"C:\\Tools\\Code.exe", "context menu tool executable should round trip");
+    require(loaded.settings.contextMenuTools[0].arguments == L"\"{path}\"", "context menu tool arguments should round trip");
+    require(loaded.settings.contextMenuTools[0].appliesToFiles, "context menu tool file flag should round trip");
+    require(loaded.settings.contextMenuTools[0].appliesToFolders, "context menu tool folder flag should round trip");
     require(loaded.settings.favorites.size() == 5, "default plus custom favorites should round trip");
     require(loaded.settings.favorites.back().label == L"Projects", "custom favorite label should round trip");
     require(loaded.settings.favorites.back().path == L"D:\\Projects", "custom favorite path should round trip");

@@ -1133,13 +1133,6 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         }
     } else if (state.statusText.empty()) {
         const D2D1_RECT_F clippedPathRect = clampRect(pathRect, window);
-        render.fillRoundedRect(
-            D2D1::RoundedRect(clippedPathRect, 10.0f, 10.0f),
-            withAlpha(tokens.appOverlay, 0.76f));
-        render.drawRoundedRect(
-            D2D1::RoundedRect(clippedPathRect, 10.0f, 10.0f),
-            withAlpha(tokens.appLine, 0.82f),
-            1.0f);
         drawPathSegments(render, clippedPathRect, state.pathText, mode);
     } else {
         drawTextClipped(

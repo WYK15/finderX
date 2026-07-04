@@ -309,6 +309,11 @@ struct FavoritesParseResult {
     std::vector<FavoriteLocation> favorites;
 };
 
+struct ContextMenuToolsParseResult {
+    bool present = false;
+    std::vector<ContextMenuTool> tools;
+};
+
 struct StringArrayParseResult {
     bool present = false;
     std::vector<std::wstring> values;
@@ -372,6 +377,55 @@ FavoritesParseResult parseFavorites(const std::string& text) {
         FavoriteLocation favorite;
         if (extractString(object, "label", favorite.label) && extractString(object, "path", favorite.path) && !favorite.path.empty()) {
             result.favorites.push_back(std::move(favorite));
+        }
+        cursor = objectEnd + 1;
+    }
+
+    return result;
+}
+
+ContextMenuToolsParseResult parseContextMenuTools(const std::string& text) {
+    ContextMenuToolsParseResult result;
+    const std::size_t key = text.find("\"contextMenuTools\"");
+    if (key == std::string::npos) {
+        return result;
+    }
+    result.present = true;
+
+    const std::size_t arrayStart = findStructuralChar(text, '[', key);
+    if (arrayStart == std::string::npos) {
+        return result;
+    }
+    const std::size_t arrayEnd = findStructuralChar(text, ']', arrayStart + 1);
+    if (arrayEnd == std::string::npos || arrayEnd <= arrayStart) {
+        return result;
+    }
+
+    std::size_t cursor = arrayStart + 1;
+    while (cursor < arrayEnd) {
+        const std::size_t objectStart = findStructuralChar(text, '{', cursor);
+        if (objectStart == std::string::npos || objectStart >= arrayEnd) {
+            break;
+        }
+        const std::size_t objectEnd = findStructuralChar(text, '}', objectStart + 1);
+        if (objectEnd == std::string::npos || objectEnd > arrayEnd) {
+            break;
+        }
+
+        const std::string object = text.substr(objectStart, objectEnd - objectStart + 1);
+        ContextMenuTool tool;
+        bool appliesToFiles = true;
+        bool appliesToFolders = true;
+        extractBool(object, "appliesToFiles", appliesToFiles);
+        extractBool(object, "appliesToFolders", appliesToFolders);
+        tool.appliesToFiles = appliesToFiles;
+        tool.appliesToFolders = appliesToFolders;
+        extractString(object, "arguments", tool.arguments);
+        if (extractString(object, "label", tool.label)
+            && extractString(object, "executablePath", tool.executablePath)
+            && !tool.label.empty()
+            && !tool.executablePath.empty()) {
+            result.tools.push_back(std::move(tool));
         }
         cursor = objectEnd + 1;
     }
@@ -560,6 +614,9 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
     if (extractNumber(text, "windowHeight", number)) {
         loaded.windowHeight = static_cast<int>(number);
     }
+    if (extractString(text, "startupFolder", stringValue)) {
+        loaded.startupFolder = std::move(stringValue);
+    }
 
     if (extractString(text, "sortColumn", stringValue)) {
         loaded.sortColumn = parseSortColumn(stringValue);
@@ -589,6 +646,11 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
         for (const std::wstring& value : toolbarItems.values) {
             loaded.toolbarCommands.push_back(parseToolbarCommand(value, ToolbarCommand::Search));
         }
+    }
+
+    ContextMenuToolsParseResult contextTools = parseContextMenuTools(text);
+    if (contextTools.present) {
+        loaded.contextMenuTools = std::move(contextTools.tools);
     }
 
     clampSettings(loaded);
@@ -626,6 +688,7 @@ bool saveSettings(const AppSettings& settings, const std::filesystem::path& path
     stream << "  \"windowWidth\": " << clamped.windowWidth << ",\n";
     stream << "  \"windowHeight\": " << clamped.windowHeight << ",\n";
     stream << "  \"rememberWindowSize\": " << (clamped.rememberWindowSize ? "true" : "false") << ",\n";
+    stream << "  \"startupFolder\": \"" << escapeJsonString(clamped.startupFolder) << "\",\n";
     stream << "  \"themeMode\": \"" << escapeJsonString(themeModeName(clamped.themeMode)) << "\",\n";
     stream << "  \"showHiddenAndSystemItems\": " << (clamped.showHiddenAndSystemItems ? "true" : "false") << ",\n";
     stream << "  \"sortColumn\": \"" << escapeJsonString(sortColumnName(clamped.sortColumn)) << "\",\n";
@@ -638,6 +701,20 @@ bool saveSettings(const AppSettings& settings, const std::filesystem::path& path
         stream << "\"" << escapeJsonString(toolbarCommandName(clamped.toolbarCommands[index])) << "\"";
     }
     stream << "],\n";
+    stream << "  \"contextMenuTools\": [\n";
+    for (std::size_t index = 0; index < clamped.contextMenuTools.size(); ++index) {
+        const ContextMenuTool& tool = clamped.contextMenuTools[index];
+        stream << "    {\"label\": \"" << escapeJsonString(tool.label)
+               << "\", \"executablePath\": \"" << escapeJsonString(tool.executablePath)
+               << "\", \"arguments\": \"" << escapeJsonString(tool.arguments)
+               << "\", \"appliesToFiles\": " << (tool.appliesToFiles ? "true" : "false")
+               << ", \"appliesToFolders\": " << (tool.appliesToFolders ? "true" : "false") << "}";
+        if (index + 1 < clamped.contextMenuTools.size()) {
+            stream << ",";
+        }
+        stream << "\n";
+    }
+    stream << "  ],\n";
     stream << "  \"favorites\": [\n";
     for (std::size_t index = 0; index < clamped.favorites.size(); ++index) {
         const FavoriteLocation& favorite = clamped.favorites[index];

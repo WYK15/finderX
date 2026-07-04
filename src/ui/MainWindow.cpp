@@ -60,6 +60,8 @@ constexpr UINT kCommandOpenInNewTab = 1023;
 constexpr UINT kCommandCreateShortcut = 1024;
 constexpr UINT kCommandCustomizeToolbar = 1025;
 constexpr UINT kInlineRenameEditId = 1101;
+constexpr UINT kCommandContextToolBase = 5000;
+constexpr UINT kCommandContextToolMax = 5099;
 constexpr UINT_PTR kDirectoryWatcherTimerId = 2001;
 constexpr UINT_PTR kDirectoryRefreshTimerId = 2002;
 constexpr UINT_PTR kSearchCaretTimerId = 2003;
@@ -224,6 +226,15 @@ std::optional<std::wstring> clipboardText(HWND owner) {
 
     CloseClipboard();
     return text;
+}
+
+std::wstring replaceAll(std::wstring value, std::wstring_view token, std::wstring_view replacement) {
+    std::size_t position = 0;
+    while ((position = value.find(token, position)) != std::wstring::npos) {
+        value.replace(position, token.size(), replacement);
+        position += replacement.size();
+    }
+    return value;
 }
 
 }
@@ -878,6 +889,14 @@ void MainWindow::initializeFileTree() {
     }
     clampSettings(settings_);
     applyVisualSettings();
+    if (!settings_.startupFolder.empty()) {
+        if (createTabAtPath(settings_.startupFolder)) {
+            return;
+        }
+        createTabAtPath(homePath_);
+        setStatusText(L"Cannot open startup folder");
+        return;
+    }
     createTabAtPath(homePath_);
 }
 
@@ -1186,6 +1205,21 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING, kCommandReveal, L"Show in Explorer");
         AppendMenuW(menu, MF_STRING, kCommandCopyPath, L"Copy Path");
+        if (singleTarget && targets.front() < tab.tree.nodes().size() && !settings_.contextMenuTools.empty()) {
+            const FileNode& node = tab.tree.node(targets.front());
+            bool addedTool = false;
+            for (std::size_t index = 0; index < settings_.contextMenuTools.size() && index < 100; ++index) {
+                const ContextMenuTool& tool = settings_.contextMenuTools[index];
+                const bool applies = node.kind == FileKind::Folder ? tool.appliesToFolders : tool.appliesToFiles;
+                if (applies && !tool.label.empty() && !tool.executablePath.empty()) {
+                    if (!addedTool) {
+                        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+                        addedTool = true;
+                    }
+                    AppendMenuW(menu, MF_STRING, kCommandContextToolBase + static_cast<UINT>(index), tool.label.c_str());
+                }
+            }
+        }
         if (directoryLocation) {
             AppendMenuW(menu, MF_STRING, kCommandMoveToTrash, L"Move to Trash");
         }
@@ -1234,7 +1268,13 @@ void MainWindow::showSidebarContextMenu(std::size_t sidebarIndex, POINT screenPo
 }
 
 void MainWindow::handleCommand(WPARAM wParam) {
-    switch (LOWORD(wParam)) {
+    const UINT command = LOWORD(wParam);
+    if (command >= kCommandContextToolBase && command <= kCommandContextToolMax) {
+        openContextMenuTool(static_cast<std::size_t>(command - kCommandContextToolBase));
+        return;
+    }
+
+    switch (command) {
     case kCommandOpen:
         openContextNode();
         break;
@@ -1789,6 +1829,37 @@ void MainWindow::removeContextFavorite() {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+void MainWindow::openContextMenuTool(std::size_t index) {
+    if (index >= settings_.contextMenuTools.size() || !hasActiveTab()) {
+        return;
+    }
+
+    const NodeId target = commandTargetNode();
+    const TabState& tab = activeTab();
+    if (target == kInvalidNodeId || target >= tab.tree.nodes().size()) {
+        return;
+    }
+
+    const FileNode& node = tab.tree.node(target);
+    const ContextMenuTool& tool = settings_.contextMenuTools[index];
+    const bool applies = node.kind == FileKind::Folder ? tool.appliesToFolders : tool.appliesToFiles;
+    if (!applies || tool.executablePath.empty()) {
+        return;
+    }
+
+    std::wstring arguments = tool.arguments.empty() ? L"\"{path}\"" : tool.arguments;
+    arguments = replaceAll(std::move(arguments), L"{path}", node.path);
+    const HINSTANCE result = ShellExecuteW(hwnd_,
+                                           L"open",
+                                           tool.executablePath.c_str(),
+                                           arguments.c_str(),
+                                           nullptr,
+                                           SW_SHOWNORMAL);
+    if (reinterpret_cast<INT_PTR>(result) <= 32) {
+        setStatusText(L"Cannot open external tool");
+    }
+}
+
 std::wstring MainWindow::powerShellTargetDirectory() const {
     if (!isActiveDirectoryLocation()) {
         return {};
@@ -2062,7 +2133,10 @@ void MainWindow::applyVisualSettings() {
 
 void MainWindow::openSettingsDialog() {
     AppSettings next = settings_;
-    if (!ui::promptForSettings(hwnd_, next)) {
+    const std::wstring currentFolder = hasActiveTab() && activeTab().locationKind == TabState::LocationKind::Directory
+        ? activeTab().history.currentPath()
+        : L"";
+    if (!ui::promptForSettings(hwnd_, next, currentFolder)) {
         return;
     }
 

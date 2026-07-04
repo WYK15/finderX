@@ -112,6 +112,7 @@ private:
     void extractContextZipHere();
     void openContextNodeInNewTab();
     void createShortcutForContextNode();
+    void openContextMenuTool(std::size_t index);
     void createFolderInCurrentDirectory();
     void createFileInCurrentDirectory();
     void addPathToFavorites(const std::wstring& path);
