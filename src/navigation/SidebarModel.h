@@ -46,6 +46,8 @@ struct ChromeState {
     float sizeColumnWidth = kDefaultSizeColumnWidth;
     float kindColumnWidth = kDefaultKindColumnWidth;
     std::vector<ToolbarCommand> toolbarCommands = defaultToolbarCommands();
+    bool hasHoveredToolbarCommand = false;
+    ToolbarCommand hoveredToolbarCommand = ToolbarCommand::Search;
 };
 
 class SidebarModel {

@@ -449,6 +449,7 @@ void clampSettings(AppSettings& settings) {
     settings.modifiedColumnWidth = (std::clamp)(settings.modifiedColumnWidth, kMinModifiedColumnWidth, kMaxModifiedColumnWidth);
     settings.sizeColumnWidth = (std::clamp)(settings.sizeColumnWidth, kMinSizeColumnWidth, kMaxSizeColumnWidth);
     settings.kindColumnWidth = (std::clamp)(settings.kindColumnWidth, kMinKindColumnWidth, kMaxKindColumnWidth);
+    settings.sidebarWidth = (std::clamp)(settings.sidebarWidth, kMinSidebarWidth, kMaxSidebarWidth);
     settings.windowWidth = (std::clamp)(settings.windowWidth, kMinWindowWidth, kMaxWindowWidth);
     settings.windowHeight = (std::clamp)(settings.windowHeight, kMinWindowHeight, kMaxWindowHeight);
     settings.toolbarCommands = normalizeToolbarCommands(std::move(settings.toolbarCommands));
@@ -550,6 +551,9 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
     if (extractNumber(text, "kindColumnWidth", number)) {
         loaded.kindColumnWidth = number;
     }
+    if (extractNumber(text, "sidebarWidth", number)) {
+        loaded.sidebarWidth = number;
+    }
     if (extractNumber(text, "windowWidth", number)) {
         loaded.windowWidth = static_cast<int>(number);
     }
@@ -618,6 +622,7 @@ bool saveSettings(const AppSettings& settings, const std::filesystem::path& path
     stream << "  \"modifiedColumnWidth\": " << clamped.modifiedColumnWidth << ",\n";
     stream << "  \"sizeColumnWidth\": " << clamped.sizeColumnWidth << ",\n";
     stream << "  \"kindColumnWidth\": " << clamped.kindColumnWidth << ",\n";
+    stream << "  \"sidebarWidth\": " << clamped.sidebarWidth << ",\n";
     stream << "  \"windowWidth\": " << clamped.windowWidth << ",\n";
     stream << "  \"windowHeight\": " << clamped.windowHeight << ",\n";
     stream << "  \"rememberWindowSize\": " << (clamped.rememberWindowSize ? "true" : "false") << ",\n";

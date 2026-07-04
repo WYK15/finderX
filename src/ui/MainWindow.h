@@ -37,6 +37,7 @@ private:
 
     enum class ColumnResizeTarget {
         None,
+        Sidebar,
         Modified,
         Size,
         Kind
@@ -141,6 +142,9 @@ private:
     std::wstring selectedNodePath() const;
     bool selectNodeByPath(const std::wstring& path);
     void refreshChromeState();
+    void ensureToolbarTooltip();
+    void updateToolbarHover(D2D1_POINT_2F point, POINT screenPoint);
+    void hideToolbarTooltip();
     void focusSearch();
     void blurSearch();
     void clearSearch();
@@ -193,6 +197,9 @@ private:
     NodeId dragTargetNode_ = kInvalidNodeId;
     std::wstring dragTargetPath_;
     std::wstring dragFeedbackText_;
+    HWND toolbarTooltip_ = nullptr;
+    std::wstring toolbarTooltipText_;
+    bool toolbarTooltipVisible_ = false;
 };
 
 }

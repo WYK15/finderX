@@ -20,9 +20,9 @@ void testToolbarSortAndSettingsHitTargetsSitBeforeSearch() {
     ChromeState state;
     state.toolbarCommands = {ToolbarCommand::Sort, ToolbarCommand::Settings, ToolbarCommand::Search};
 
-    require(chrome.hitTest(436.0f, 63.0f, rects, state).kind == ChromeHitKind::SortMenu,
+    require(chrome.hitTest(724.0f, 63.0f, rects, state).kind == ChromeHitKind::SortMenu,
             "sort toolbar button should hit before search");
-    require(chrome.hitTest(474.0f, 63.0f, rects, state).kind == ChromeHitKind::Settings,
+    require(chrome.hitTest(762.0f, 63.0f, rects, state).kind == ChromeHitKind::Settings,
             "settings toolbar button should hit before search");
     require(chrome.hitTest(900.0f, 63.0f, rects, state).kind == ChromeHitKind::SearchField,
             "search field should remain hittable");
@@ -49,9 +49,9 @@ void testToolbarNewItemHitTargets() {
     ChromeState state;
     state.toolbarCommands = {ToolbarCommand::NewFolder, ToolbarCommand::NewFile, ToolbarCommand::Sort, ToolbarCommand::Settings, ToolbarCommand::Search};
 
-    require(chrome.hitTest(436.0f, 63.0f, rects, state).kind == ChromeHitKind::NewFolder,
+    require(chrome.hitTest(648.0f, 63.0f, rects, state).kind == ChromeHitKind::NewFolder,
             "new folder toolbar button should be hittable");
-    require(chrome.hitTest(474.0f, 63.0f, rects, state).kind == ChromeHitKind::NewFile,
+    require(chrome.hitTest(686.0f, 63.0f, rects, state).kind == ChromeHitKind::NewFile,
             "new file toolbar button should be hittable");
 }
 
@@ -78,19 +78,32 @@ void testHeaderColumnSeparatorsHitResizeTargets() {
             "kind column separator should start kind column resize");
 }
 
+void testCustomSidebarWidthControlsLayoutAndResizeHitTarget() {
+    FinderChrome chrome;
+    const LayoutRects rects = chrome.layout(1000.0f, 700.0f, 232.0f);
+    ChromeState state;
+
+    require(rects.sidebar.right == 232.0f,
+            "custom sidebar width should set sidebar right edge");
+    require(rects.toolbar.left == 232.0f,
+            "custom sidebar width should shift toolbar left edge");
+    require(chrome.hitTest(232.0f, 400.0f, rects, state).kind == ChromeHitKind::ResizeSidebar,
+            "sidebar separator should start sidebar resize");
+}
+
 void testTabCloseHitTargetDoesNotActivateTab() {
     FinderChrome chrome;
     const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
     ChromeState state;
     state.tabTitles = {L"First", L"Second"};
 
-    const ChromeHitResult closeHit = chrome.hitTest(313.0f, 20.0f, rects, state);
+    const ChromeHitResult closeHit = chrome.hitTest(427.0f, 20.0f, rects, state);
     require(closeHit.kind == ChromeHitKind::CloseTab,
             "tab close target should hit close tab action");
     require(closeHit.tabIndex == 0,
             "tab close target should report first tab index");
 
-    const ChromeHitResult bodyHit = chrome.hitTest(220.0f, 20.0f, rects, state);
+    const ChromeHitResult bodyHit = chrome.hitTest(260.0f, 20.0f, rects, state);
     require(bodyHit.kind == ChromeHitKind::Tab,
             "tab body should still activate tab");
     require(bodyHit.tabIndex == 0,
@@ -193,6 +206,7 @@ int main() {
     testToolbarHiddenCommandIsNotHittable();
     testHeaderColumnsHitUsingDrawnGeometry();
     testHeaderColumnSeparatorsHitResizeTargets();
+    testCustomSidebarWidthControlsLayoutAndResizeHitTarget();
     testTabCloseHitTargetDoesNotActivateTab();
     testPathbarSegmentsReturnNavigationTargets();
     testPathbarGivesDocumentsEnoughSegmentWidth();

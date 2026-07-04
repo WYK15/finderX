@@ -2,6 +2,8 @@
 #include "ui/ThemeTokens.h"
 
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -13,8 +15,9 @@ constexpr float kSidebarWidth = 174.0f;
 constexpr float kTabStripHeight = 34.0f;
 constexpr float kTabTop = 6.0f;
 constexpr float kTabHeight = 28.0f;
-constexpr float kTabLeftPadding = 184.0f;
-constexpr float kTabWidth = 146.0f;
+constexpr float kTabLeftInset = 10.0f;
+constexpr float kMinTabWidth = 92.0f;
+constexpr float kPreferredTabWidth = 260.0f;
 constexpr float kTabGap = 4.0f;
 constexpr float kNewTabWidth = 30.0f;
 constexpr float kToolbarHeight = 53.0f;
@@ -28,11 +31,10 @@ constexpr float kSidebarSectionHeaderHeight = 24.0f;
 constexpr float kSidebarSectionGap = 6.0f;
 constexpr float kSidebarRowStep = 28.0f;
 constexpr float kSidebarRowLeft = 24.0f;
-constexpr float kSidebarRowRight = 164.0f;
 constexpr float kSidebarTextLeft = 56.0f;
 constexpr float kBackLeftOffset = 18.0f;
-constexpr float kBackRightOffset = 48.0f;
-constexpr float kForwardLeftOffset = 52.0f;
+constexpr float kBackRightOffset = 50.0f;
+constexpr float kForwardLeftOffset = 54.0f;
 constexpr float kForwardRightOffset = 86.0f;
 constexpr float kToolbarButtonTop = 12.0f;
 constexpr float kToolbarButtonBottom = 44.0f;
@@ -44,6 +46,8 @@ constexpr float kColumnResizeHitSlop = 5.0f;
 constexpr float kToolbarUtilityButtonWidth = 32.0f;
 constexpr float kToolbarUtilityButtonGap = 6.0f;
 constexpr float kToolbarUtilitySearchGap = 8.0f;
+constexpr float kTopBarGroupRadius = 7.0f;
+constexpr float kTopBarButtonRadius = 6.0f;
 
 struct HeaderColumnRects {
     D2D1_RECT_F name{};
@@ -125,12 +129,20 @@ D2D1_RECT_F clampRect(const D2D1_RECT_F& rect, const D2D1_RECT_F& bounds) {
         (std::clamp)(rect.bottom, bounds.top, bounds.bottom));
 }
 
+D2D1_RECT_F sidebarRowRect(const D2D1_RECT_F& sidebar, float rowY) {
+    return clampRect(D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, sidebar.right - 12.0f, rowY + 24.0f), sidebar);
+}
+
+D2D1_RECT_F sidebarTextRect(const D2D1_RECT_F& sidebar, float rowY) {
+    return clampRect(D2D1::RectF(kSidebarTextLeft, rowY + 2.0f, sidebar.right - 18.0f, rowY + 22.0f), sidebar);
+}
+
 D2D1_RECT_F searchFieldRect(const D2D1_RECT_F& toolbar) {
     if (toolbar.right - toolbar.left < 240.0f) {
         return D2D1::RectF();
     }
     const float searchLeft = (std::max)(toolbar.left + 420.0f, toolbar.right - 202.0f);
-    return clampRect(D2D1::RectF(searchLeft, toolbar.top + 16.0f, toolbar.right - 14.0f, toolbar.top + 44.0f), toolbar);
+    return clampRect(D2D1::RectF(searchLeft, toolbar.top + kToolbarButtonTop, toolbar.right - 14.0f, toolbar.top + kToolbarButtonBottom), toolbar);
 }
 
 bool hasToolbarCommand(const ChromeState& state, ToolbarCommand command) {
@@ -155,15 +167,28 @@ ChromeHitKind hitKindForToolbarCommand(ToolbarCommand command) {
 
 std::vector<ToolbarCommandLayout> toolbarCommandLayouts(const D2D1_RECT_F& toolbar, const ChromeState& state) {
     std::vector<ToolbarCommandLayout> layouts;
+    std::vector<ToolbarCommand> commands;
+    for (const ToolbarCommand command : state.toolbarCommands) {
+        if (command != ToolbarCommand::Search) {
+            commands.push_back(command);
+        }
+    }
+    if (commands.empty()) {
+        return layouts;
+    }
+
     const bool hasSearch = hasToolbarCommand(state, ToolbarCommand::Search);
     const D2D1_RECT_F searchRect = hasSearch ? searchFieldRect(toolbar) : D2D1::RectF();
     const float maxRight = hasArea(searchRect) ? searchRect.left - kToolbarUtilitySearchGap : toolbar.right - 14.0f;
-    float cursor = toolbar.left + 250.0f;
+    const float minLeft = toolbar.left + 250.0f;
+    const float totalWidth = static_cast<float>(commands.size()) * kToolbarUtilityButtonWidth
+        + static_cast<float>(commands.size() - 1) * kToolbarUtilityButtonGap;
+    float cursor = maxRight - totalWidth;
+    if (cursor < minLeft) {
+        cursor = minLeft;
+    }
 
-    for (const ToolbarCommand command : state.toolbarCommands) {
-        if (command == ToolbarCommand::Search) {
-            continue;
-        }
+    for (const ToolbarCommand command : commands) {
         if (cursor + kToolbarUtilityButtonWidth > maxRight) {
             break;
         }
@@ -171,6 +196,18 @@ std::vector<ToolbarCommandLayout> toolbarCommandLayouts(const D2D1_RECT_F& toolb
         cursor += kToolbarUtilityButtonWidth + kToolbarUtilityButtonGap;
     }
     return layouts;
+}
+
+float toolbarTitleRight(const D2D1_RECT_F& toolbar, const ChromeState& state) {
+    const std::vector<ToolbarCommandLayout> layouts = toolbarCommandLayouts(toolbar, state);
+    if (!layouts.empty()) {
+        return (std::max)(toolbar.left + 240.0f, layouts.front().rect.left - 14.0f);
+    }
+    const D2D1_RECT_F searchRect = hasToolbarCommand(state, ToolbarCommand::Search) ? searchFieldRect(toolbar) : D2D1::RectF();
+    if (hasArea(searchRect)) {
+        return (std::max)(toolbar.left + 240.0f, searchRect.left - 14.0f);
+    }
+    return toolbar.right - 14.0f;
 }
 
 D2D1_RECT_F settingsButtonRect(const D2D1_RECT_F& toolbar) {
@@ -254,13 +291,28 @@ void drawHeaderColumnSeparator(RenderContext& render, const D2D1_RECT_F& header,
         1.0f);
 }
 
-D2D1_RECT_F tabRect(std::size_t index, float right) {
-    const float left = kTabLeftPadding + (static_cast<float>(index) * (kTabWidth + kTabGap));
+D2D1_RECT_F tabStripStart(float sidebarRight) {
+    return D2D1::RectF(sidebarRight + kTabLeftInset, kTabTop, sidebarRight + kTabLeftInset, kTabTop + kTabHeight);
+}
+
+float tabWidth(std::size_t tabCount, float left, float right) {
+    if (tabCount == 0 || right <= left) {
+        return kMinTabWidth;
+    }
+    const float available = right - left - kNewTabWidth - kTabGap;
+    const float gapWidth = static_cast<float>(tabCount > 0 ? tabCount - 1 : 0) * kTabGap;
+    return (std::clamp)((available - gapWidth) / static_cast<float>(tabCount), kMinTabWidth, kPreferredTabWidth);
+}
+
+D2D1_RECT_F tabRect(std::size_t index, std::size_t tabCount, float sidebarRight, float right) {
+    const float start = tabStripStart(sidebarRight).left;
+    const float width = tabWidth(tabCount, start, right);
+    const float left = start + (static_cast<float>(index) * (width + kTabGap));
     if (left >= right) {
         return D2D1::RectF(right, kTabTop, right, kTabTop + kTabHeight);
     }
 
-    return D2D1::RectF(left, kTabTop, (std::min)(left + kTabWidth, right), kTabTop + kTabHeight);
+    return D2D1::RectF(left, kTabTop, (std::min)(left + width, right), kTabTop + kTabHeight);
 }
 
 D2D1_RECT_F tabCloseRect(const D2D1_RECT_F& tab) {
@@ -271,8 +323,10 @@ D2D1_RECT_F tabCloseRect(const D2D1_RECT_F& tab) {
     return D2D1::RectF(tab.right - 28.0f, tab.top + 6.0f, tab.right - 8.0f, tab.bottom - 6.0f);
 }
 
-D2D1_RECT_F newTabRect(std::size_t tabCount, float right) {
-    const float left = kTabLeftPadding + (static_cast<float>(tabCount) * (kTabWidth + kTabGap));
+D2D1_RECT_F newTabRect(std::size_t tabCount, float sidebarRight, float right) {
+    const float start = tabStripStart(sidebarRight).left;
+    const float width = tabWidth(tabCount, start, right);
+    const float left = start + (static_cast<float>(tabCount) * (width + kTabGap));
     if (left >= right) {
         return D2D1::RectF(right, kTabTop, right, kTabTop + kTabHeight);
     }
@@ -303,6 +357,28 @@ void drawTextClipped(
     render.drawText(text, rect, format, color);
 }
 
+void drawTextCenteredClipped(
+    RenderContext& render,
+    std::wstring_view text,
+    D2D1_RECT_F rect,
+    const D2D1_RECT_F& bounds,
+    IDWriteTextFormat* format,
+    D2D1_COLOR_F color) {
+    rect = clampRect(rect, bounds);
+    if (rect.right - rect.left < kMinTextWidth || rect.top >= rect.bottom) {
+        return;
+    }
+
+    const float available = rect.right - rect.left;
+    const float measured = render.measureTextWidth(text, format);
+    if (measured > 0.0f && measured < available) {
+        const float left = rect.left + (available - measured) * 0.5f;
+        rect = D2D1::RectF(left, rect.top, left + measured + 2.0f, rect.bottom);
+    }
+
+    render.drawText(text, rect, format, color);
+}
+
 void drawSeparator(RenderContext& render, float x, float top, float bottom, D2D1_COLOR_F color) {
     if (top >= bottom) {
         return;
@@ -312,6 +388,41 @@ void drawSeparator(RenderContext& render, float x, float top, float bottom, D2D1
         D2D1::Point2F(x, top),
         D2D1::Point2F(x, bottom),
         color);
+}
+
+void drawSpaceTopBarButton(
+    RenderContext& render,
+    const D2D1_RECT_F& rect,
+    D2D1_COLOR_F fill,
+    D2D1_COLOR_F stroke,
+    bool enabled = true,
+    bool borderless = false) {
+    const D2D1_COLOR_F buttonFill = enabled ? fill : withAlpha(fill, 0.52f);
+    const D2D1_COLOR_F buttonStroke = enabled ? stroke : withAlpha(stroke, 0.48f);
+    render.fillRoundedRect(
+        D2D1::RoundedRect(rect, kTopBarButtonRadius, kTopBarButtonRadius),
+        buttonFill);
+    if (borderless) {
+        return;
+    }
+    render.drawRoundedRect(
+        D2D1::RoundedRect(rect, kTopBarButtonRadius, kTopBarButtonRadius),
+        buttonStroke,
+        1.0f);
+}
+
+void drawSpaceTopBarGroup(
+    RenderContext& render,
+    const D2D1_RECT_F& rect,
+    D2D1_COLOR_F fill,
+    D2D1_COLOR_F stroke) {
+    render.fillRoundedRect(
+        D2D1::RoundedRect(rect, kTopBarGroupRadius, kTopBarGroupRadius),
+        fill);
+    render.drawRoundedRect(
+        D2D1::RoundedRect(rect, kTopBarGroupRadius, kTopBarGroupRadius),
+        stroke,
+        1.0f);
 }
 
 std::wstring sortedHeaderLabel(std::wstring label, SortColumn column, const ChromeState& state) {
@@ -326,6 +437,89 @@ std::wstring sortedHeaderLabel(std::wstring label, SortColumn column, const Chro
 D2D1_COLOR_F navigationColor(bool enabled, ThemeMode mode) {
     const ThemeTokens tokens = themeTokens(mode);
     return enabled ? tokens.navigation : tokens.navigationDisabled;
+}
+
+constexpr std::string_view kSvgCaretLeft = "M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z";
+constexpr std::string_view kSvgCaretRight = "M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z";
+constexpr std::string_view kSvgPlus = "M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z";
+constexpr std::string_view kSvgFolderPlus = "M216,72H131.31L104,44.69A15.86,15.86,0,0,0,92.69,40H40A16,16,0,0,0,24,56V200.62A15.4,15.4,0,0,0,39.38,216H216.89A15.13,15.13,0,0,0,232,200.89V88A16,16,0,0,0,216,72ZM92.69,56l16,16H40V56ZM216,200H40V88H216Zm-88-88a8,8,0,0,1,8,8v16h16a8,8,0,0,1,0,16H136v16a8,8,0,0,1-16,0V152H104a8,8,0,0,1,0-16h16V120A8,8,0,0,1,128,112Z";
+constexpr std::string_view kSvgFilePlus = "M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Zm-40-64a8,8,0,0,1-8,8H136v16a8,8,0,0,1-16,0V160H104a8,8,0,0,1,0-16h16V128a8,8,0,0,1,16,0v16h16A8,8,0,0,1,160,152Z";
+constexpr std::string_view kSvgArrowsDownUp = "M117.66,170.34a8,8,0,0,1,0,11.32l-32,32a8,8,0,0,1-11.32,0l-32-32a8,8,0,0,1,11.32-11.32L72,188.69V48a8,8,0,0,1,16,0V188.69l18.34-18.35A8,8,0,0,1,117.66,170.34Zm96-96-32-32a8,8,0,0,0-11.32,0l-32,32a8,8,0,0,0,11.32,11.32L168,67.31V208a8,8,0,0,0,16,0V67.31l18.34,18.35a8,8,0,0,0,11.32-11.32Z";
+constexpr std::string_view kSvgGearSix = "M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm109.94-52.79a8,8,0,0,0-3.89-5.4l-29.83-17-.12-33.62a8,8,0,0,0-2.83-6.08,111.91,111.91,0,0,0-36.72-20.67,8,8,0,0,0-6.46.59L128,41.85,97.88,25a8,8,0,0,0-6.47-.6A112.1,112.1,0,0,0,54.73,45.15a8,8,0,0,0-2.83,6.07l-.15,33.65-29.83,17a8,8,0,0,0-3.89,5.4,106.47,106.47,0,0,0,0,41.56,8,8,0,0,0,3.89,5.4l29.83,17,.12,33.62a8,8,0,0,0,2.83,6.08,111.91,111.91,0,0,0,36.72,20.67,8,8,0,0,0,6.46-.59L128,214.15,158.12,231a7.91,7.91,0,0,0,3.9,1,8.09,8.09,0,0,0,2.57-.42,112.1,112.1,0,0,0,36.68-20.73,8,8,0,0,0,2.83-6.07l.15-33.65,29.83-17a8,8,0,0,0,3.89-5.4A106.47,106.47,0,0,0,237.94,107.21Zm-15,34.91-28.57,16.25a8,8,0,0,0-3,3c-.58,1-1.19,2.06-1.81,3.06a7.94,7.94,0,0,0-1.22,4.21l-.15,32.25a95.89,95.89,0,0,1-25.37,14.3L134,199.13a8,8,0,0,0-3.91-1h-.19c-1.21,0-2.43,0-3.64,0a8.08,8.08,0,0,0-4.1,1l-28.84,16.1A96,96,0,0,1,67.88,201l-.11-32.2a8,8,0,0,0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09,8.09,0,0,0-3-3.06l-28.6-16.29a90.49,90.49,0,0,1,0-28.26L61.67,97.63a8,8,0,0,0,3-3c.58-1,1.19-2.06,1.81-3.06a7.94,7.94,0,0,0,1.22-4.21l.15-32.25a95.89,95.89,0,0,1,25.37-14.3L122,56.87a8,8,0,0,0,4.1,1c1.21,0,2.43,0,3.64,0a8.08,8.08,0,0,0,4.1-1l28.84-16.1A96,96,0,0,1,188.12,55l.11,32.2a8,8,0,0,0,1.22,4.22c.62,1,1.23,2,1.8,3.06a8.09,8.09,0,0,0,3,3.06l28.6,16.29A90.49,90.49,0,0,1,222.9,142.12Z";
+constexpr std::string_view kSvgMagnifyingGlass = "M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z";
+
+D2D1_RECT_F centeredSvgRect(const D2D1_RECT_F& rect, float size) {
+    const float left = (rect.left + rect.right - size) * 0.5f;
+    const float top = (rect.top + rect.bottom - size) * 0.5f;
+    return D2D1::RectF(left, top, left + size, top + size);
+}
+
+void drawSvgIcon(RenderContext& render, std::string_view pathData, const D2D1_RECT_F& rect, D2D1_COLOR_F color, float size = 18.0f) {
+    render.fillSvgPath(pathData, 256.0f, 256.0f, centeredSvgRect(rect, size), color);
+}
+
+D2D1_RECT_F centeredIconBox(const D2D1_RECT_F& rect, float size) {
+    const float left = (rect.left + rect.right - size) * 0.5f;
+    const float top = (rect.top + rect.bottom - size) * 0.5f;
+    return D2D1::RectF(left, top, left + size, top + size);
+}
+
+D2D1_POINT_2F phosphorPoint(const D2D1_RECT_F& box, float x, float y) {
+    const float width = box.right - box.left;
+    const float height = box.bottom - box.top;
+    return D2D1::Point2F(box.left + (x / 256.0f) * width, box.top + (y / 256.0f) * height);
+}
+
+D2D1_RECT_F phosphorRect(const D2D1_RECT_F& box, float left, float top, float right, float bottom) {
+    return D2D1::RectF(
+        phosphorPoint(box, left, top).x,
+        phosphorPoint(box, left, top).y,
+        phosphorPoint(box, right, bottom).x,
+        phosphorPoint(box, right, bottom).y);
+}
+
+float phosphorSize(const D2D1_RECT_F& box, float value) {
+    return ((box.right - box.left) / 256.0f) * value;
+}
+
+void drawPhosphorPlusGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color, float size) {
+    // Based on @phosphor-icons/core plus-bold.svg, simplified to two rounded bars.
+    const D2D1_RECT_F box = centeredIconBox(rect, size);
+    const float radius = phosphorSize(box, 12.0f);
+    render.fillRoundedRect(
+        D2D1::RoundedRect(phosphorRect(box, 28.0f, 116.0f, 228.0f, 140.0f), radius, radius),
+        color);
+    render.fillRoundedRect(
+        D2D1::RoundedRect(phosphorRect(box, 116.0f, 28.0f, 140.0f, 228.0f), radius, radius),
+        color);
+}
+
+void drawPhosphorCaretGlyph(RenderContext& render, const D2D1_RECT_F& rect, bool left, D2D1_COLOR_F color) {
+    // Based on @phosphor-icons/core caret-left/right-bold.svg, with rounded joins approximated by polygon edges.
+    const D2D1_RECT_F box = centeredIconBox(rect, 17.0f);
+    if (left) {
+        const std::array<D2D1_POINT_2F, 7> points = {
+            phosphorPoint(box, 160.0f, 39.5f),
+            phosphorPoint(box, 177.0f, 56.5f),
+            phosphorPoint(box, 105.5f, 128.0f),
+            phosphorPoint(box, 177.0f, 199.5f),
+            phosphorPoint(box, 160.0f, 216.5f),
+            phosphorPoint(box, 71.5f, 136.5f),
+            phosphorPoint(box, 71.5f, 119.5f),
+        };
+        render.fillPolygon(points, color);
+    } else {
+        const std::array<D2D1_POINT_2F, 7> points = {
+            phosphorPoint(box, 96.0f, 39.5f),
+            phosphorPoint(box, 184.5f, 119.5f),
+            phosphorPoint(box, 184.5f, 136.5f),
+            phosphorPoint(box, 96.0f, 216.5f),
+            phosphorPoint(box, 79.0f, 199.5f),
+            phosphorPoint(box, 150.5f, 128.0f),
+            phosphorPoint(box, 79.0f, 56.5f),
+        };
+        render.fillPolygon(points, color);
+    }
 }
 
 void drawFolderGlyph(RenderContext& render, float x, float y, D2D1_COLOR_F color) {
@@ -408,74 +602,28 @@ void drawSidebarIcon(RenderContext& render, std::wstring_view label, float x, fl
 }
 
 void drawSortGlyph(RenderContext& render, const D2D1_RECT_F& rect, SortDirection direction, D2D1_COLOR_F color) {
-    const float left = rect.left + 9.0f;
-    const float top = rect.top + 8.0f;
-    const float bottom = rect.bottom - 8.0f;
-    const float right = rect.right - 9.0f;
-    render.drawLine(D2D1::Point2F(left, top), D2D1::Point2F(left, bottom), color, 1.55f);
-    render.drawLine(D2D1::Point2F(right, top), D2D1::Point2F(right, bottom), color, 1.55f);
-    if (direction == SortDirection::Ascending) {
-        render.drawLine(D2D1::Point2F(left - 3.0f, top + 4.0f), D2D1::Point2F(left, top), color, 1.55f);
-        render.drawLine(D2D1::Point2F(left + 3.0f, top + 4.0f), D2D1::Point2F(left, top), color, 1.55f);
-        render.drawLine(D2D1::Point2F(right - 3.0f, bottom - 4.0f), D2D1::Point2F(right, bottom), color, 1.55f);
-        render.drawLine(D2D1::Point2F(right + 3.0f, bottom - 4.0f), D2D1::Point2F(right, bottom), color, 1.55f);
-    } else {
-        render.drawLine(D2D1::Point2F(left - 3.0f, bottom - 4.0f), D2D1::Point2F(left, bottom), color, 1.55f);
-        render.drawLine(D2D1::Point2F(left + 3.0f, bottom - 4.0f), D2D1::Point2F(left, bottom), color, 1.55f);
-        render.drawLine(D2D1::Point2F(right - 3.0f, top + 4.0f), D2D1::Point2F(right, top), color, 1.55f);
-        render.drawLine(D2D1::Point2F(right + 3.0f, top + 4.0f), D2D1::Point2F(right, top), color, 1.55f);
-    }
+    (void)direction;
+    drawSvgIcon(render, kSvgArrowsDownUp, rect, color, 18.0f);
 }
 
 void drawSettingsGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
-    const float cx = rect.left + 16.0f;
-    const float cy = rect.top + 16.0f;
-    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(cx - 6.0f, cy - 6.0f, cx + 6.0f, cy + 6.0f), 6.0f, 6.0f), color, 1.55f);
-    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(cx - 2.0f, cy - 2.0f, cx + 2.0f, cy + 2.0f), 2.0f, 2.0f), color, 1.4f);
-    render.drawLine(D2D1::Point2F(cx, cy - 10.0f), D2D1::Point2F(cx, cy - 7.0f), color, 1.55f);
-    render.drawLine(D2D1::Point2F(cx, cy + 7.0f), D2D1::Point2F(cx, cy + 10.0f), color, 1.55f);
-    render.drawLine(D2D1::Point2F(cx - 10.0f, cy), D2D1::Point2F(cx - 7.0f, cy), color, 1.55f);
-    render.drawLine(D2D1::Point2F(cx + 7.0f, cy), D2D1::Point2F(cx + 10.0f, cy), color, 1.55f);
-    render.drawLine(D2D1::Point2F(cx - 7.0f, cy - 7.0f), D2D1::Point2F(cx - 5.0f, cy - 5.0f), color, 1.4f);
-    render.drawLine(D2D1::Point2F(cx + 5.0f, cy + 5.0f), D2D1::Point2F(cx + 7.0f, cy + 7.0f), color, 1.4f);
-    render.drawLine(D2D1::Point2F(cx + 7.0f, cy - 7.0f), D2D1::Point2F(cx + 5.0f, cy - 5.0f), color, 1.4f);
-    render.drawLine(D2D1::Point2F(cx - 5.0f, cy + 5.0f), D2D1::Point2F(cx - 7.0f, cy + 7.0f), color, 1.4f);
+    drawSvgIcon(render, kSvgGearSix, rect, color, 18.0f);
 }
 
 void drawNewFolderGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
-    const float left = rect.left + 7.0f;
-    const float top = rect.top + 9.0f;
-    render.drawLine(D2D1::Point2F(left + 1.0f, top + 5.0f), D2D1::Point2F(left + 5.0f, top + 2.0f), color, 1.45f);
-    render.drawLine(D2D1::Point2F(left + 5.0f, top + 2.0f), D2D1::Point2F(left + 11.0f, top + 2.0f), color, 1.45f);
-    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(left + 1.0f, top + 5.0f, left + 18.0f, top + 15.0f), 2.4f, 2.4f), color, 1.45f);
-    render.drawLine(D2D1::Point2F(rect.right - 7.5f, rect.top + 7.5f), D2D1::Point2F(rect.right - 7.5f, rect.top + 16.5f), color, 1.55f);
-    render.drawLine(D2D1::Point2F(rect.right - 12.0f, rect.top + 12.0f), D2D1::Point2F(rect.right - 3.0f, rect.top + 12.0f), color, 1.55f);
+    drawSvgIcon(render, kSvgFolderPlus, rect, color, 20.0f);
 }
 
 void drawNewFileGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
-    const float left = rect.left + 8.0f;
-    const float top = rect.top + 7.0f;
-    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(left, top, left + 14.0f, top + 18.0f), 2.0f, 2.0f), color, 1.45f);
-    render.drawLine(D2D1::Point2F(left + 9.0f, top), D2D1::Point2F(left + 14.0f, top + 5.0f), color, 1.25f);
-    render.drawLine(D2D1::Point2F(left + 4.0f, top + 7.0f), D2D1::Point2F(left + 10.0f, top + 7.0f), color, 1.15f);
-    render.drawLine(D2D1::Point2F(left + 4.0f, top + 11.0f), D2D1::Point2F(left + 10.0f, top + 11.0f), color, 1.15f);
-    render.drawLine(D2D1::Point2F(rect.right - 6.5f, rect.top + 7.5f), D2D1::Point2F(rect.right - 6.5f, rect.top + 16.5f), color, 1.55f);
-    render.drawLine(D2D1::Point2F(rect.right - 11.0f, rect.top + 12.0f), D2D1::Point2F(rect.right - 2.0f, rect.top + 12.0f), color, 1.55f);
+    drawSvgIcon(render, kSvgFilePlus, rect, color, 20.0f);
 }
 
 void drawPlusGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
-    const float cx = (rect.left + rect.right) * 0.5f;
-    const float cy = (rect.top + rect.bottom) * 0.5f;
-    render.drawLine(D2D1::Point2F(cx, cy - 5.0f), D2D1::Point2F(cx, cy + 5.0f), color, 1.55f);
-    render.drawLine(D2D1::Point2F(cx - 5.0f, cy), D2D1::Point2F(cx + 5.0f, cy), color, 1.55f);
+    drawSvgIcon(render, kSvgPlus, rect, color, 13.0f);
 }
 
 void drawChevronGlyph(RenderContext& render, const D2D1_RECT_F& rect, bool left, D2D1_COLOR_F color) {
-    const float cx = (rect.left + rect.right) * 0.5f;
-    const float cy = (rect.top + rect.bottom) * 0.5f;
-    const float direction = left ? -1.0f : 1.0f;
-    render.drawLine(D2D1::Point2F(cx + 3.0f * direction, cy - 6.0f), D2D1::Point2F(cx - 3.0f * direction, cy), color, 1.75f);
-    render.drawLine(D2D1::Point2F(cx - 3.0f * direction, cy), D2D1::Point2F(cx + 3.0f * direction, cy + 6.0f), color, 1.75f);
+    drawSvgIcon(render, left ? kSvgCaretLeft : kSvgCaretRight, rect, color, 17.0f);
 }
 
 void drawToolbarCommandGlyph(RenderContext& render, ToolbarCommand command, const D2D1_RECT_F& rect, SortDirection sortDirection, D2D1_COLOR_F color) {
@@ -498,17 +646,8 @@ void drawToolbarCommandGlyph(RenderContext& render, ToolbarCommand command, cons
 }
 
 void drawSearchGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
-    const float cx = rect.left + 17.0f;
-    const float cy = rect.top + 14.0f;
-    render.drawRoundedRect(
-        D2D1::RoundedRect(D2D1::RectF(cx - 4.5f, cy - 4.5f, cx + 4.5f, cy + 4.5f), 4.5f, 4.5f),
-        color,
-        1.35f);
-    render.drawLine(
-        D2D1::Point2F(cx + 3.4f, cy + 3.4f),
-        D2D1::Point2F(cx + 8.0f, cy + 8.0f),
-        color,
-        1.35f);
+    const D2D1_RECT_F iconRect = D2D1::RectF(rect.left + 8.0f, rect.top + 5.0f, rect.left + 26.0f, rect.top + 23.0f);
+    render.fillSvgPath(kSvgMagnifyingGlass, 256.0f, 256.0f, iconRect, color);
 }
 
 std::vector<std::wstring> splitPathSegments(std::wstring_view path) {
@@ -677,9 +816,13 @@ const ChromeState& defaultChromeState() {
 }
 
 LayoutRects FinderChrome::layout(float width, float height) const {
+    return layout(width, height, kSidebarWidth);
+}
+
+LayoutRects FinderChrome::layout(float width, float height, float sidebarWidth) const {
     const float right = clampNonNegative(width);
     const float bottom = clampNonNegative(height);
-    const float contentLeft = (std::min)(kSidebarWidth, right);
+    const float contentLeft = (std::min)(clampNonNegative(sidebarWidth), right);
     const float tabBottom = (std::min)(kTabStripHeight, bottom);
     const float toolbarBottom = (std::min)(kTabStripHeight + kToolbarHeight, bottom);
     const float headerBottom = (std::clamp)(kTabStripHeight + kHeaderBottom, toolbarBottom, bottom);
@@ -707,8 +850,10 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     const D2D1_COLOR_F textPrimary = tokens.ink;
     const D2D1_COLOR_F textSecondary = tokens.inkDull;
     const D2D1_COLOR_F mutedText = tokens.inkFaint;
-    const D2D1_COLOR_F controlFill = tokens.appOverlay;
     const D2D1_COLOR_F controlStroke = tokens.appLine;
+    const D2D1_COLOR_F topBarSurface = withAlpha(tokens.appBox, isDarkTheme(mode) ? 0.66f : 0.82f);
+    const D2D1_COLOR_F topBarButton = withAlpha(tokens.appOverlay, isDarkTheme(mode) ? 0.78f : 0.92f);
+    const D2D1_COLOR_F topBarButtonMuted = withAlpha(tokens.appOverlay, isDarkTheme(mode) ? 0.42f : 0.54f);
 
     render.fillRect(rects.sidebar, tokens.sidebar);
     render.fillRect(rects.toolbar, tokens.menu);
@@ -728,26 +873,21 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             render.headerTextFormat(),
             textPrimary);
     }
-    render.drawLine(
-        D2D1::Point2F(rects.sidebar.right, kTabStripHeight),
-        D2D1::Point2F(rects.pathbar.right, kTabStripHeight),
-        separatorColor);
-
     std::size_t visibleTabCount = 0;
     for (std::size_t index = 0; index < state.tabTitles.size(); ++index) {
-        const D2D1_RECT_F rect = tabRect(index, rects.pathbar.right);
+        const D2D1_RECT_F rect = tabRect(index, state.tabTitles.size(), rects.sidebar.right, rects.pathbar.right);
         if (!isTabRectUsable(rect)) {
             break;
         }
         visibleTabCount = index + 1;
 
         const bool active = index == state.activeTabIndex;
-        const D2D1_COLOR_F fill = active ? tokens.appBox : tokens.appHover;
-        const D2D1_COLOR_F stroke = active ? tokens.appLine : tokens.sidebarLine;
+        const D2D1_COLOR_F fill = active
+            ? (isDarkTheme(mode) ? withAlpha(tokens.appHover, 0.98f) : tokens.appBox)
+            : withAlpha(tokens.appOverlay, isDarkTheme(mode) ? 0.52f : 0.64f);
 
-        render.fillRoundedRect(D2D1::RoundedRect(rect, tokens.radiusControl, tokens.radiusControl), fill);
-        render.drawRoundedRect(D2D1::RoundedRect(rect, tokens.radiusControl, tokens.radiusControl), stroke, 1.0f);
-        drawTextClipped(
+        render.fillRoundedRect(D2D1::RoundedRect(rect, 0.0f, 0.0f), fill);
+        drawTextCenteredClipped(
             render,
             state.tabTitles[index],
             D2D1::RectF(rect.left + 12.0f, rect.top + 5.0f, rect.right - 32.0f, rect.bottom - 3.0f),
@@ -773,25 +913,17 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         }
     }
 
-    const D2D1_RECT_F plusRect = newTabRect(visibleTabCount, rects.pathbar.right);
+    const D2D1_RECT_F plusRect = newTabRect(visibleTabCount, rects.sidebar.right, rects.pathbar.right);
     if (isNewTabRectUsable(plusRect)) {
         render.fillRoundedRect(
             D2D1::RoundedRect(plusRect, 15.0f, 15.0f),
             tokens.appBox);
-        render.drawRoundedRect(
-            D2D1::RoundedRect(plusRect, 15.0f, 15.0f),
-            controlStroke,
-            1.0f);
         drawPlusGlyph(render, plusRect, textSecondary);
     }
 
     if (rects.sidebar.right < rects.pathbar.right) {
         drawSeparator(render, rects.sidebar.right, 0.0f, rects.sidebar.bottom, separatorColor);
     }
-    render.drawLine(
-        D2D1::Point2F(rects.toolbar.left, rects.toolbar.bottom),
-        D2D1::Point2F(rects.toolbar.right, rects.toolbar.bottom),
-        separatorColor);
     render.drawLine(
         D2D1::Point2F(rects.header.left, rects.header.bottom),
         D2D1::Point2F(rects.header.right, rects.header.bottom),
@@ -825,7 +957,7 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
                 tokens.accent);
             render.fillRoundedRect(
                 D2D1::RoundedRect(
-                    clampRect(D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, kSidebarRowRight, rowY + 24.0f), rects.sidebar),
+                    sidebarRowRect(rects.sidebar, rowY),
                     tokens.radiusPanel,
                     tokens.radiusPanel),
                 withAlpha(tokens.sidebarSelected, 0.92f));
@@ -836,72 +968,53 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         drawTextClipped(
             render,
             item.label,
-            D2D1::RectF(kSidebarTextLeft, rowY + 2.0f, 160.0f, rowY + 22.0f),
+            sidebarTextRect(rects.sidebar, rowY),
             rects.sidebar,
             render.textFormat(),
             item.available ? textPrimary : mutedText);
     }
 
-    render.fillRoundedRect(
-        D2D1::RoundedRect(
-            clampRect(
-                D2D1::RectF(rects.toolbar.left + kBackLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kBackRightOffset, rects.toolbar.top + kToolbarButtonBottom),
-                rects.toolbar),
-            16.0f,
-            16.0f),
-        state.canGoBack ? tokens.appBox : withAlpha(tokens.appOverlay, 0.58f));
-    render.drawRoundedRect(
-        D2D1::RoundedRect(
-            clampRect(
-                D2D1::RectF(rects.toolbar.left + kBackLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kBackRightOffset, rects.toolbar.top + kToolbarButtonBottom),
-                rects.toolbar),
-            16.0f,
-            16.0f),
-        controlStroke,
-        1.0f);
-    render.fillRoundedRect(
-        D2D1::RoundedRect(
-            clampRect(
-                D2D1::RectF(rects.toolbar.left + kForwardLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kForwardRightOffset, rects.toolbar.top + kToolbarButtonBottom),
-                rects.toolbar),
-            16.0f,
-            16.0f),
-        state.canGoForward ? tokens.appBox : withAlpha(tokens.appOverlay, 0.58f));
-    render.drawRoundedRect(
-        D2D1::RoundedRect(
-            clampRect(
-                D2D1::RectF(rects.toolbar.left + kForwardLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kForwardRightOffset, rects.toolbar.top + kToolbarButtonBottom),
-                rects.toolbar),
-            16.0f,
-            16.0f),
-        controlStroke,
-        1.0f);
+    const D2D1_RECT_F backRect = clampRect(
+        D2D1::RectF(rects.toolbar.left + kBackLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kBackRightOffset, rects.toolbar.top + kToolbarButtonBottom),
+        rects.toolbar);
+    const D2D1_RECT_F forwardRect = clampRect(
+        D2D1::RectF(rects.toolbar.left + kForwardLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kForwardRightOffset, rects.toolbar.top + kToolbarButtonBottom),
+        rects.toolbar);
+    const D2D1_RECT_F navGroupRect = clampRect(
+        D2D1::RectF(backRect.left - 1.0f, backRect.top - 1.0f, forwardRect.right + 1.0f, forwardRect.bottom + 1.0f),
+        rects.toolbar);
+    drawSpaceTopBarGroup(render, navGroupRect, topBarSurface, withAlpha(controlStroke, 0.78f));
+    drawSpaceTopBarButton(render, backRect, state.canGoBack ? topBarButton : topBarButtonMuted, withAlpha(controlStroke, 0.50f), state.canGoBack);
+    drawSpaceTopBarButton(render, forwardRect, state.canGoForward ? topBarButton : topBarButtonMuted, withAlpha(controlStroke, 0.50f), state.canGoForward);
+    drawSeparator(
+        render,
+        (backRect.right + forwardRect.left) * 0.5f,
+        navGroupRect.top + 6.0f,
+        navGroupRect.bottom - 6.0f,
+        withAlpha(controlStroke, 0.65f));
     drawChevronGlyph(
         render,
-        D2D1::RectF(rects.toolbar.left + kBackLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kBackRightOffset, rects.toolbar.top + kToolbarButtonBottom),
+        backRect,
         true,
         navigationColor(state.canGoBack, mode));
     drawChevronGlyph(
         render,
-        D2D1::RectF(rects.toolbar.left + kForwardLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kForwardRightOffset, rects.toolbar.top + kToolbarButtonBottom),
+        forwardRect,
         false,
         navigationColor(state.canGoForward, mode));
     drawTextClipped(
         render,
         title,
-        D2D1::RectF(rects.toolbar.left + 106.0f, rects.toolbar.top + 16.0f, rects.toolbar.left + 240.0f, rects.toolbar.top + 45.0f),
+        D2D1::RectF(rects.toolbar.left + 106.0f, rects.toolbar.top + 16.0f, toolbarTitleRight(rects.toolbar, state), rects.toolbar.top + 45.0f),
         rects.toolbar,
         render.headerTextFormat(),
         textPrimary);
     const std::vector<ToolbarCommandLayout> toolbarLayouts = toolbarCommandLayouts(rects.toolbar, state);
     for (const ToolbarCommandLayout& layout : toolbarLayouts) {
-        render.fillRoundedRect(
-            D2D1::RoundedRect(layout.rect, 16.0f, 16.0f),
-            tokens.appBox);
-        render.drawRoundedRect(
-            D2D1::RoundedRect(layout.rect, 16.0f, 16.0f),
-            controlStroke,
-            1.0f);
+        const bool hovered = state.hasHoveredToolbarCommand && state.hoveredToolbarCommand == layout.command;
+        if (hovered) {
+            drawSpaceTopBarButton(render, layout.rect, topBarButton, withAlpha(controlStroke, 0.0f), true, true);
+        }
         drawToolbarCommandGlyph(render, layout.command, layout.rect, state.sortDirection, textSecondary);
     }
 
@@ -910,12 +1023,12 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         const bool hasSearchText = !state.searchText.empty();
         const D2D1_RECT_F searchTextRect = D2D1::RectF(searchRect.left + 34.0f, searchRect.top + 4.0f, searchRect.right - 12.0f, searchRect.bottom);
         render.fillRoundedRect(
-            D2D1::RoundedRect(searchRect, 14.0f, 14.0f),
-            withAlpha(tokens.appInput, 0.94f));
+            D2D1::RoundedRect(searchRect, 8.0f, 8.0f),
+            withAlpha(tokens.appInput, isDarkTheme(mode) ? 0.88f : 0.96f));
         render.drawRoundedRect(
-            D2D1::RoundedRect(searchRect, 14.0f, 14.0f),
-            state.searchFocused ? tokens.accent : tokens.appLine,
-            state.searchFocused ? 1.4f : 1.0f);
+            D2D1::RoundedRect(searchRect, 8.0f, 8.0f),
+            state.searchFocused ? withAlpha(tokens.accent, 0.92f) : withAlpha(tokens.appLine, 0.78f),
+            state.searchFocused ? 1.35f : 1.0f);
         drawSearchGlyph(render, searchRect, state.searchFocused ? tokens.accent : mutedText);
         drawTextClipped(
             render,
@@ -947,15 +1060,19 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         if (hasArea(columns.kind)) {
             drawHeaderColumnSeparator(render, rects.header, columns.kind.left, mode);
         }
+        auto paddedColumn = [](D2D1_RECT_F rect) {
+            rect.left += 10.0f;
+            return rect;
+        };
         drawTextClipped(render, sortedHeaderLabel(L"Name", SortColumn::Name, state), columns.name, rects.header, render.headerTextFormat(), state.sortColumn == SortColumn::Name ? activeHeader : inactiveHeader);
         if (hasArea(columns.modified)) {
-            drawTextClipped(render, sortedHeaderLabel(L"Date Modified", SortColumn::Modified, state), columns.modified, rects.header, render.headerTextFormat(), state.sortColumn == SortColumn::Modified ? activeHeader : inactiveHeader);
+            drawTextClipped(render, sortedHeaderLabel(L"Date Modified", SortColumn::Modified, state), paddedColumn(columns.modified), rects.header, render.headerTextFormat(), state.sortColumn == SortColumn::Modified ? activeHeader : inactiveHeader);
         }
         if (hasArea(columns.size)) {
-            drawTextClipped(render, sortedHeaderLabel(L"Size", SortColumn::Size, state), columns.size, rects.header, render.headerTextFormat(), state.sortColumn == SortColumn::Size ? activeHeader : inactiveHeader);
+            drawTextClipped(render, sortedHeaderLabel(L"Size", SortColumn::Size, state), paddedColumn(columns.size), rects.header, render.headerTextFormat(), state.sortColumn == SortColumn::Size ? activeHeader : inactiveHeader);
         }
         if (hasArea(columns.kind)) {
-            drawTextClipped(render, sortedHeaderLabel(L"Kind", SortColumn::Kind, state), columns.kind, rects.header, render.headerTextFormat(), state.sortColumn == SortColumn::Kind ? activeHeader : inactiveHeader);
+            drawTextClipped(render, sortedHeaderLabel(L"Kind", SortColumn::Kind, state), paddedColumn(columns.kind), rects.header, render.headerTextFormat(), state.sortColumn == SortColumn::Kind ? activeHeader : inactiveHeader);
         }
     }
 
@@ -1024,9 +1141,13 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
 }
 
 ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects, const ChromeState& state) const {
+    if (rects.sidebar.right > 0.0f && y >= kTabStripHeight && y <= rects.sidebar.bottom && std::abs(x - rects.sidebar.right) <= kColumnResizeHitSlop) {
+        return {ChromeHitKind::ResizeSidebar, 0, 0};
+    }
+
     std::size_t visibleTabCount = 0;
     for (std::size_t index = 0; index < state.tabTitles.size(); ++index) {
-        const D2D1_RECT_F rect = tabRect(index, rects.pathbar.right);
+        const D2D1_RECT_F rect = tabRect(index, state.tabTitles.size(), rects.sidebar.right, rects.pathbar.right);
         if (!isTabRectUsable(rect)) {
             break;
         }
@@ -1040,7 +1161,7 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
         }
     }
 
-    const D2D1_RECT_F plusRect = newTabRect(visibleTabCount, rects.pathbar.right);
+    const D2D1_RECT_F plusRect = newTabRect(visibleTabCount, rects.sidebar.right, rects.pathbar.right);
     if (isNewTabRectUsable(plusRect) && containsPoint(plusRect, x, y)) {
         return {ChromeHitKind::NewTab, 0, 0};
     }
@@ -1102,7 +1223,7 @@ ChromeHitResult FinderChrome::hitTest(float x, float y, const LayoutRects& rects
     for (const SidebarLayoutRow& row : sidebarRows) {
         const SidebarItem& item = state.sidebarItems[row.index];
         const float rowY = row.rowY;
-        const D2D1_RECT_F rowRect = D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, kSidebarRowRight, rowY + 24.0f);
+        const D2D1_RECT_F rowRect = sidebarRowRect(rects.sidebar, rowY);
         if (item.available && containsPoint(rowRect, x, y)) {
             return {ChromeHitKind::SidebarItem, row.index, 0};
         }

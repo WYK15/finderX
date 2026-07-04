@@ -38,6 +38,7 @@ enum class ChromeHitKind {
     ResizeModifiedColumn,
     ResizeSizeColumn,
     ResizeKindColumn,
+    ResizeSidebar,
     PathSegment,
     AddressField
 };
@@ -52,6 +53,7 @@ struct ChromeHitResult {
 class FinderChrome {
 public:
     LayoutRects layout(float width, float height) const;
+    LayoutRects layout(float width, float height, float sidebarWidth) const;
     void draw(RenderContext& render, const LayoutRects& rects);
     void draw(RenderContext& render, const LayoutRects& rects, const ChromeState& state);
     ChromeHitResult hitTest(float x, float y, const LayoutRects& rects, const ChromeState& state) const;

@@ -8,6 +8,7 @@
 #include <dwrite.h>
 #include <wrl/client.h>
 
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -37,7 +38,11 @@ public:
     void drawText(std::wstring_view text, const D2D1_RECT_F& rect, IDWriteTextFormat* format, D2D1_COLOR_F color);
     void fillRoundedRect(const D2D1_ROUNDED_RECT& rect, D2D1_COLOR_F color);
     void drawRoundedRect(const D2D1_ROUNDED_RECT& rect, D2D1_COLOR_F color, float width = 1.0f);
+    void fillEllipse(const D2D1_ELLIPSE& ellipse, D2D1_COLOR_F color);
+    void drawEllipse(const D2D1_ELLIPSE& ellipse, D2D1_COLOR_F color, float width = 1.0f);
     void fillRect(const D2D1_RECT_F& rect, D2D1_COLOR_F color);
+    void fillPolygon(std::span<const D2D1_POINT_2F> points, D2D1_COLOR_F color);
+    bool fillSvgPath(std::string_view pathData, float viewBoxWidth, float viewBoxHeight, const D2D1_RECT_F& rect, D2D1_COLOR_F color);
     void drawLine(D2D1_POINT_2F start, D2D1_POINT_2F end, D2D1_COLOR_F color, float width = 1.0f);
 
 private:

@@ -26,6 +26,7 @@
 #include <string_view>
 #include <utility>
 
+#include <commctrl.h>
 #include <windowsx.h>
 
 namespace finderx {
@@ -170,6 +171,11 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
     settings_ = loadSettings(homePath_).settings;
     clampSettings(settings_);
 
+    INITCOMMONCONTROLSEX commonControls{};
+    commonControls.dwSize = sizeof(commonControls);
+    commonControls.dwICC = ICC_WIN95_CLASSES;
+    InitCommonControlsEx(&commonControls);
+
     WNDCLASSEXW windowClass{};
     windowClass.cbSize = sizeof(windowClass);
     windowClass.lpfnWndProc = MainWindow::WndProc;
@@ -203,6 +209,7 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
     }
 
     ui::applyNativeTitleBarTheme(hwnd_, settings_.themeMode);
+    ensureToolbarTooltip();
     initializeFileTree();
     ShowWindow(hwnd_, showCommand);
     SetFocus(hwnd_);
@@ -290,6 +297,12 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
         const ChromeHitResult chromeHit = chrome_.hitTest(x, y, rects, chromeState_);
         switch (chromeHit.kind) {
+        case ChromeHitKind::ResizeSidebar:
+            columnResizeTarget_ = ColumnResizeTarget::Sidebar;
+            columnResizeStartX_ = x;
+            columnResizeStartWidth_ = settings_.sidebarWidth;
+            SetCapture(hwnd_);
+            return 0;
         case ChromeHitKind::ResizeModifiedColumn:
             columnResizeTarget_ = ColumnResizeTarget::Modified;
             columnResizeStartX_ = x;
@@ -419,6 +432,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
     }
     case WM_MOUSEMOVE: {
         if (pointerMode_ != PointerMode::None) {
+            hideToolbarTooltip();
             const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
             pointerCurrent_ = render_.clientPointToDips(clientPoint);
             const LayoutRects rects = currentLayout();
@@ -457,14 +471,24 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
 
         if (columnResizeTarget_ == ColumnResizeTarget::None) {
+            const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            POINT screenPoint = clientPoint;
+            ClientToScreen(hwnd_, &screenPoint);
+            updateToolbarHover(render_.clientPointToDips(clientPoint), screenPoint);
             break;
         }
 
+        hideToolbarTooltip();
         const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         const D2D1_POINT_2F dipPoint = render_.clientPointToDips(clientPoint);
         const float deltaX = dipPoint.x - columnResizeStartX_;
-        const float nextWidth = columnResizeStartWidth_ - deltaX;
+        const float nextWidth = columnResizeTarget_ == ColumnResizeTarget::Sidebar
+            ? columnResizeStartWidth_ + deltaX
+            : columnResizeStartWidth_ - deltaX;
         switch (columnResizeTarget_) {
+        case ColumnResizeTarget::Sidebar:
+            settings_.sidebarWidth = (std::clamp)(nextWidth, kMinSidebarWidth, kMaxSidebarWidth);
+            break;
         case ColumnResizeTarget::Modified:
             settings_.modifiedColumnWidth = (std::clamp)(nextWidth, kMinModifiedColumnWidth, kMaxModifiedColumnWidth);
             break;
@@ -482,6 +506,11 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         InvalidateRect(hwnd_, nullptr, FALSE);
         return 0;
     }
+    case WM_MOUSELEAVE:
+        chromeState_.hasHoveredToolbarCommand = false;
+        hideToolbarTooltip();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return 0;
     case WM_LBUTTONUP: {
         if (pointerMode_ != PointerMode::None) {
             if (pointerMode_ == PointerMode::AddressSelecting) {
@@ -525,7 +554,8 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
         const D2D1_POINT_2F dipPoint = render_.clientPointToDips(clientPoint);
         const ChromeHitKind kind = chrome_.hitTest(dipPoint.x, dipPoint.y, currentLayout(), chromeState_).kind;
-        if (kind == ChromeHitKind::ResizeModifiedColumn
+        if (kind == ChromeHitKind::ResizeSidebar
+            || kind == ChromeHitKind::ResizeModifiedColumn
             || kind == ChromeHitKind::ResizeSizeColumn
             || kind == ChromeHitKind::ResizeKindColumn) {
             SetCursor(LoadCursorW(nullptr, IDC_SIZEWE));
@@ -701,6 +731,10 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             }
         }
         stopDirectoryWatcher();
+        if (toolbarTooltip_) {
+            DestroyWindow(toolbarTooltip_);
+            toolbarTooltip_ = nullptr;
+        }
         KillTimer(hwnd_, kSearchCaretTimerId);
         PostQuitMessage(0);
         return 0;
@@ -720,19 +754,19 @@ bool allZipPaths(const std::vector<std::wstring>& paths) {
 LayoutRects MainWindow::currentLayout() const {
     const D2D1_SIZE_F renderSize = render_.sizeDips();
     if (renderSize.width > 0.0f && renderSize.height > 0.0f) {
-        return chrome_.layout(renderSize.width, renderSize.height);
+        return chrome_.layout(renderSize.width, renderSize.height, settings_.sidebarWidth);
     }
 
     RECT client{};
     if (!hwnd_ || !GetClientRect(hwnd_, &client)) {
-        return chrome_.layout(0.0f, 0.0f);
+        return chrome_.layout(0.0f, 0.0f, settings_.sidebarWidth);
     }
 
     const D2D1_SIZE_F clientSize = pixelsToDips(
         static_cast<unsigned int>(client.right - client.left),
         static_cast<unsigned int>(client.bottom - client.top),
         render_.dpiScale());
-    return chrome_.layout(clientSize.width, clientSize.height);
+    return chrome_.layout(clientSize.width, clientSize.height, settings_.sidebarWidth);
 }
 
 void MainWindow::initializeFileTree() {
@@ -1984,6 +2018,8 @@ bool MainWindow::selectNodeByPath(const std::wstring& path) {
 }
 
 void MainWindow::refreshChromeState() {
+    const bool hadHoveredToolbarCommand = chromeState_.hasHoveredToolbarCommand;
+    const ToolbarCommand hoveredToolbarCommand = chromeState_.hoveredToolbarCommand;
     if (!hasActiveTab()) {
         chromeState_.title.clear();
         chromeState_.pathText.clear();
@@ -2009,6 +2045,8 @@ void MainWindow::refreshChromeState() {
         chromeState_.sizeColumnWidth = settings_.sizeColumnWidth;
         chromeState_.kindColumnWidth = settings_.kindColumnWidth;
         chromeState_.toolbarCommands = settings_.toolbarCommands;
+        chromeState_.hasHoveredToolbarCommand = hadHoveredToolbarCommand;
+        chromeState_.hoveredToolbarCommand = hoveredToolbarCommand;
         return;
     }
 
@@ -2045,6 +2083,132 @@ void MainWindow::refreshChromeState() {
     chromeState_.sizeColumnWidth = settings_.sizeColumnWidth;
     chromeState_.kindColumnWidth = settings_.kindColumnWidth;
     chromeState_.toolbarCommands = settings_.toolbarCommands;
+    chromeState_.hasHoveredToolbarCommand = hadHoveredToolbarCommand;
+    chromeState_.hoveredToolbarCommand = hoveredToolbarCommand;
+}
+
+std::wstring toolbarTooltipTextForHit(ChromeHitKind kind) {
+    switch (kind) {
+    case ChromeHitKind::NewFolder:
+        return L"New Folder";
+    case ChromeHitKind::NewFile:
+        return L"New File";
+    case ChromeHitKind::SortMenu:
+        return L"Sort";
+    case ChromeHitKind::Settings:
+        return L"Settings";
+    default:
+        return {};
+    }
+}
+
+bool toolbarCommandForHit(ChromeHitKind kind, ToolbarCommand& command) {
+    switch (kind) {
+    case ChromeHitKind::NewFolder:
+        command = ToolbarCommand::NewFolder;
+        return true;
+    case ChromeHitKind::NewFile:
+        command = ToolbarCommand::NewFile;
+        return true;
+    case ChromeHitKind::SortMenu:
+        command = ToolbarCommand::Sort;
+        return true;
+    case ChromeHitKind::Settings:
+        command = ToolbarCommand::Settings;
+        return true;
+    default:
+        return false;
+    }
+}
+
+void MainWindow::ensureToolbarTooltip() {
+    if (toolbarTooltip_ || !hwnd_) {
+        return;
+    }
+
+    toolbarTooltip_ = CreateWindowExW(
+        WS_EX_TOPMOST,
+        TOOLTIPS_CLASSW,
+        nullptr,
+        WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        hwnd_,
+        nullptr,
+        GetModuleHandleW(nullptr),
+        nullptr);
+    if (!toolbarTooltip_) {
+        return;
+    }
+
+    TOOLINFOW tool{};
+    tool.cbSize = sizeof(tool);
+    tool.uFlags = TTF_TRACK | TTF_ABSOLUTE;
+    tool.hwnd = hwnd_;
+    tool.uId = 1;
+    tool.lpszText = const_cast<wchar_t*>(L"");
+    SendMessageW(toolbarTooltip_, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
+    SendMessageW(toolbarTooltip_, TTM_SETMAXTIPWIDTH, 0, 260);
+}
+
+void MainWindow::updateToolbarHover(D2D1_POINT_2F point, POINT screenPoint) {
+    TRACKMOUSEEVENT tracking{};
+    tracking.cbSize = sizeof(tracking);
+    tracking.dwFlags = TME_LEAVE;
+    tracking.hwndTrack = hwnd_;
+    TrackMouseEvent(&tracking);
+
+    const ChromeHitResult hit = chrome_.hitTest(point.x, point.y, currentLayout(), chromeState_);
+    ToolbarCommand command = ToolbarCommand::Search;
+    const bool hasToolbarHover = toolbarCommandForHit(hit.kind, command);
+    const bool changed = chromeState_.hasHoveredToolbarCommand != hasToolbarHover
+        || (hasToolbarHover && chromeState_.hoveredToolbarCommand != command);
+    chromeState_.hasHoveredToolbarCommand = hasToolbarHover;
+    chromeState_.hoveredToolbarCommand = command;
+
+    const std::wstring text = toolbarTooltipTextForHit(hit.kind);
+    if (text.empty()) {
+        hideToolbarTooltip();
+    } else {
+        ensureToolbarTooltip();
+        if (toolbarTooltip_) {
+            toolbarTooltipText_ = text;
+            TOOLINFOW tool{};
+            tool.cbSize = sizeof(tool);
+            tool.uFlags = TTF_TRACK | TTF_ABSOLUTE;
+            tool.hwnd = hwnd_;
+            tool.uId = 1;
+            tool.lpszText = toolbarTooltipText_.data();
+            SendMessageW(toolbarTooltip_, TTM_UPDATETIPTEXTW, 0, reinterpret_cast<LPARAM>(&tool));
+            SendMessageW(toolbarTooltip_, TTM_TRACKPOSITION, 0, MAKELPARAM(screenPoint.x + 12, screenPoint.y + 18));
+            SendMessageW(toolbarTooltip_, TTM_TRACKACTIVATE, TRUE, reinterpret_cast<LPARAM>(&tool));
+            toolbarTooltipVisible_ = true;
+        }
+    }
+
+    if (changed) {
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+}
+
+void MainWindow::hideToolbarTooltip() {
+    if (chromeState_.hasHoveredToolbarCommand) {
+        chromeState_.hasHoveredToolbarCommand = false;
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+    if (!toolbarTooltip_ || !toolbarTooltipVisible_) {
+        return;
+    }
+
+    TOOLINFOW tool{};
+    tool.cbSize = sizeof(tool);
+    tool.uFlags = TTF_TRACK | TTF_ABSOLUTE;
+    tool.hwnd = hwnd_;
+    tool.uId = 1;
+    SendMessageW(toolbarTooltip_, TTM_TRACKACTIVATE, FALSE, reinterpret_cast<LPARAM>(&tool));
+    toolbarTooltipVisible_ = false;
 }
 
 void MainWindow::focusSearch() {

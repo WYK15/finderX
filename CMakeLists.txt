@@ -355,6 +355,7 @@ if(FINDERX_APP_SOURCES_EXIST)
         windowscodecs
         ole32
         shell32
+        comctl32
         dwmapi
     )
     finderx_enable_utf8(FinderX)
