@@ -2470,11 +2470,10 @@ void MainWindow::paint() {
     }
 
     const LayoutRects rects = currentLayout();
+    const ThemeTokens tokens = themeTokens(settings_.themeMode);
 
     render_.beginDraw();
-    render_.clear(settings_.themeMode == ThemeMode::Dark
-        ? D2D1::ColorF(0.065f, 0.080f, 0.115f)
-        : D2D1::ColorF(1.0f, 1.0f, 1.0f));
+    render_.clear(tokens.app);
     chrome_.draw(render_, rects, chromeState_);
     if (hasActiveTab()) {
         activeTab().listView.draw(render_, rects.list);
@@ -2482,14 +2481,10 @@ void MainWindow::paint() {
             const D2D1_RECT_F band = currentRubberBandRect();
             render_.fillRoundedRect(
                 D2D1::RoundedRect(band, 3.0f, 3.0f),
-                settings_.themeMode == ThemeMode::Dark
-                    ? D2D1::ColorF(0.20f, 0.55f, 1.0f, 0.18f)
-                    : D2D1::ColorF(0.10f, 0.45f, 1.0f, 0.14f));
+                tokens.rubberBandFill);
             render_.drawRoundedRect(
                 D2D1::RoundedRect(band, 3.0f, 3.0f),
-                settings_.themeMode == ThemeMode::Dark
-                    ? D2D1::ColorF(0.44f, 0.72f, 1.0f, 0.75f)
-                    : D2D1::ColorF(0.14f, 0.44f, 0.90f, 0.65f),
+                tokens.rubberBandStroke,
                 1.0f);
         }
         drawDragFeedback();

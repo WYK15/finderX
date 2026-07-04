@@ -46,6 +46,18 @@ void testRadiiMatchDesignBaseline() {
     require(tokens.radiusWindow == 10.0f, "window radius should be 10px");
 }
 
+void testInteractionTokensHaveExpectedTransparency() {
+    const ThemeTokens light = themeTokens(ThemeMode::Light);
+    const ThemeTokens dark = themeTokens(ThemeMode::Dark);
+
+    require(light.rubberBandFill.a > 0.0f && light.rubberBandFill.a < 0.30f, "light rubber band fill should be translucent");
+    require(dark.rubberBandFill.a > 0.0f && dark.rubberBandFill.a < 0.30f, "dark rubber band fill should be translucent");
+    require(light.sidebarIconPlate.a < 1.0f, "light sidebar icon plate should be subtle");
+    require(dark.sidebarIconPlate.a <= 1.0f, "dark sidebar icon plate should not exceed full opacity");
+    require(light.navigationDisabled.a == 1.0f, "disabled navigation should remain opaque for readability");
+    require(dark.navigationDisabled.a == 1.0f, "disabled navigation should remain opaque for readability");
+}
+
 void testAlphaHelperPreservesRgb() {
     const D2D1_COLOR_F color = D2D1::ColorF(0.1f, 0.2f, 0.3f, 1.0f);
     const D2D1_COLOR_F faded = withAlpha(color, 0.42f);
@@ -62,6 +74,7 @@ int main() {
     testThemeTokensExposeDistinctLightAndDarkSurfaces();
     testAccentStaysBlueAcrossThemes();
     testRadiiMatchDesignBaseline();
+    testInteractionTokensHaveExpectedTransparency();
     testAlphaHelperPreservesRgb();
     std::cout << "ThemeTokensTests passed\n";
 }

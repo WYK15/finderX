@@ -38,7 +38,31 @@ struct ThemeTokens {
     D2D1_COLOR_F statusError{};
     D2D1_COLOR_F rowStripe{};
     D2D1_COLOR_F rowSelected{};
+    D2D1_COLOR_F rowSelectedMutedInk{};
     D2D1_COLOR_F shadow{};
+
+    D2D1_COLOR_F navigation{};
+    D2D1_COLOR_F navigationDisabled{};
+    D2D1_COLOR_F pathInk{};
+    D2D1_COLOR_F pathChevron{};
+
+    D2D1_COLOR_F sidebarIconPlate{};
+    D2D1_COLOR_F sidebarIconPlateSelected{};
+    D2D1_COLOR_F sidebarIconPlateDisabled{};
+    D2D1_COLOR_F sidebarIcon{};
+    D2D1_COLOR_F sidebarIconSelected{};
+    D2D1_COLOR_F sidebarIconDisabled{};
+
+    D2D1_COLOR_F folderTab{};
+    D2D1_COLOR_F folderBody{};
+    D2D1_COLOR_F folderHighlight{};
+    D2D1_COLOR_F selectedFolderTab{};
+    D2D1_COLOR_F selectedFolderBody{};
+    D2D1_COLOR_F selectedIconSurface{};
+    D2D1_COLOR_F selectedIconLine{};
+
+    D2D1_COLOR_F rubberBandFill{};
+    D2D1_COLOR_F rubberBandStroke{};
 
     float radiusControl = 6.0f;
     float radiusPanel = 8.0f;

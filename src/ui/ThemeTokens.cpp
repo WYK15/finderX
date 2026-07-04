@@ -41,7 +41,31 @@ ThemeTokens lightTokens() {
     tokens.statusError = color(0.72f, 0.18f, 0.16f);
     tokens.rowStripe = color(0.965f, 0.965f, 0.965f);
     tokens.rowSelected = color(0.00f, 0.42f, 0.88f);
+    tokens.rowSelectedMutedInk = color(0.92f, 0.96f, 1.0f);
     tokens.shadow = color(0.0f, 0.0f, 0.0f, 0.14f);
+
+    tokens.navigation = color(0.20f, 0.20f, 0.20f);
+    tokens.navigationDisabled = color(0.68f, 0.68f, 0.68f);
+    tokens.pathInk = color(0.34f, 0.34f, 0.34f);
+    tokens.pathChevron = color(0.56f, 0.56f, 0.56f);
+
+    tokens.sidebarIconPlate = color(0.84f, 0.90f, 1.0f, 0.55f);
+    tokens.sidebarIconPlateSelected = color(0.70f, 0.82f, 1.0f, 0.55f);
+    tokens.sidebarIconPlateDisabled = color(0.84f, 0.85f, 0.86f, 0.50f);
+    tokens.sidebarIcon = color(0.02f, 0.45f, 0.92f);
+    tokens.sidebarIconSelected = color(0.02f, 0.33f, 0.70f);
+    tokens.sidebarIconDisabled = color(0.62f, 0.62f, 0.62f);
+
+    tokens.folderTab = color(0.96f, 0.72f, 0.24f);
+    tokens.folderBody = color(1.0f, 0.80f, 0.32f);
+    tokens.folderHighlight = color(1.0f, 0.92f, 0.58f, 0.45f);
+    tokens.selectedFolderTab = color(0.82f, 0.91f, 1.0f);
+    tokens.selectedFolderBody = color(0.72f, 0.86f, 1.0f);
+    tokens.selectedIconSurface = color(0.96f, 0.99f, 1.0f);
+    tokens.selectedIconLine = color(0.52f, 0.74f, 1.0f);
+
+    tokens.rubberBandFill = color(0.10f, 0.45f, 1.0f, 0.14f);
+    tokens.rubberBandStroke = color(0.14f, 0.44f, 0.90f, 0.65f);
     return tokens;
 }
 
@@ -78,7 +102,31 @@ ThemeTokens darkTokens() {
     tokens.statusError = color(0.92f, 0.35f, 0.32f);
     tokens.rowStripe = color(0.095f, 0.115f, 0.155f);
     tokens.rowSelected = color(0.12f, 0.34f, 0.74f);
+    tokens.rowSelectedMutedInk = color(0.92f, 0.96f, 1.0f);
     tokens.shadow = color(0.0f, 0.0f, 0.0f, 0.24f);
+
+    tokens.navigation = color(0.88f, 0.92f, 0.98f);
+    tokens.navigationDisabled = color(0.35f, 0.40f, 0.50f);
+    tokens.pathInk = color(0.72f, 0.78f, 0.88f);
+    tokens.pathChevron = color(0.42f, 0.48f, 0.58f);
+
+    tokens.sidebarIconPlate = color(0.11f, 0.15f, 0.23f, 0.95f);
+    tokens.sidebarIconPlateSelected = color(0.12f, 0.30f, 0.62f, 0.90f);
+    tokens.sidebarIconPlateDisabled = color(0.14f, 0.16f, 0.21f, 0.70f);
+    tokens.sidebarIcon = color(0.25f, 0.58f, 1.0f);
+    tokens.sidebarIconSelected = color(0.55f, 0.72f, 1.0f);
+    tokens.sidebarIconDisabled = color(0.35f, 0.40f, 0.50f);
+
+    tokens.folderTab = tokens.accentFaint;
+    tokens.folderBody = tokens.accentDeep;
+    tokens.folderHighlight = withAlpha(tokens.accentFaint, 0.30f);
+    tokens.selectedFolderTab = color(0.82f, 0.91f, 1.0f);
+    tokens.selectedFolderBody = color(0.72f, 0.86f, 1.0f);
+    tokens.selectedIconSurface = color(0.96f, 0.99f, 1.0f);
+    tokens.selectedIconLine = color(0.52f, 0.74f, 1.0f);
+
+    tokens.rubberBandFill = color(0.20f, 0.55f, 1.0f, 0.18f);
+    tokens.rubberBandStroke = color(0.44f, 0.72f, 1.0f, 0.75f);
     return tokens;
 }
 

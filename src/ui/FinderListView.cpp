@@ -34,10 +34,6 @@ bool isExpandableFolder(const FileNode& node) {
     return node.kind == FileKind::Folder && (!node.childrenLoaded || !node.children.empty());
 }
 
-bool isDark(ThemeMode mode) {
-    return isDarkTheme(mode);
-}
-
 D2D1_COLOR_F rowStripeColor(ThemeMode mode) {
     return themeTokens(mode).rowStripe;
 }
@@ -55,7 +51,7 @@ D2D1_COLOR_F primaryTextColor(ThemeMode mode, bool selected) {
 
 D2D1_COLOR_F mutedTextColor(ThemeMode mode, bool selected) {
     if (selected) {
-        return D2D1::ColorF(0.92f, 0.96f, 1.0f);
+        return themeTokens(mode).rowSelectedMutedInk;
     }
     return themeTokens(mode).inkDull;
 }
@@ -88,15 +84,9 @@ void drawDisclosure(RenderContext& render, const FileNode& node, float x, float 
 
 void drawFolderIcon(RenderContext& render, float x, float y, float size, bool selected, ThemeMode mode) {
     const ThemeTokens tokens = themeTokens(mode);
-    const D2D1_COLOR_F tabColor = selected
-        ? D2D1::ColorF(0.82f, 0.91f, 1.0f)
-        : (isDark(mode) ? tokens.accentFaint : D2D1::ColorF(0.96f, 0.72f, 0.24f));
-    const D2D1_COLOR_F bodyColor = selected
-        ? D2D1::ColorF(0.72f, 0.86f, 1.0f)
-        : (isDark(mode) ? tokens.accentDeep : D2D1::ColorF(1.0f, 0.80f, 0.32f));
-    const D2D1_COLOR_F highlightColor = selected
-        ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.36f)
-        : (isDark(mode) ? withAlpha(tokens.accentFaint, 0.30f) : D2D1::ColorF(1.0f, 0.92f, 0.58f, 0.45f));
+    const D2D1_COLOR_F tabColor = selected ? tokens.selectedFolderTab : tokens.folderTab;
+    const D2D1_COLOR_F bodyColor = selected ? tokens.selectedFolderBody : tokens.folderBody;
+    const D2D1_COLOR_F highlightColor = selected ? withAlpha(tokens.inkOnAccent, 0.36f) : tokens.folderHighlight;
     const float scale = size / kBaseIconSize;
 
     render.fillRoundedRect(
@@ -121,18 +111,10 @@ void drawFolderIcon(RenderContext& render, float x, float y, float size, bool se
 
 void drawFileIcon(RenderContext& render, float x, float y, float size, bool selected, ThemeMode mode) {
     const ThemeTokens tokens = themeTokens(mode);
-    const D2D1_COLOR_F fillColor = selected
-        ? D2D1::ColorF(0.96f, 0.99f, 1.0f)
-        : tokens.appBox;
-    const D2D1_COLOR_F strokeColor = selected
-        ? D2D1::ColorF(0.78f, 0.89f, 1.0f)
-        : tokens.appLine;
-    const D2D1_COLOR_F lineColor = selected
-        ? D2D1::ColorF(0.52f, 0.74f, 1.0f)
-        : tokens.inkFaint;
-    const D2D1_COLOR_F cornerColor = selected
-        ? D2D1::ColorF(0.72f, 0.86f, 1.0f)
-        : tokens.accentFaint;
+    const D2D1_COLOR_F fillColor = selected ? tokens.selectedIconSurface : tokens.appBox;
+    const D2D1_COLOR_F strokeColor = selected ? tokens.selectedFolderTab : tokens.appLine;
+    const D2D1_COLOR_F lineColor = selected ? tokens.selectedIconLine : tokens.inkFaint;
+    const D2D1_COLOR_F cornerColor = selected ? tokens.selectedFolderBody : tokens.accentFaint;
     const float scale = size / kBaseIconSize;
 
     const D2D1_RECT_F body = D2D1::RectF(x + 2.0f * scale, y + 1.0f * scale, x + 12.0f * scale, y + size);

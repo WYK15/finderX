@@ -70,18 +70,6 @@ struct ToolbarCommandLayout {
     D2D1_RECT_F rect{};
 };
 
-D2D1_COLOR_F rgb(float value) {
-    return D2D1::ColorF(value, value, value);
-}
-
-bool isDark(ThemeMode mode) {
-    return mode == ThemeMode::Dark;
-}
-
-D2D1_COLOR_F themeColor(ThemeMode mode, D2D1_COLOR_F light, D2D1_COLOR_F dark) {
-    return isDark(mode) ? dark : light;
-}
-
 float clampNonNegative(float value) {
     return (std::max)(0.0f, value);
 }
@@ -258,10 +246,11 @@ D2D1_RECT_F columnResizeRect(float x, const D2D1_RECT_F& header) {
 }
 
 void drawHeaderColumnSeparator(RenderContext& render, const D2D1_RECT_F& header, float x, ThemeMode mode) {
+    const ThemeTokens tokens = themeTokens(mode);
     render.drawLine(
         D2D1::Point2F(x, header.top + 5.0f),
         D2D1::Point2F(x, header.bottom - 5.0f),
-        themeColor(mode, D2D1::ColorF(0.84f, 0.84f, 0.84f), D2D1::ColorF(0.26f, 0.31f, 0.40f)),
+        tokens.appLine,
         1.0f);
 }
 
@@ -335,10 +324,8 @@ std::wstring sortedHeaderLabel(std::wstring label, SortColumn column, const Chro
 }
 
 D2D1_COLOR_F navigationColor(bool enabled, ThemeMode mode) {
-    if (isDark(mode)) {
-        return enabled ? D2D1::ColorF(0.88f, 0.92f, 0.98f) : D2D1::ColorF(0.35f, 0.40f, 0.50f);
-    }
-    return enabled ? D2D1::ColorF(0.20f, 0.20f, 0.20f) : D2D1::ColorF(0.68f, 0.68f, 0.68f);
+    const ThemeTokens tokens = themeTokens(mode);
+    return enabled ? tokens.navigation : tokens.navigationDisabled;
 }
 
 void drawFolderGlyph(RenderContext& render, float x, float y, D2D1_COLOR_F color) {
@@ -355,11 +342,10 @@ void drawFolderGlyph(RenderContext& render, float x, float y, D2D1_COLOR_F color
 }
 
 void drawSidebarIconPlate(RenderContext& render, float x, float y, bool selected, bool available, ThemeMode mode) {
+    const ThemeTokens tokens = themeTokens(mode);
     const D2D1_COLOR_F fill = !available
-        ? themeColor(mode, D2D1::ColorF(0.84f, 0.85f, 0.86f, 0.50f), D2D1::ColorF(0.14f, 0.16f, 0.21f, 0.70f))
-        : (selected
-            ? themeColor(mode, D2D1::ColorF(0.70f, 0.82f, 1.0f, 0.55f), D2D1::ColorF(0.12f, 0.30f, 0.62f, 0.90f))
-            : themeColor(mode, D2D1::ColorF(0.84f, 0.90f, 1.0f, 0.55f), D2D1::ColorF(0.11f, 0.15f, 0.23f, 0.95f)));
+        ? tokens.sidebarIconPlateDisabled
+        : (selected ? tokens.sidebarIconPlateSelected : tokens.sidebarIconPlate);
     render.fillRoundedRect(
         D2D1::RoundedRect(D2D1::RectF(x - 5.0f, y - 3.0f, x + 21.0f, y + 21.0f), 6.0f, 6.0f),
         fill);
@@ -368,11 +354,10 @@ void drawSidebarIconPlate(RenderContext& render, float x, float y, bool selected
 void drawSidebarIcon(RenderContext& render, std::wstring_view label, float x, float y, bool selected, bool available, ThemeMode mode) {
     drawSidebarIconPlate(render, x, y, selected, available, mode);
 
+    const ThemeTokens tokens = themeTokens(mode);
     const D2D1_COLOR_F color = !available
-        ? themeColor(mode, D2D1::ColorF(0.62f, 0.62f, 0.62f), D2D1::ColorF(0.35f, 0.40f, 0.50f))
-        : (selected
-            ? themeColor(mode, D2D1::ColorF(0.02f, 0.33f, 0.70f), D2D1::ColorF(0.55f, 0.72f, 1.0f))
-            : themeColor(mode, D2D1::ColorF(0.02f, 0.45f, 0.92f), D2D1::ColorF(0.25f, 0.58f, 1.0f)));
+        ? tokens.sidebarIconDisabled
+        : (selected ? tokens.sidebarIconSelected : tokens.sidebarIcon);
 
     if (label == L"Downloads") {
         render.drawLine(D2D1::Point2F(x + 8.0f, y + 2.0f), D2D1::Point2F(x + 8.0f, y + 10.0f), color, 1.6f);
@@ -594,8 +579,9 @@ std::vector<PathSegmentLayout> pathSegmentLayouts(const D2D1_RECT_F& rect, std::
 
 void drawPathSegments(RenderContext& render, const D2D1_RECT_F& rect, std::wstring_view path, ThemeMode mode) {
     const std::vector<PathSegmentLayout> layouts = pathSegmentLayouts(rect, path);
-    const D2D1_COLOR_F textColor = themeColor(mode, D2D1::ColorF(0.34f, 0.34f, 0.34f), D2D1::ColorF(0.72f, 0.78f, 0.88f));
-    const D2D1_COLOR_F chevronColor = themeColor(mode, D2D1::ColorF(0.56f, 0.56f, 0.56f), D2D1::ColorF(0.42f, 0.48f, 0.58f));
+    const ThemeTokens tokens = themeTokens(mode);
+    const D2D1_COLOR_F textColor = tokens.pathInk;
+    const D2D1_COLOR_F chevronColor = tokens.pathChevron;
 
     if (layouts.empty()) {
         drawTextClipped(render, path, rect, rect, render.textFormat(), textColor);
@@ -700,7 +686,7 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         tokens.sidebar);
     if (rects.sidebar.right >= 120.0f && rects.sidebar.bottom >= 62.0f) {
         render.fillRoundedRect(D2D1::RoundedRect(D2D1::RectF(18.0f, 22.0f, 42.0f, 46.0f), tokens.radiusPanel, tokens.radiusPanel), tokens.accentDeep);
-        render.fillRoundedRect(D2D1::RoundedRect(D2D1::RectF(24.0f, 28.0f, 36.0f, 40.0f), 3.0f, 3.0f), withAlpha(D2D1::ColorF(1.0f, 1.0f, 1.0f), 0.22f));
+        render.fillRoundedRect(D2D1::RoundedRect(D2D1::RectF(24.0f, 28.0f, 36.0f, 40.0f), 3.0f, 3.0f), withAlpha(tokens.inkOnAccent, 0.22f));
         drawTextClipped(
             render,
             L"FinderX",
