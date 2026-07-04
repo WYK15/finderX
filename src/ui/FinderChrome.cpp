@@ -1,4 +1,5 @@
 #include "ui/FinderChrome.h"
+#include "ui/ThemeTokens.h"
 
 #include <algorithm>
 #include <string>
@@ -79,11 +80,6 @@ bool isDark(ThemeMode mode) {
 
 D2D1_COLOR_F themeColor(ThemeMode mode, D2D1_COLOR_F light, D2D1_COLOR_F dark) {
     return isDark(mode) ? dark : light;
-}
-
-D2D1_COLOR_F withAlpha(D2D1_COLOR_F color, float alpha) {
-    color.a = alpha;
-    return color;
 }
 
 float clampNonNegative(float value) {
@@ -687,23 +683,23 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     const D2D1_RECT_F window = D2D1::RectF(0.0f, 0.0f, rects.pathbar.right, rects.sidebar.bottom);
     const std::wstring_view title = state.title.empty() ? std::wstring_view(L"FinderX") : std::wstring_view(state.title);
     const ThemeMode mode = state.themeMode;
-    const D2D1_COLOR_F separatorColor = themeColor(mode, rgb(0.82f), D2D1::ColorF(0.16f, 0.19f, 0.26f));
-    const D2D1_COLOR_F textPrimary = themeColor(mode, D2D1::ColorF(0.18f, 0.18f, 0.18f), D2D1::ColorF(0.90f, 0.93f, 0.98f));
-    const D2D1_COLOR_F textSecondary = themeColor(mode, D2D1::ColorF(0.38f, 0.38f, 0.38f), D2D1::ColorF(0.60f, 0.66f, 0.76f));
-    const D2D1_COLOR_F mutedText = themeColor(mode, D2D1::ColorF(0.50f, 0.50f, 0.50f), D2D1::ColorF(0.43f, 0.49f, 0.59f));
-    const D2D1_COLOR_F controlFill = themeColor(mode, D2D1::ColorF(0.91f, 0.92f, 0.93f), D2D1::ColorF(0.13f, 0.16f, 0.22f));
-    const D2D1_COLOR_F controlStroke = themeColor(mode, rgb(0.82f), D2D1::ColorF(0.22f, 0.27f, 0.36f));
+    const ThemeTokens tokens = themeTokens(mode);
+    const D2D1_COLOR_F separatorColor = tokens.appLine;
+    const D2D1_COLOR_F textPrimary = tokens.ink;
+    const D2D1_COLOR_F textSecondary = tokens.inkDull;
+    const D2D1_COLOR_F mutedText = tokens.inkFaint;
+    const D2D1_COLOR_F controlFill = tokens.appOverlay;
+    const D2D1_COLOR_F controlStroke = tokens.appLine;
 
-    render.fillRect(rects.sidebar, themeColor(mode, D2D1::ColorF(0.92f, 0.93f, 0.94f), D2D1::ColorF(0.075f, 0.090f, 0.125f)));
-    render.fillRect(rects.toolbar, themeColor(mode, D2D1::ColorF(0.97f, 0.97f, 0.965f), D2D1::ColorF(0.080f, 0.100f, 0.145f)));
-    render.fillRect(rects.header, themeColor(mode, D2D1::ColorF(0.995f, 0.995f, 0.995f), D2D1::ColorF(0.070f, 0.085f, 0.120f)));
-    render.fillRect(rects.pathbar, themeColor(mode, D2D1::ColorF(0.975f, 0.975f, 0.972f), D2D1::ColorF(0.080f, 0.095f, 0.135f)));
+    render.fillRect(rects.sidebar, tokens.sidebar);
+    render.fillRect(rects.toolbar, tokens.menu);
+    render.fillRect(rects.header, tokens.app);
+    render.fillRect(rects.pathbar, tokens.menu);
     render.fillRect(
         D2D1::RectF(0.0f, 0.0f, rects.pathbar.right, (std::min)(kTabStripHeight, rects.sidebar.bottom)),
-        themeColor(mode, D2D1::ColorF(0.925f, 0.93f, 0.935f), D2D1::ColorF(0.055f, 0.070f, 0.105f)));
+        tokens.sidebar);
     if (rects.sidebar.right >= 120.0f && rects.sidebar.bottom >= 62.0f) {
-        const D2D1_COLOR_F logoFill = themeColor(mode, D2D1::ColorF(0.18f, 0.45f, 0.98f), D2D1::ColorF(0.18f, 0.40f, 0.92f));
-        render.fillRoundedRect(D2D1::RoundedRect(D2D1::RectF(18.0f, 22.0f, 42.0f, 46.0f), 7.0f, 7.0f), logoFill);
+        render.fillRoundedRect(D2D1::RoundedRect(D2D1::RectF(18.0f, 22.0f, 42.0f, 46.0f), tokens.radiusPanel, tokens.radiusPanel), tokens.accentDeep);
         render.fillRoundedRect(D2D1::RoundedRect(D2D1::RectF(24.0f, 28.0f, 36.0f, 40.0f), 3.0f, 3.0f), withAlpha(D2D1::ColorF(1.0f, 1.0f, 1.0f), 0.22f));
         drawTextClipped(
             render,
@@ -727,15 +723,11 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         visibleTabCount = index + 1;
 
         const bool active = index == state.activeTabIndex;
-        const D2D1_COLOR_F fill = active
-            ? themeColor(mode, D2D1::ColorF(0.985f, 0.985f, 0.982f), D2D1::ColorF(0.105f, 0.130f, 0.190f))
-            : themeColor(mode, D2D1::ColorF(0.86f, 0.865f, 0.87f), D2D1::ColorF(0.075f, 0.090f, 0.130f));
-        const D2D1_COLOR_F stroke = active
-            ? themeColor(mode, D2D1::ColorF(0.76f, 0.76f, 0.76f), D2D1::ColorF(0.25f, 0.33f, 0.48f))
-            : themeColor(mode, D2D1::ColorF(0.78f, 0.785f, 0.79f), D2D1::ColorF(0.16f, 0.19f, 0.26f));
+        const D2D1_COLOR_F fill = active ? tokens.appBox : tokens.appHover;
+        const D2D1_COLOR_F stroke = active ? tokens.appLine : tokens.sidebarLine;
 
-        render.fillRoundedRect(D2D1::RoundedRect(rect, 6.0f, 6.0f), fill);
-        render.drawRoundedRect(D2D1::RoundedRect(rect, 6.0f, 6.0f), stroke, 1.0f);
+        render.fillRoundedRect(D2D1::RoundedRect(rect, tokens.radiusControl, tokens.radiusControl), fill);
+        render.drawRoundedRect(D2D1::RoundedRect(rect, tokens.radiusControl, tokens.radiusControl), stroke, 1.0f);
         drawTextClipped(
             render,
             state.tabTitles[index],
@@ -765,10 +757,10 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     const D2D1_RECT_F plusRect = newTabRect(visibleTabCount, rects.pathbar.right);
     if (isNewTabRectUsable(plusRect)) {
         render.fillRoundedRect(
-            D2D1::RoundedRect(plusRect, 6.0f, 6.0f),
+            D2D1::RoundedRect(plusRect, tokens.radiusControl, tokens.radiusControl),
             controlFill);
         render.drawRoundedRect(
-            D2D1::RoundedRect(plusRect, 6.0f, 6.0f),
+            D2D1::RoundedRect(plusRect, tokens.radiusControl, tokens.radiusControl),
             controlStroke,
             1.0f);
         drawTextClipped(
@@ -815,9 +807,9 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             render.fillRoundedRect(
                 D2D1::RoundedRect(
                     clampRect(D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, kSidebarRowRight, rowY + 24.0f), rects.sidebar),
-                    6.0f,
-                    6.0f),
-                themeColor(mode, D2D1::ColorF(0.80f, 0.82f, 0.84f), D2D1::ColorF(0.13f, 0.22f, 0.36f)));
+                    tokens.radiusControl,
+                    tokens.radiusControl),
+                tokens.sidebarSelected);
         }
 
         drawSidebarIcon(render, item.label, 35.0f, rowY + 4.0f, item.selected, item.available, mode);
@@ -836,17 +828,17 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             clampRect(
                 D2D1::RectF(rects.toolbar.left + kBackLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kBackRightOffset, rects.toolbar.top + kToolbarButtonBottom),
                 rects.toolbar),
-            7.0f,
-            7.0f),
-        state.canGoBack ? controlFill : themeColor(mode, D2D1::ColorF(0.945f, 0.945f, 0.94f), D2D1::ColorF(0.095f, 0.115f, 0.160f)));
+            tokens.radiusControl,
+            tokens.radiusControl),
+        state.canGoBack ? controlFill : tokens.app);
     render.fillRoundedRect(
         D2D1::RoundedRect(
             clampRect(
                 D2D1::RectF(rects.toolbar.left + kForwardLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kForwardRightOffset, rects.toolbar.top + kToolbarButtonBottom),
                 rects.toolbar),
-            7.0f,
-            7.0f),
-        state.canGoForward ? controlFill : themeColor(mode, D2D1::ColorF(0.945f, 0.945f, 0.94f), D2D1::ColorF(0.095f, 0.115f, 0.160f)));
+            tokens.radiusControl,
+            tokens.radiusControl),
+        state.canGoForward ? controlFill : tokens.app);
     drawTextClipped(
         render,
         L"\u2039",
@@ -871,10 +863,10 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     const std::vector<ToolbarCommandLayout> toolbarLayouts = toolbarCommandLayouts(rects.toolbar, state);
     for (const ToolbarCommandLayout& layout : toolbarLayouts) {
         render.fillRoundedRect(
-            D2D1::RoundedRect(layout.rect, 7.0f, 7.0f),
+            D2D1::RoundedRect(layout.rect, tokens.radiusControl, tokens.radiusControl),
             controlFill);
         render.drawRoundedRect(
-            D2D1::RoundedRect(layout.rect, 7.0f, 7.0f),
+            D2D1::RoundedRect(layout.rect, tokens.radiusControl, tokens.radiusControl),
             controlStroke,
             1.0f);
         drawToolbarCommandGlyph(render, layout.command, layout.rect, state.sortDirection, textSecondary);
@@ -885,11 +877,11 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         const bool hasSearchText = !state.searchText.empty();
         const D2D1_RECT_F searchTextRect = D2D1::RectF(searchRect.left + 11.0f, searchRect.top + 4.0f, searchRect.right - 12.0f, searchRect.bottom);
         render.fillRoundedRect(
-            D2D1::RoundedRect(searchRect, 7.0f, 7.0f),
-            themeColor(mode, D2D1::ColorF(1.0f, 1.0f, 1.0f), D2D1::ColorF(0.095f, 0.115f, 0.160f)));
+            D2D1::RoundedRect(searchRect, tokens.radiusControl, tokens.radiusControl),
+            tokens.appInput);
         render.drawRoundedRect(
-            D2D1::RoundedRect(searchRect, 7.0f, 7.0f),
-            state.searchFocused ? D2D1::ColorF(0.20f, 0.52f, 1.0f) : themeColor(mode, rgb(0.88f), D2D1::ColorF(0.22f, 0.27f, 0.36f)),
+            D2D1::RoundedRect(searchRect, tokens.radiusControl, tokens.radiusControl),
+            state.searchFocused ? tokens.accent : tokens.appLine,
             state.searchFocused ? 1.4f : 1.0f);
         drawTextClipped(
             render,
@@ -937,11 +929,11 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     if (state.addressEditing) {
         const D2D1_RECT_F addressTextRect = D2D1::RectF(pathRect.left + 8.0f, pathRect.top, pathRect.right - 8.0f, pathRect.bottom);
         render.fillRoundedRect(
-            D2D1::RoundedRect(pathRect, 6.0f, 6.0f),
-            themeColor(mode, D2D1::ColorF(1.0f, 1.0f, 1.0f), D2D1::ColorF(0.095f, 0.115f, 0.160f)));
+            D2D1::RoundedRect(pathRect, tokens.radiusControl, tokens.radiusControl),
+            tokens.appInput);
         render.drawRoundedRect(
-            D2D1::RoundedRect(pathRect, 6.0f, 6.0f),
-            D2D1::ColorF(0.20f, 0.52f, 1.0f),
+            D2D1::RoundedRect(pathRect, tokens.radiusControl, tokens.radiusControl),
+            tokens.accent,
             1.2f);
         const std::size_t selectionStart = (std::min)(state.addressSelectionStart, state.addressText.size());
         const std::size_t selectionEnd = (std::min)(state.addressSelectionEnd, state.addressText.size());
@@ -955,7 +947,7 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             if (selectionLeft < selectionRight) {
                 render.fillRoundedRect(
                     D2D1::RoundedRect(D2D1::RectF(selectionLeft, pathRect.top + 4.0f, selectionRight, pathRect.bottom - 4.0f), 3.0f, 3.0f),
-                    D2D1::ColorF(0.20f, 0.52f, 1.0f, 0.30f));
+                    withAlpha(tokens.accent, 0.30f));
             }
         }
         drawTextClipped(
@@ -985,7 +977,7 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             pathRect,
             window,
             render.textFormat(),
-            D2D1::ColorF(0.72f, 0.18f, 0.16f));
+            tokens.statusError);
     }
 }
 

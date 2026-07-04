@@ -197,6 +197,17 @@ finderx_enable_utf8(finderx_drag_feedback_tests)
 finderx_enable_windows_unicode(finderx_drag_feedback_tests)
 add_test(NAME finderx_drag_feedback_tests COMMAND finderx_drag_feedback_tests)
 
+add_executable(finderx_theme_tokens_tests
+    src/ui/ThemeTokensTests.cpp
+    src/ui/ThemeTokens.cpp
+)
+
+target_include_directories(finderx_theme_tokens_tests PRIVATE src)
+target_link_libraries(finderx_theme_tokens_tests PRIVATE d2d1)
+finderx_enable_utf8(finderx_theme_tokens_tests)
+finderx_enable_windows_unicode(finderx_theme_tokens_tests)
+add_test(NAME finderx_theme_tokens_tests COMMAND finderx_theme_tokens_tests)
+
 add_executable(finderx_native_title_bar_tests
     src/ui/NativeTitleBarTests.cpp
     src/ui/NativeTitleBar.cpp
@@ -264,6 +275,7 @@ add_test(NAME finderx_render_context_tests COMMAND finderx_render_context_tests)
 add_executable(finderx_list_view_tests
     src/ui/FinderListViewTests.cpp
     src/ui/FinderListView.cpp
+    src/ui/ThemeTokens.cpp
     src/ui/RenderContext.cpp
 )
 
@@ -276,6 +288,7 @@ add_test(NAME finderx_list_view_tests COMMAND finderx_list_view_tests)
 add_executable(finderx_chrome_tests
     src/ui/FinderChromeTests.cpp
     src/ui/FinderChrome.cpp
+    src/ui/ThemeTokens.cpp
     src/ui/RenderContext.cpp
 )
 
@@ -301,6 +314,7 @@ set(FINDERX_APP_SOURCES
     src/ui/SettingsDialog.cpp
     src/ui/ToolbarCustomization.cpp
     src/ui/ToolbarCustomizationDialog.cpp
+    src/ui/ThemeTokens.cpp
     src/ui/RenderContext.cpp
     resources/FinderX.rc
 )

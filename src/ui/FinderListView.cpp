@@ -1,4 +1,5 @@
 #include "ui/FinderListView.h"
+#include "ui/ThemeTokens.h"
 
 #include <algorithm>
 #include <cmath>
@@ -34,29 +35,29 @@ bool isExpandableFolder(const FileNode& node) {
 }
 
 bool isDark(ThemeMode mode) {
-    return mode == ThemeMode::Dark;
+    return isDarkTheme(mode);
 }
 
 D2D1_COLOR_F rowStripeColor(ThemeMode mode) {
-    return isDark(mode) ? D2D1::ColorF(0.095f, 0.115f, 0.155f) : D2D1::ColorF(0.965f, 0.965f, 0.965f);
+    return themeTokens(mode).rowStripe;
 }
 
 D2D1_COLOR_F rowSelectionColor(ThemeMode mode) {
-    return isDark(mode) ? D2D1::ColorF(0.12f, 0.34f, 0.74f) : D2D1::ColorF(0.00f, 0.42f, 0.88f);
+    return themeTokens(mode).rowSelected;
 }
 
 D2D1_COLOR_F primaryTextColor(ThemeMode mode, bool selected) {
     if (selected) {
-        return D2D1::ColorF(1.0f, 1.0f, 1.0f);
+        return themeTokens(mode).inkOnAccent;
     }
-    return isDark(mode) ? D2D1::ColorF(0.90f, 0.93f, 0.97f) : D2D1::ColorF(0.10f, 0.10f, 0.10f);
+    return themeTokens(mode).ink;
 }
 
 D2D1_COLOR_F mutedTextColor(ThemeMode mode, bool selected) {
     if (selected) {
         return D2D1::ColorF(0.92f, 0.96f, 1.0f);
     }
-    return isDark(mode) ? D2D1::ColorF(0.57f, 0.63f, 0.72f) : D2D1::ColorF(0.42f, 0.42f, 0.42f);
+    return themeTokens(mode).inkDull;
 }
 
 void drawTextIfWide(
@@ -86,16 +87,16 @@ void drawDisclosure(RenderContext& render, const FileNode& node, float x, float 
 }
 
 void drawFolderIcon(RenderContext& render, float x, float y, float size, bool selected, ThemeMode mode) {
-    const bool dark = isDark(mode);
+    const ThemeTokens tokens = themeTokens(mode);
     const D2D1_COLOR_F tabColor = selected
         ? D2D1::ColorF(0.82f, 0.91f, 1.0f)
-        : (dark ? D2D1::ColorF(0.30f, 0.58f, 1.0f) : D2D1::ColorF(0.96f, 0.72f, 0.24f));
+        : (isDark(mode) ? tokens.accentFaint : D2D1::ColorF(0.96f, 0.72f, 0.24f));
     const D2D1_COLOR_F bodyColor = selected
         ? D2D1::ColorF(0.72f, 0.86f, 1.0f)
-        : (dark ? D2D1::ColorF(0.20f, 0.43f, 0.86f) : D2D1::ColorF(1.0f, 0.80f, 0.32f));
+        : (isDark(mode) ? tokens.accentDeep : D2D1::ColorF(1.0f, 0.80f, 0.32f));
     const D2D1_COLOR_F highlightColor = selected
         ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.36f)
-        : (dark ? D2D1::ColorF(0.62f, 0.77f, 1.0f, 0.30f) : D2D1::ColorF(1.0f, 0.92f, 0.58f, 0.45f));
+        : (isDark(mode) ? withAlpha(tokens.accentFaint, 0.30f) : D2D1::ColorF(1.0f, 0.92f, 0.58f, 0.45f));
     const float scale = size / kBaseIconSize;
 
     render.fillRoundedRect(
@@ -119,19 +120,19 @@ void drawFolderIcon(RenderContext& render, float x, float y, float size, bool se
 }
 
 void drawFileIcon(RenderContext& render, float x, float y, float size, bool selected, ThemeMode mode) {
-    const bool dark = isDark(mode);
+    const ThemeTokens tokens = themeTokens(mode);
     const D2D1_COLOR_F fillColor = selected
         ? D2D1::ColorF(0.96f, 0.99f, 1.0f)
-        : (dark ? D2D1::ColorF(0.13f, 0.16f, 0.22f) : D2D1::ColorF(1.0f, 1.0f, 1.0f));
+        : tokens.appBox;
     const D2D1_COLOR_F strokeColor = selected
         ? D2D1::ColorF(0.78f, 0.89f, 1.0f)
-        : (dark ? D2D1::ColorF(0.30f, 0.36f, 0.47f) : D2D1::ColorF(0.72f, 0.72f, 0.72f));
+        : tokens.appLine;
     const D2D1_COLOR_F lineColor = selected
         ? D2D1::ColorF(0.52f, 0.74f, 1.0f)
-        : (dark ? D2D1::ColorF(0.48f, 0.58f, 0.72f) : D2D1::ColorF(0.62f, 0.62f, 0.62f));
+        : tokens.inkFaint;
     const D2D1_COLOR_F cornerColor = selected
         ? D2D1::ColorF(0.72f, 0.86f, 1.0f)
-        : (dark ? D2D1::ColorF(0.20f, 0.52f, 1.0f) : D2D1::ColorF(0.88f, 0.92f, 0.98f));
+        : tokens.accentFaint;
     const float scale = size / kBaseIconSize;
 
     const D2D1_RECT_F body = D2D1::RectF(x + 2.0f * scale, y + 1.0f * scale, x + 12.0f * scale, y + size);
@@ -617,6 +618,7 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
     const float nameRight = trailingLeft - 8.0f;
     const float height = rowHeight();
     const float icon = iconSize();
+    const ThemeTokens tokens = themeTokens(style_.themeMode);
     float y = bounds.top + kTopPadding - scrollY_;
     ID2D1HwndRenderTarget* target = render.target();
     if (target) {
@@ -639,12 +641,12 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
 
         if (selected) {
             render.fillRoundedRect(
-                D2D1::RoundedRect(rowRect, 5.0f, 5.0f),
-                rowSelectionColor(style_.themeMode));
+                D2D1::RoundedRect(rowRect, tokens.radiusControl, tokens.radiusControl),
+                tokens.rowSelected);
         } else if (i % 2 == 1) {
             render.fillRoundedRect(
-                D2D1::RoundedRect(rowRect, 5.0f, 5.0f),
-                rowStripeColor(style_.themeMode));
+                D2D1::RoundedRect(rowRect, tokens.radiusControl, tokens.radiusControl),
+                tokens.rowStripe);
         }
 
         const D2D1_COLOR_F textColor = primaryTextColor(style_.themeMode, selected);
@@ -659,7 +661,7 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
             render.drawLine(
                 D2D1::Point2F(guideX, y + 4.0f),
                 D2D1::Point2F(guideX, y + height - 4.0f),
-                isDark(style_.themeMode) ? D2D1::ColorF(0.18f, 0.22f, 0.30f) : D2D1::ColorF(0.88f, 0.88f, 0.88f),
+                tokens.appLine,
                 1.0f);
         }
         if (isExpandableFolder(node) && disclosureX + kDisclosureWidth <= nameRight) {

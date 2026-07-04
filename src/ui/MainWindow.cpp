@@ -1,4 +1,5 @@
 #include "ui/MainWindow.h"
+#include "ui/ThemeTokens.h"
 
 #include "fs/DriveEnumerator.h"
 #include "fs/FileCreation.h"
@@ -1599,31 +1600,23 @@ void MainWindow::drawDragFeedback() {
     }
 
     const D2D1_RECT_F rect = D2D1::RectF(left, top, left + textWidth, top + kDragFeedbackHeight);
+    const ThemeTokens tokens = themeTokens(settings_.themeMode);
     render_.fillRoundedRect(
-        D2D1::RoundedRect(D2D1::RectF(rect.left + 2.0f, rect.top + 3.0f, rect.right + 2.0f, rect.bottom + 3.0f), 7.0f, 7.0f),
-        settings_.themeMode == ThemeMode::Dark
-            ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.24f)
-            : D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.14f));
+        D2D1::RoundedRect(D2D1::RectF(rect.left + 2.0f, rect.top + 3.0f, rect.right + 2.0f, rect.bottom + 3.0f), tokens.radiusPanel, tokens.radiusPanel),
+        tokens.shadow);
     render_.fillRoundedRect(
-        D2D1::RoundedRect(rect, 7.0f, 7.0f),
-        settings_.themeMode == ThemeMode::Dark
-            ? D2D1::ColorF(0.13f, 0.16f, 0.22f, 0.94f)
-            : D2D1::ColorF(0.97f, 0.98f, 1.0f, 0.96f));
+        D2D1::RoundedRect(rect, tokens.radiusPanel, tokens.radiusPanel),
+        withAlpha(tokens.appOverlay, 0.96f));
     render_.drawRoundedRect(
-        D2D1::RoundedRect(rect, 7.0f, 7.0f),
-        settings_.themeMode == ThemeMode::Dark
-            ? D2D1::ColorF(0.35f, 0.48f, 0.68f, 0.85f)
-            : D2D1::ColorF(0.62f, 0.70f, 0.82f, 0.90f),
+        D2D1::RoundedRect(rect, tokens.radiusPanel, tokens.radiusPanel),
+        withAlpha(tokens.accentFaint, 0.85f),
         1.0f);
 
-    const D2D1_COLOR_F textColor = settings_.themeMode == ThemeMode::Dark
-        ? D2D1::ColorF(0.90f, 0.94f, 1.0f)
-        : D2D1::ColorF(0.12f, 0.16f, 0.22f);
     render_.drawText(
         dragFeedbackText_,
         D2D1::RectF(rect.left + 12.0f, rect.top + 5.0f, rect.right - 10.0f, rect.bottom),
         render_.textFormat(),
-        textColor);
+        tokens.ink);
 }
 
 bool MainWindow::canMoveDraggedItemsTo(NodeId destinationNode) const {
