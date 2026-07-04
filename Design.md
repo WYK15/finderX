@@ -50,6 +50,32 @@ Recommended defaults:
 
 Avoid one-off hard-coded colors when adding new UI. Add or reuse a semantic theme value first.
 
+## Theme Switching
+
+FinderX must support both dark and light themes as first-class UI modes.
+
+Theme behavior:
+
+- The current theme should be user-configurable in Settings.
+- Theme selection should persist between app launches.
+- If a system-following option is added later, it should map Windows light/dark preference into the same semantic theme tokens.
+- Switching themes should update the whole app consistently: title bar, toolbar, sidebar, file list/tree, path bar, menus, dialogs, settings, drag overlay, icons, and focus states.
+- Avoid partial theme changes where one surface updates but adjacent controls keep the old palette.
+
+Design requirements:
+
+- Every new color must be represented as a semantic token with both dark and light values.
+- Do not hard-code dark-only or light-only colors inside rendering code.
+- Text, icons, row selection, column separators, input carets, resize handles, and context menu highlights must remain readable in both themes.
+- Disabled and secondary text should be visibly muted but not too low-contrast.
+- Accent blue should remain recognizable in both themes, with adjusted brightness if needed.
+
+Icon requirements:
+
+- Prefer theme-aware icons when using rich file/kind assets.
+- Monochrome command icons should draw from current theme ink/accent colors.
+- Imported SpaceUI icons with `_Light` variants should be resolved through an icon resolver instead of selected ad hoc in view code.
+
 ## Typography
 
 Use the configured FinderX font setting as the source of truth. The style baseline should remain compact:
@@ -194,6 +220,7 @@ When adding or changing UI:
 - Avoid introducing new color constants inside control rendering.
 - Prefer reusable helper functions for repeated controls such as toolbar buttons, menu rows, path segments, and icon drawing.
 - Verify light theme and dark theme.
+- Verify live theme switching if the changed surface stays mounted while settings change.
 - Verify default, hover, active, focused, disabled, selected, and dragging states when applicable.
 - Verify text fit at the minimum and maximum configured font size.
 
