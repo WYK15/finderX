@@ -478,6 +478,20 @@ void drawToolbarCommandGlyph(RenderContext& render, ToolbarCommand command, cons
     }
 }
 
+void drawSearchGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
+    const float cx = rect.left + 17.0f;
+    const float cy = rect.top + 14.0f;
+    render.drawRoundedRect(
+        D2D1::RoundedRect(D2D1::RectF(cx - 4.5f, cy - 4.5f, cx + 4.5f, cy + 4.5f), 4.5f, 4.5f),
+        color,
+        1.35f);
+    render.drawLine(
+        D2D1::Point2F(cx + 3.4f, cy + 3.4f),
+        D2D1::Point2F(cx + 8.0f, cy + 8.0f),
+        color,
+        1.35f);
+}
+
 std::vector<std::wstring> splitPathSegments(std::wstring_view path) {
     std::vector<std::wstring> segments;
     std::size_t start = 0;
@@ -792,10 +806,16 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
         if (item.selected) {
             render.fillRoundedRect(
                 D2D1::RoundedRect(
+                    clampRect(D2D1::RectF(14.0f, rowY + 3.0f, 18.0f, rowY + 19.0f), rects.sidebar),
+                    2.0f,
+                    2.0f),
+                tokens.accent);
+            render.fillRoundedRect(
+                D2D1::RoundedRect(
                     clampRect(D2D1::RectF(kSidebarRowLeft, rowY - 2.0f, kSidebarRowRight, rowY + 24.0f), rects.sidebar),
-                    tokens.radiusControl,
-                    tokens.radiusControl),
-                tokens.sidebarSelected);
+                    tokens.radiusPanel,
+                    tokens.radiusPanel),
+                withAlpha(tokens.sidebarSelected, 0.92f));
         }
 
         drawSidebarIcon(render, item.label, 35.0f, rowY + 4.0f, item.selected, item.available, mode);
@@ -814,17 +834,35 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             clampRect(
                 D2D1::RectF(rects.toolbar.left + kBackLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kBackRightOffset, rects.toolbar.top + kToolbarButtonBottom),
                 rects.toolbar),
-            tokens.radiusControl,
-            tokens.radiusControl),
-        state.canGoBack ? controlFill : tokens.app);
+            16.0f,
+            16.0f),
+        state.canGoBack ? tokens.appBox : withAlpha(tokens.appOverlay, 0.58f));
+    render.drawRoundedRect(
+        D2D1::RoundedRect(
+            clampRect(
+                D2D1::RectF(rects.toolbar.left + kBackLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kBackRightOffset, rects.toolbar.top + kToolbarButtonBottom),
+                rects.toolbar),
+            16.0f,
+            16.0f),
+        controlStroke,
+        1.0f);
     render.fillRoundedRect(
         D2D1::RoundedRect(
             clampRect(
                 D2D1::RectF(rects.toolbar.left + kForwardLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kForwardRightOffset, rects.toolbar.top + kToolbarButtonBottom),
                 rects.toolbar),
-            tokens.radiusControl,
-            tokens.radiusControl),
-        state.canGoForward ? controlFill : tokens.app);
+            16.0f,
+            16.0f),
+        state.canGoForward ? tokens.appBox : withAlpha(tokens.appOverlay, 0.58f));
+    render.drawRoundedRect(
+        D2D1::RoundedRect(
+            clampRect(
+                D2D1::RectF(rects.toolbar.left + kForwardLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kForwardRightOffset, rects.toolbar.top + kToolbarButtonBottom),
+                rects.toolbar),
+            16.0f,
+            16.0f),
+        controlStroke,
+        1.0f);
     drawTextClipped(
         render,
         L"\u2039",
@@ -849,10 +887,10 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     const std::vector<ToolbarCommandLayout> toolbarLayouts = toolbarCommandLayouts(rects.toolbar, state);
     for (const ToolbarCommandLayout& layout : toolbarLayouts) {
         render.fillRoundedRect(
-            D2D1::RoundedRect(layout.rect, tokens.radiusControl, tokens.radiusControl),
-            controlFill);
+            D2D1::RoundedRect(layout.rect, 16.0f, 16.0f),
+            tokens.appBox);
         render.drawRoundedRect(
-            D2D1::RoundedRect(layout.rect, tokens.radiusControl, tokens.radiusControl),
+            D2D1::RoundedRect(layout.rect, 16.0f, 16.0f),
             controlStroke,
             1.0f);
         drawToolbarCommandGlyph(render, layout.command, layout.rect, state.sortDirection, textSecondary);
@@ -861,17 +899,18 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     const D2D1_RECT_F searchRect = hasToolbarCommand(state, ToolbarCommand::Search) ? searchFieldRect(rects.toolbar) : D2D1::RectF();
     if (hasArea(searchRect) && searchRect.right - searchRect.left >= 80.0f) {
         const bool hasSearchText = !state.searchText.empty();
-        const D2D1_RECT_F searchTextRect = D2D1::RectF(searchRect.left + 11.0f, searchRect.top + 4.0f, searchRect.right - 12.0f, searchRect.bottom);
+        const D2D1_RECT_F searchTextRect = D2D1::RectF(searchRect.left + 34.0f, searchRect.top + 4.0f, searchRect.right - 12.0f, searchRect.bottom);
         render.fillRoundedRect(
-            D2D1::RoundedRect(searchRect, tokens.radiusControl, tokens.radiusControl),
-            tokens.appInput);
+            D2D1::RoundedRect(searchRect, 14.0f, 14.0f),
+            withAlpha(tokens.appInput, 0.94f));
         render.drawRoundedRect(
-            D2D1::RoundedRect(searchRect, tokens.radiusControl, tokens.radiusControl),
+            D2D1::RoundedRect(searchRect, 14.0f, 14.0f),
             state.searchFocused ? tokens.accent : tokens.appLine,
             state.searchFocused ? 1.4f : 1.0f);
+        drawSearchGlyph(render, searchRect, state.searchFocused ? tokens.accent : mutedText);
         drawTextClipped(
             render,
-            hasSearchText ? std::wstring_view(state.searchText) : (state.searchFocused ? std::wstring_view(L"") : std::wstring_view(L"\u2315 Search")),
+            hasSearchText ? std::wstring_view(state.searchText) : (state.searchFocused ? std::wstring_view(L"") : std::wstring_view(L"Search")),
             searchTextRect,
             searchRect,
             render.textFormat(),
@@ -955,7 +994,15 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
                 1.2f);
         }
     } else if (state.statusText.empty()) {
-        drawPathSegments(render, clampRect(pathRect, window), state.pathText, mode);
+        const D2D1_RECT_F clippedPathRect = clampRect(pathRect, window);
+        render.fillRoundedRect(
+            D2D1::RoundedRect(clippedPathRect, 10.0f, 10.0f),
+            withAlpha(tokens.appOverlay, 0.76f));
+        render.drawRoundedRect(
+            D2D1::RoundedRect(clippedPathRect, 10.0f, 10.0f),
+            withAlpha(tokens.appLine, 0.82f),
+            1.0f);
+        drawPathSegments(render, clippedPathRect, state.pathText, mode);
     } else {
         drawTextClipped(
             render,
