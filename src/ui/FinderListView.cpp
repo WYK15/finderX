@@ -1,4 +1,5 @@
 #include "ui/FinderListView.h"
+#include "ui/FileIconResolver.h"
 #include "ui/ThemeTokens.h"
 
 #include <algorithm>
@@ -109,31 +110,105 @@ void drawFolderIcon(RenderContext& render, float x, float y, float size, bool se
         highlightColor);
 }
 
-void drawFileIcon(RenderContext& render, float x, float y, float size, bool selected, ThemeMode mode) {
+struct FileIconPalette {
+    D2D1_COLOR_F fill{};
+    D2D1_COLOR_F stroke{};
+    D2D1_COLOR_F mark{};
+    D2D1_COLOR_F fold{};
+};
+
+FileIconPalette fileIconPalette(FileIconKind iconKind, bool selected, ThemeMode mode) {
     const ThemeTokens tokens = themeTokens(mode);
-    const D2D1_COLOR_F fillColor = selected ? tokens.selectedIconSurface : tokens.appBox;
-    const D2D1_COLOR_F strokeColor = selected ? tokens.selectedFolderTab : tokens.appLine;
-    const D2D1_COLOR_F lineColor = selected ? tokens.selectedIconLine : tokens.inkFaint;
-    const D2D1_COLOR_F cornerColor = selected ? tokens.selectedFolderBody : tokens.accentFaint;
+    if (selected) {
+        return {tokens.selectedIconSurface, tokens.selectedFolderTab, tokens.selectedIconLine, tokens.selectedFolderBody};
+    }
+
+    switch (iconKind) {
+    case FileIconKind::Image:
+        return {D2D1::ColorF(0.12f, 0.48f, 0.35f), D2D1::ColorF(0.18f, 0.72f, 0.52f), D2D1::ColorF(0.70f, 1.0f, 0.84f), D2D1::ColorF(0.30f, 0.85f, 0.58f)};
+    case FileIconKind::Video:
+        return {D2D1::ColorF(0.35f, 0.18f, 0.52f), D2D1::ColorF(0.62f, 0.42f, 0.95f), D2D1::ColorF(0.90f, 0.80f, 1.0f), D2D1::ColorF(0.55f, 0.34f, 0.88f)};
+    case FileIconKind::Audio:
+        return {D2D1::ColorF(0.40f, 0.22f, 0.10f), D2D1::ColorF(0.94f, 0.58f, 0.24f), D2D1::ColorF(1.0f, 0.78f, 0.44f), D2D1::ColorF(0.90f, 0.42f, 0.16f)};
+    case FileIconKind::Archive:
+        return {D2D1::ColorF(0.36f, 0.29f, 0.10f), D2D1::ColorF(0.84f, 0.70f, 0.22f), D2D1::ColorF(1.0f, 0.88f, 0.38f), D2D1::ColorF(0.72f, 0.56f, 0.14f)};
+    case FileIconKind::Code:
+        return {D2D1::ColorF(0.10f, 0.28f, 0.46f), D2D1::ColorF(0.24f, 0.62f, 1.0f), D2D1::ColorF(0.68f, 0.86f, 1.0f), D2D1::ColorF(0.18f, 0.48f, 0.82f)};
+    case FileIconKind::Pdf:
+        return {D2D1::ColorF(0.52f, 0.12f, 0.12f), D2D1::ColorF(0.90f, 0.26f, 0.24f), D2D1::ColorF(1.0f, 0.78f, 0.76f), D2D1::ColorF(0.76f, 0.16f, 0.14f)};
+    case FileIconKind::Executable:
+        return {D2D1::ColorF(0.18f, 0.22f, 0.28f), D2D1::ColorF(0.56f, 0.64f, 0.76f), D2D1::ColorF(0.82f, 0.88f, 0.96f), D2D1::ColorF(0.38f, 0.46f, 0.58f)};
+    case FileIconKind::Document:
+    case FileIconKind::Folder:
+    default:
+        return {tokens.appBox, tokens.appLine, tokens.inkFaint, tokens.accentFaint};
+    }
+}
+
+void drawTypeMark(RenderContext& render, FileIconKind iconKind, float x, float y, float size, D2D1_COLOR_F color) {
+    const float scale = size / kBaseIconSize;
+    switch (iconKind) {
+    case FileIconKind::Image:
+        render.drawLine(D2D1::Point2F(x + 4.0f * scale, y + 10.0f * scale), D2D1::Point2F(x + 6.6f * scale, y + 7.5f * scale), color, 1.2f);
+        render.drawLine(D2D1::Point2F(x + 6.6f * scale, y + 7.5f * scale), D2D1::Point2F(x + 8.4f * scale, y + 9.3f * scale), color, 1.2f);
+        render.drawLine(D2D1::Point2F(x + 8.4f * scale, y + 9.3f * scale), D2D1::Point2F(x + 10.5f * scale, y + 6.7f * scale), color, 1.2f);
+        render.fillRoundedRect(D2D1::RoundedRect(D2D1::RectF(x + 4.0f * scale, y + 4.0f * scale, x + 5.8f * scale, y + 5.8f * scale), 0.9f * scale, 0.9f * scale), color);
+        break;
+    case FileIconKind::Video:
+        render.fillRoundedRect(D2D1::RoundedRect(D2D1::RectF(x + 4.2f * scale, y + 4.5f * scale, x + 5.5f * scale, y + 10.5f * scale), 0.5f * scale, 0.5f * scale), color);
+        render.drawLine(D2D1::Point2F(x + 6.0f * scale, y + 4.5f * scale), D2D1::Point2F(x + 10.2f * scale, y + 7.5f * scale), color, 1.8f);
+        render.drawLine(D2D1::Point2F(x + 10.2f * scale, y + 7.5f * scale), D2D1::Point2F(x + 6.0f * scale, y + 10.5f * scale), color, 1.8f);
+        break;
+    case FileIconKind::Audio:
+        render.drawLine(D2D1::Point2F(x + 5.5f * scale, y + 4.5f * scale), D2D1::Point2F(x + 5.5f * scale, y + 10.0f * scale), color, 1.4f);
+        render.drawLine(D2D1::Point2F(x + 5.5f * scale, y + 4.5f * scale), D2D1::Point2F(x + 9.8f * scale, y + 3.6f * scale), color, 1.4f);
+        render.drawLine(D2D1::Point2F(x + 9.8f * scale, y + 3.6f * scale), D2D1::Point2F(x + 9.8f * scale, y + 8.6f * scale), color, 1.4f);
+        render.fillRoundedRect(D2D1::RoundedRect(D2D1::RectF(x + 3.6f * scale, y + 9.0f * scale, x + 6.6f * scale, y + 11.5f * scale), 1.2f * scale, 1.2f * scale), color);
+        break;
+    case FileIconKind::Archive:
+        for (int i = 0; i < 4; ++i) {
+            const float top = y + (3.8f + static_cast<float>(i) * 2.0f) * scale;
+            render.drawLine(D2D1::Point2F(x + 4.0f * scale, top), D2D1::Point2F(x + 10.0f * scale, top), color, 1.0f);
+        }
+        break;
+    case FileIconKind::Code:
+        render.drawLine(D2D1::Point2F(x + 5.5f * scale, y + 4.5f * scale), D2D1::Point2F(x + 3.5f * scale, y + 7.3f * scale), color, 1.2f);
+        render.drawLine(D2D1::Point2F(x + 3.5f * scale, y + 7.3f * scale), D2D1::Point2F(x + 5.5f * scale, y + 10.0f * scale), color, 1.2f);
+        render.drawLine(D2D1::Point2F(x + 8.5f * scale, y + 4.5f * scale), D2D1::Point2F(x + 10.5f * scale, y + 7.3f * scale), color, 1.2f);
+        render.drawLine(D2D1::Point2F(x + 10.5f * scale, y + 7.3f * scale), D2D1::Point2F(x + 8.5f * scale, y + 10.0f * scale), color, 1.2f);
+        break;
+    case FileIconKind::Pdf:
+        render.drawText(L"PDF", D2D1::RectF(x + 3.0f * scale, y + 5.0f * scale, x + 12.5f * scale, y + 13.0f * scale), render.headerTextFormat(), color);
+        break;
+    case FileIconKind::Executable:
+        render.fillRoundedRect(D2D1::RoundedRect(D2D1::RectF(x + 4.0f * scale, y + 4.8f * scale, x + 10.0f * scale, y + 10.8f * scale), 1.4f * scale, 1.4f * scale), withAlpha(color, 0.36f));
+        render.drawLine(D2D1::Point2F(x + 7.0f * scale, y + 3.2f * scale), D2D1::Point2F(x + 7.0f * scale, y + 12.0f * scale), color, 1.1f);
+        render.drawLine(D2D1::Point2F(x + 2.8f * scale, y + 7.8f * scale), D2D1::Point2F(x + 11.2f * scale, y + 7.8f * scale), color, 1.1f);
+        break;
+    case FileIconKind::Document:
+    case FileIconKind::Folder:
+    default:
+        render.drawLine(D2D1::Point2F(x + 4.0f * scale, y + 6.0f * scale), D2D1::Point2F(x + 10.0f * scale, y + 6.0f * scale), color);
+        render.drawLine(D2D1::Point2F(x + 4.0f * scale, y + 9.0f * scale), D2D1::Point2F(x + 10.0f * scale, y + 9.0f * scale), color);
+        break;
+    }
+}
+
+void drawFileIcon(RenderContext& render, const FileNode& node, float x, float y, float size, bool selected, ThemeMode mode) {
+    const FileIconKind iconKind = resolveFileIconKind(node);
+    const FileIconPalette palette = fileIconPalette(iconKind, selected, mode);
     const float scale = size / kBaseIconSize;
 
     const D2D1_RECT_F body = D2D1::RectF(x + 2.0f * scale, y + 1.0f * scale, x + 12.0f * scale, y + size);
-    render.fillRoundedRect(D2D1::RoundedRect(body, 1.5f * scale, 1.5f * scale), fillColor);
-    render.drawRoundedRect(D2D1::RoundedRect(body, 1.5f * scale, 1.5f * scale), strokeColor);
+    render.fillRoundedRect(D2D1::RoundedRect(body, 1.5f * scale, 1.5f * scale), palette.fill);
+    render.drawRoundedRect(D2D1::RoundedRect(body, 1.5f * scale, 1.5f * scale), palette.stroke);
     render.fillRoundedRect(
         D2D1::RoundedRect(
             D2D1::RectF(x + 8.0f * scale, y + 1.0f * scale, x + 12.0f * scale, y + 5.0f * scale),
             1.0f * scale,
             1.0f * scale),
-        cornerColor);
-    render.drawLine(
-        D2D1::Point2F(x + 4.0f * scale, y + 6.0f * scale),
-        D2D1::Point2F(x + 10.0f * scale, y + 6.0f * scale),
-        lineColor);
-    render.drawLine(
-        D2D1::Point2F(x + 4.0f * scale, y + 9.0f * scale),
-        D2D1::Point2F(x + 10.0f * scale, y + 9.0f * scale),
-        lineColor);
+        palette.fold);
+    drawTypeMark(render, iconKind, x, y, size, palette.mark);
 }
 
 void drawNodeIcon(RenderContext& render, const FileNode& node, float x, float y, float size, bool selected, ThemeMode mode) {
@@ -142,7 +217,7 @@ void drawNodeIcon(RenderContext& render, const FileNode& node, float x, float y,
         return;
     }
 
-    drawFileIcon(render, x, y, size, selected, mode);
+    drawFileIcon(render, node, x, y, size, selected, mode);
 }
 
 std::wstring lowercase(std::wstring_view text) {
