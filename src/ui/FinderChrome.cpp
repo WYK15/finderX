@@ -408,55 +408,74 @@ void drawSidebarIcon(RenderContext& render, std::wstring_view label, float x, fl
 }
 
 void drawSortGlyph(RenderContext& render, const D2D1_RECT_F& rect, SortDirection direction, D2D1_COLOR_F color) {
-    const float left = rect.left + 8.0f;
+    const float left = rect.left + 9.0f;
     const float top = rect.top + 8.0f;
     const float bottom = rect.bottom - 8.0f;
-    render.drawLine(D2D1::Point2F(left, top), D2D1::Point2F(left, bottom), color, 1.4f);
-    render.drawLine(D2D1::Point2F(left + 8.0f, top), D2D1::Point2F(left + 8.0f, bottom), color, 1.4f);
+    const float right = rect.right - 9.0f;
+    render.drawLine(D2D1::Point2F(left, top), D2D1::Point2F(left, bottom), color, 1.55f);
+    render.drawLine(D2D1::Point2F(right, top), D2D1::Point2F(right, bottom), color, 1.55f);
     if (direction == SortDirection::Ascending) {
-        render.drawLine(D2D1::Point2F(left - 3.0f, top + 4.0f), D2D1::Point2F(left, top), color, 1.4f);
-        render.drawLine(D2D1::Point2F(left + 3.0f, top + 4.0f), D2D1::Point2F(left, top), color, 1.4f);
-        render.drawLine(D2D1::Point2F(left + 5.0f, bottom - 4.0f), D2D1::Point2F(left + 8.0f, bottom), color, 1.4f);
-        render.drawLine(D2D1::Point2F(left + 11.0f, bottom - 4.0f), D2D1::Point2F(left + 8.0f, bottom), color, 1.4f);
+        render.drawLine(D2D1::Point2F(left - 3.0f, top + 4.0f), D2D1::Point2F(left, top), color, 1.55f);
+        render.drawLine(D2D1::Point2F(left + 3.0f, top + 4.0f), D2D1::Point2F(left, top), color, 1.55f);
+        render.drawLine(D2D1::Point2F(right - 3.0f, bottom - 4.0f), D2D1::Point2F(right, bottom), color, 1.55f);
+        render.drawLine(D2D1::Point2F(right + 3.0f, bottom - 4.0f), D2D1::Point2F(right, bottom), color, 1.55f);
     } else {
-        render.drawLine(D2D1::Point2F(left - 3.0f, bottom - 4.0f), D2D1::Point2F(left, bottom), color, 1.4f);
-        render.drawLine(D2D1::Point2F(left + 3.0f, bottom - 4.0f), D2D1::Point2F(left, bottom), color, 1.4f);
-        render.drawLine(D2D1::Point2F(left + 5.0f, top + 4.0f), D2D1::Point2F(left + 8.0f, top), color, 1.4f);
-        render.drawLine(D2D1::Point2F(left + 11.0f, top + 4.0f), D2D1::Point2F(left + 8.0f, top), color, 1.4f);
+        render.drawLine(D2D1::Point2F(left - 3.0f, bottom - 4.0f), D2D1::Point2F(left, bottom), color, 1.55f);
+        render.drawLine(D2D1::Point2F(left + 3.0f, bottom - 4.0f), D2D1::Point2F(left, bottom), color, 1.55f);
+        render.drawLine(D2D1::Point2F(right - 3.0f, top + 4.0f), D2D1::Point2F(right, top), color, 1.55f);
+        render.drawLine(D2D1::Point2F(right + 3.0f, top + 4.0f), D2D1::Point2F(right, top), color, 1.55f);
     }
 }
 
 void drawSettingsGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
     const float cx = rect.left + 16.0f;
     const float cy = rect.top + 16.0f;
-    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(cx - 5.0f, cy - 5.0f, cx + 5.0f, cy + 5.0f), 5.0f, 5.0f), color, 1.4f);
-    render.fillRoundedRect(D2D1::RoundedRect(D2D1::RectF(cx - 1.5f, cy - 1.5f, cx + 1.5f, cy + 1.5f), 1.5f, 1.5f), color);
-    for (int index = 0; index < 4; ++index) {
-        const float dx = (index % 2 == 0) ? 0.0f : 7.5f;
-        const float dy = (index % 2 == 0) ? 7.5f : 0.0f;
-        render.drawLine(D2D1::Point2F(cx - dx, cy - dy), D2D1::Point2F(cx - dx * 0.70f, cy - dy * 0.70f), color, 1.4f);
-        render.drawLine(D2D1::Point2F(cx + dx, cy + dy), D2D1::Point2F(cx + dx * 0.70f, cy + dy * 0.70f), color, 1.4f);
-    }
+    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(cx - 6.0f, cy - 6.0f, cx + 6.0f, cy + 6.0f), 6.0f, 6.0f), color, 1.55f);
+    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(cx - 2.0f, cy - 2.0f, cx + 2.0f, cy + 2.0f), 2.0f, 2.0f), color, 1.4f);
+    render.drawLine(D2D1::Point2F(cx, cy - 10.0f), D2D1::Point2F(cx, cy - 7.0f), color, 1.55f);
+    render.drawLine(D2D1::Point2F(cx, cy + 7.0f), D2D1::Point2F(cx, cy + 10.0f), color, 1.55f);
+    render.drawLine(D2D1::Point2F(cx - 10.0f, cy), D2D1::Point2F(cx - 7.0f, cy), color, 1.55f);
+    render.drawLine(D2D1::Point2F(cx + 7.0f, cy), D2D1::Point2F(cx + 10.0f, cy), color, 1.55f);
+    render.drawLine(D2D1::Point2F(cx - 7.0f, cy - 7.0f), D2D1::Point2F(cx - 5.0f, cy - 5.0f), color, 1.4f);
+    render.drawLine(D2D1::Point2F(cx + 5.0f, cy + 5.0f), D2D1::Point2F(cx + 7.0f, cy + 7.0f), color, 1.4f);
+    render.drawLine(D2D1::Point2F(cx + 7.0f, cy - 7.0f), D2D1::Point2F(cx + 5.0f, cy - 5.0f), color, 1.4f);
+    render.drawLine(D2D1::Point2F(cx - 5.0f, cy + 5.0f), D2D1::Point2F(cx - 7.0f, cy + 7.0f), color, 1.4f);
 }
 
 void drawNewFolderGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
-    const float left = rect.left + 8.0f;
-    const float top = rect.top + 10.0f;
-    render.drawLine(D2D1::Point2F(left, top + 5.0f), D2D1::Point2F(left + 5.0f, top + 1.0f), color, 1.3f);
-    render.drawLine(D2D1::Point2F(left + 5.0f, top + 1.0f), D2D1::Point2F(left + 11.0f, top + 1.0f), color, 1.3f);
-    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(left, top + 5.0f, left + 16.0f, top + 14.0f), 2.0f, 2.0f), color, 1.3f);
-    render.drawLine(D2D1::Point2F(rect.right - 9.0f, rect.top + 9.0f), D2D1::Point2F(rect.right - 9.0f, rect.top + 17.0f), color, 1.4f);
-    render.drawLine(D2D1::Point2F(rect.right - 13.0f, rect.top + 13.0f), D2D1::Point2F(rect.right - 5.0f, rect.top + 13.0f), color, 1.4f);
+    const float left = rect.left + 7.0f;
+    const float top = rect.top + 9.0f;
+    render.drawLine(D2D1::Point2F(left + 1.0f, top + 5.0f), D2D1::Point2F(left + 5.0f, top + 2.0f), color, 1.45f);
+    render.drawLine(D2D1::Point2F(left + 5.0f, top + 2.0f), D2D1::Point2F(left + 11.0f, top + 2.0f), color, 1.45f);
+    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(left + 1.0f, top + 5.0f, left + 18.0f, top + 15.0f), 2.4f, 2.4f), color, 1.45f);
+    render.drawLine(D2D1::Point2F(rect.right - 7.5f, rect.top + 7.5f), D2D1::Point2F(rect.right - 7.5f, rect.top + 16.5f), color, 1.55f);
+    render.drawLine(D2D1::Point2F(rect.right - 12.0f, rect.top + 12.0f), D2D1::Point2F(rect.right - 3.0f, rect.top + 12.0f), color, 1.55f);
 }
 
 void drawNewFileGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
-    const float left = rect.left + 9.0f;
+    const float left = rect.left + 8.0f;
     const float top = rect.top + 7.0f;
-    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(left, top, left + 13.0f, top + 18.0f), 1.8f, 1.8f), color, 1.3f);
-    render.drawLine(D2D1::Point2F(left + 3.0f, top + 6.0f), D2D1::Point2F(left + 10.0f, top + 6.0f), color, 1.1f);
-    render.drawLine(D2D1::Point2F(left + 3.0f, top + 10.0f), D2D1::Point2F(left + 10.0f, top + 10.0f), color, 1.1f);
-    render.drawLine(D2D1::Point2F(rect.right - 7.0f, rect.top + 9.0f), D2D1::Point2F(rect.right - 7.0f, rect.top + 17.0f), color, 1.4f);
-    render.drawLine(D2D1::Point2F(rect.right - 11.0f, rect.top + 13.0f), D2D1::Point2F(rect.right - 3.0f, rect.top + 13.0f), color, 1.4f);
+    render.drawRoundedRect(D2D1::RoundedRect(D2D1::RectF(left, top, left + 14.0f, top + 18.0f), 2.0f, 2.0f), color, 1.45f);
+    render.drawLine(D2D1::Point2F(left + 9.0f, top), D2D1::Point2F(left + 14.0f, top + 5.0f), color, 1.25f);
+    render.drawLine(D2D1::Point2F(left + 4.0f, top + 7.0f), D2D1::Point2F(left + 10.0f, top + 7.0f), color, 1.15f);
+    render.drawLine(D2D1::Point2F(left + 4.0f, top + 11.0f), D2D1::Point2F(left + 10.0f, top + 11.0f), color, 1.15f);
+    render.drawLine(D2D1::Point2F(rect.right - 6.5f, rect.top + 7.5f), D2D1::Point2F(rect.right - 6.5f, rect.top + 16.5f), color, 1.55f);
+    render.drawLine(D2D1::Point2F(rect.right - 11.0f, rect.top + 12.0f), D2D1::Point2F(rect.right - 2.0f, rect.top + 12.0f), color, 1.55f);
+}
+
+void drawPlusGlyph(RenderContext& render, const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
+    const float cx = (rect.left + rect.right) * 0.5f;
+    const float cy = (rect.top + rect.bottom) * 0.5f;
+    render.drawLine(D2D1::Point2F(cx, cy - 5.0f), D2D1::Point2F(cx, cy + 5.0f), color, 1.55f);
+    render.drawLine(D2D1::Point2F(cx - 5.0f, cy), D2D1::Point2F(cx + 5.0f, cy), color, 1.55f);
+}
+
+void drawChevronGlyph(RenderContext& render, const D2D1_RECT_F& rect, bool left, D2D1_COLOR_F color) {
+    const float cx = (rect.left + rect.right) * 0.5f;
+    const float cy = (rect.top + rect.bottom) * 0.5f;
+    const float direction = left ? -1.0f : 1.0f;
+    render.drawLine(D2D1::Point2F(cx + 3.0f * direction, cy - 6.0f), D2D1::Point2F(cx - 3.0f * direction, cy), color, 1.75f);
+    render.drawLine(D2D1::Point2F(cx - 3.0f * direction, cy), D2D1::Point2F(cx + 3.0f * direction, cy + 6.0f), color, 1.75f);
 }
 
 void drawToolbarCommandGlyph(RenderContext& render, ToolbarCommand command, const D2D1_RECT_F& rect, SortDirection sortDirection, D2D1_COLOR_F color) {
@@ -757,19 +776,13 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
     const D2D1_RECT_F plusRect = newTabRect(visibleTabCount, rects.pathbar.right);
     if (isNewTabRectUsable(plusRect)) {
         render.fillRoundedRect(
-            D2D1::RoundedRect(plusRect, tokens.radiusControl, tokens.radiusControl),
-            controlFill);
+            D2D1::RoundedRect(plusRect, 15.0f, 15.0f),
+            tokens.appBox);
         render.drawRoundedRect(
-            D2D1::RoundedRect(plusRect, tokens.radiusControl, tokens.radiusControl),
+            D2D1::RoundedRect(plusRect, 15.0f, 15.0f),
             controlStroke,
             1.0f);
-        drawTextClipped(
-            render,
-            L"+",
-            D2D1::RectF(plusRect.left + 10.0f, plusRect.top + 4.0f, plusRect.right, plusRect.bottom),
-            plusRect,
-            render.headerTextFormat(),
-            textSecondary);
+        drawPlusGlyph(render, plusRect, textSecondary);
     }
 
     if (rects.sidebar.right < rects.pathbar.right) {
@@ -863,19 +876,15 @@ void FinderChrome::draw(RenderContext& render, const LayoutRects& rects, const C
             16.0f),
         controlStroke,
         1.0f);
-    drawTextClipped(
+    drawChevronGlyph(
         render,
-        L"\u2039",
-        D2D1::RectF(rects.toolbar.left + 22.0f, rects.toolbar.top + 15.0f, rects.toolbar.left + 44.0f, rects.toolbar.top + 43.0f),
-        rects.toolbar,
-        render.textFormat(),
+        D2D1::RectF(rects.toolbar.left + kBackLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kBackRightOffset, rects.toolbar.top + kToolbarButtonBottom),
+        true,
         navigationColor(state.canGoBack, mode));
-    drawTextClipped(
+    drawChevronGlyph(
         render,
-        L"\u203a",
-        D2D1::RectF(rects.toolbar.left + 56.0f, rects.toolbar.top + 15.0f, rects.toolbar.left + 82.0f, rects.toolbar.top + 43.0f),
-        rects.toolbar,
-        render.textFormat(),
+        D2D1::RectF(rects.toolbar.left + kForwardLeftOffset, rects.toolbar.top + kToolbarButtonTop, rects.toolbar.left + kForwardRightOffset, rects.toolbar.top + kToolbarButtonBottom),
+        false,
         navigationColor(state.canGoForward, mode));
     drawTextClipped(
         render,
