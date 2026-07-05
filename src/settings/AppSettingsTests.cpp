@@ -30,6 +30,7 @@ void testDefaults() {
     require(settings.fontFamily == L"Segoe UI", "default font family should be Segoe UI");
     require(settings.contextMenuFontSize == 12.0f, "default context menu font size should be 12");
     require(settings.iconSize == 14.0f, "default icon size should be 14");
+    require(settings.itemPadding == kDefaultItemPadding, "default item padding should be compact");
     require(settings.modifiedColumnWidth == 150.0f, "default modified column width should be 150");
     require(settings.sizeColumnWidth == 80.0f, "default size column width should be 80");
     require(settings.kindColumnWidth == 120.0f, "default kind column width should be 120");
@@ -61,6 +62,7 @@ void testClamping() {
     settings.fontSize = 3.0f;
     settings.contextMenuFontSize = 3.0f;
     settings.iconSize = 99.0f;
+    settings.itemPadding = 1.0f;
     settings.modifiedColumnWidth = 20.0f;
     settings.sizeColumnWidth = 20.0f;
     settings.kindColumnWidth = 20.0f;
@@ -71,6 +73,7 @@ void testClamping() {
     require(settings.fontSize == kMinFontSize, "font size should clamp to min");
     require(settings.contextMenuFontSize == kMinContextMenuFontSize, "context menu font size should clamp to min");
     require(settings.iconSize == kMaxIconSize, "icon size should clamp to max");
+    require(settings.itemPadding == kMinItemPadding, "item padding should clamp to min");
     require(settings.modifiedColumnWidth == kMinModifiedColumnWidth, "modified column width should clamp to min");
     require(settings.sizeColumnWidth == kMinSizeColumnWidth, "size column width should clamp to min");
     require(settings.kindColumnWidth == kMinKindColumnWidth, "kind column width should clamp to min");
@@ -81,6 +84,7 @@ void testClamping() {
     settings.fontSize = 30.0f;
     settings.contextMenuFontSize = 30.0f;
     settings.iconSize = 2.0f;
+    settings.itemPadding = 99.0f;
     settings.modifiedColumnWidth = 999.0f;
     settings.sizeColumnWidth = 999.0f;
     settings.kindColumnWidth = 999.0f;
@@ -91,6 +95,7 @@ void testClamping() {
     require(settings.fontSize == kMaxFontSize, "font size should clamp to max");
     require(settings.contextMenuFontSize == kMaxContextMenuFontSize, "context menu font size should clamp to max");
     require(settings.iconSize == kMinIconSize, "icon size should clamp to min");
+    require(settings.itemPadding == kMaxItemPadding, "item padding should clamp to max");
     require(settings.modifiedColumnWidth == kMaxModifiedColumnWidth, "modified column width should clamp to max");
     require(settings.sizeColumnWidth == kMaxSizeColumnWidth, "size column width should clamp to max");
     require(settings.kindColumnWidth == kMaxKindColumnWidth, "kind column width should clamp to max");
@@ -151,6 +156,7 @@ void testSaveLoadRoundTrip() {
     settings.fontFamily = L"Microsoft YaHei UI";
     settings.contextMenuFontSize = 11.5f;
     settings.iconSize = 20.0f;
+    settings.itemPadding = 14.0f;
     settings.modifiedColumnWidth = 188.0f;
     settings.sizeColumnWidth = 96.0f;
     settings.kindColumnWidth = 164.0f;
@@ -174,6 +180,7 @@ void testSaveLoadRoundTrip() {
     require(loaded.settings.fontFamily == L"Microsoft YaHei UI", "font family should round trip");
     require(loaded.settings.contextMenuFontSize == 11.5f, "context menu font size should round trip");
     require(loaded.settings.iconSize == 20.0f, "icon size should round trip");
+    require(loaded.settings.itemPadding == 14.0f, "item padding should round trip");
     require(loaded.settings.modifiedColumnWidth == 188.0f, "modified column width should round trip");
     require(loaded.settings.sizeColumnWidth == 96.0f, "size column width should round trip");
     require(loaded.settings.kindColumnWidth == 164.0f, "kind column width should round trip");
@@ -271,6 +278,7 @@ void testInvalidFieldsFallbackToDefaults() {
         stream << "  \"fontSize\": \"bad 16\",\n";
         stream << "  \"fontFamily\": \"\",\n";
         stream << "  \"iconSize\": \"bad 20\",\n";
+        stream << "  \"itemPadding\": \"bad 14\",\n";
         stream << "  \"themeMode\": \"unknown\",\n";
         stream << "  \"sortColumn\": \"unknown\",\n";
         stream << "  \"sortDirection\": \"unknown\",\n";
@@ -283,6 +291,7 @@ void testInvalidFieldsFallbackToDefaults() {
     require(loaded.settings.fontSize == kDefaultFontSize, "invalid font field should keep default");
     require(loaded.settings.fontFamily == L"Segoe UI", "empty font family should keep default");
     require(loaded.settings.iconSize == kDefaultIconSize, "invalid icon field should keep default");
+    require(loaded.settings.itemPadding == kDefaultItemPadding, "invalid item padding field should keep default");
     require(loaded.settings.themeMode == ThemeMode::Dark, "invalid theme mode should keep default");
     require(loaded.settings.sortColumn == SortColumn::Name, "invalid sort column should keep default");
     require(loaded.settings.sortDirection == SortDirection::Ascending, "invalid sort direction should keep default");

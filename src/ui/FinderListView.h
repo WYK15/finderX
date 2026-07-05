@@ -21,11 +21,14 @@ struct ListInteractionResult {
 struct ListViewStyle {
     float fontSize = 13.0f;
     float iconSize = 14.0f;
+    float itemPadding = kDefaultItemPadding;
     ThemeMode themeMode = ThemeMode::Dark;
     float modifiedColumnWidth = kDefaultModifiedColumnWidth;
     float sizeColumnWidth = kDefaultSizeColumnWidth;
     float kindColumnWidth = kDefaultKindColumnWidth;
 };
+
+D2D1_RECT_F listRowTextRect(float left, float rowTop, float right, float rowHeight, float fontSize);
 
 class FinderListView {
 public:

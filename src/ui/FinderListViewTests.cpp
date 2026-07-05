@@ -72,6 +72,16 @@ int main() {
     const D2D1_RECT_F bounds = D2D1::RectF(0.0f, 0.0f, 900.0f, 600.0f);
 
     {
+        const D2D1_RECT_F rect = listRowTextRect(20.0f, 10.0f, 300.0f, 36.0f, 17.0f);
+        require(rect.left == 20.0f && rect.right == 300.0f, "row text rect should preserve horizontal bounds");
+        require(rect.top > 10.0f, "row text rect should move down when row padding grows");
+        require(rect.bottom < 46.0f, "row text rect should not consume the full padded row");
+        const float rowCenter = 10.0f + 36.0f * 0.5f;
+        const float textCenter = rect.top + (rect.bottom - rect.top) * 0.5f;
+        require(std::fabs(rowCenter - textCenter) < 0.01f, "row text rect should be vertically centered");
+    }
+
+    {
         FileTree tree = FileTree::sample();
         FinderListView view(&tree);
         const std::vector<VisibleRow> rows = tree.flatten();
@@ -221,7 +231,10 @@ int main() {
         FinderListView view(&tree);
         const std::vector<VisibleRow> rows = tree.flatten();
 
-        view.setStyle(ListViewStyle{18.0f, 24.0f});
+        ListViewStyle largeStyle;
+        largeStyle.fontSize = 18.0f;
+        largeStyle.iconSize = 24.0f;
+        view.setStyle(largeStyle);
         const ListInteractionResult result = view.onMouseDown(200.0f, rowY(2, 30.0f), bounds);
 
         require(result.changed, "large style click should change selection");
@@ -231,10 +244,32 @@ int main() {
     {
         FileTree tree = FileTree::sample();
         FinderListView view(&tree);
+        const std::vector<VisibleRow> rows = tree.flatten();
 
-        view.setStyle(ListViewStyle{13.0f, 14.0f, ThemeMode::Light});
+        ListViewStyle paddedStyle;
+        paddedStyle.fontSize = 13.0f;
+        paddedStyle.iconSize = 14.0f;
+        paddedStyle.itemPadding = 16.0f;
+        view.setStyle(paddedStyle);
+        const ListInteractionResult result = view.onMouseDown(200.0f, rowY(2, 29.0f), bounds);
+
+        require(result.changed, "padded style click should change selection");
+        require(view.selectedNode() == rows[2].nodeId, "padded style should increase row hit-test height");
+    }
+
+    {
+        FileTree tree = FileTree::sample();
+        FinderListView view(&tree);
+
+        ListViewStyle lightStyle;
+        lightStyle.fontSize = 13.0f;
+        lightStyle.iconSize = 14.0f;
+        lightStyle.themeMode = ThemeMode::Light;
+        view.setStyle(lightStyle);
         require(view.style().themeMode == ThemeMode::Light, "list view style should keep light theme");
-        view.setStyle(ListViewStyle{13.0f, 14.0f, ThemeMode::Dark});
+        ListViewStyle darkStyle = lightStyle;
+        darkStyle.themeMode = ThemeMode::Dark;
+        view.setStyle(darkStyle);
         require(view.style().themeMode == ThemeMode::Dark, "list view style should keep dark theme");
     }
 

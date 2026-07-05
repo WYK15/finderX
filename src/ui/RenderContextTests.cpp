@@ -45,6 +45,10 @@ int main() {
 
     RenderContext render;
     require(render.initialize(window), "render context should initialize");
+    require(render.textFormat()->GetParagraphAlignment() == DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
+            "main text format should vertically center text inside row rectangles");
+    require(render.headerTextFormat()->GetParagraphAlignment() == DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
+            "header text format should vertically center text inside header rectangles");
 
     const float narrow = render.measureTextWidth(L"iiiiiiiiii", render.textFormat());
     const float wide = render.measureTextWidth(L"WWWWWWWWWW", render.textFormat());

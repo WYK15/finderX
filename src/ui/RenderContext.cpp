@@ -391,6 +391,8 @@ bool RenderContext::createFactories() {
 
     textFormat_->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
     headerTextFormat_->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    textFormat_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    headerTextFormat_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     return true;
 }
 

@@ -2132,6 +2132,7 @@ ListViewStyle MainWindow::currentListViewStyle() const {
     return ListViewStyle{
         settings_.fontSize,
         settings_.iconSize,
+        settings_.itemPadding,
         settings_.themeMode,
         settings_.modifiedColumnWidth,
         settings_.sizeColumnWidth,

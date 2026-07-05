@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cwchar>
+#include <set>
 #include <vector>
 
 #include <commdlg.h>
@@ -49,6 +50,7 @@ constexpr int kRememberWindowSizeId = 108;
 constexpr int kStartupFolderEditId = 109;
 constexpr int kUseCurrentFolderId = 110;
 constexpr int kContextMenuFontEditId = 111;
+constexpr int kItemPaddingEditId = 112;
 constexpr int kFavoritesListId = 201;
 constexpr int kFavoriteLabelEditId = 202;
 constexpr int kFavoritePathEditId = 203;
@@ -83,6 +85,7 @@ constexpr int kDialogTop = 78;
 constexpr int kDialogSidebarWidth = 180;
 constexpr int kDialogGap = 20;
 constexpr int kDialogActionHeight = 58;
+constexpr wchar_t kOriginalComboProcProp[] = L"FinderXOriginalComboProc";
 
 bool hasStyle(DWORD style, DWORD flag) {
     return (style & flag) == flag;
@@ -136,6 +139,7 @@ bool isInputControl(HWND control) {
     return id == kFontEditId
         || id == kContextMenuFontEditId
         || id == kIconEditId
+        || id == kItemPaddingEditId
         || id == kWindowWidthEditId
         || id == kWindowHeightEditId
         || id == kStartupFolderEditId
@@ -253,6 +257,77 @@ void setControlFont(HWND control, HWND parent) {
     SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
 }
 
+void drawComboArrow(HWND combo) {
+    HWND parent = GetParent(combo);
+    auto* state = reinterpret_cast<SettingsDialogState*>(GetWindowLongPtrW(parent, GWLP_USERDATA));
+    if (!state) {
+        return;
+    }
+
+    const ThemeTokens tokens = themeTokens(state->resultSettings.themeMode);
+    RECT rect{};
+    GetClientRect(combo, &rect);
+    const int arrowW = sx(combo, 28);
+    RECT arrowRect{(std::max)(rect.left, rect.right - arrowW), rect.top, rect.right, rect.bottom};
+
+    HDC dc = GetDC(combo);
+    if (!dc) {
+        return;
+    }
+
+    HBRUSH fill = CreateSolidBrush(colorRef(tokens.appInput));
+    FillRect(dc, &arrowRect, fill);
+    DeleteObject(fill);
+
+    HPEN line = CreatePen(PS_SOLID, 1, colorRef(tokens.appLine));
+    HGDIOBJ oldPen = SelectObject(dc, line);
+    MoveToEx(dc, arrowRect.left, arrowRect.top + 1, nullptr);
+    LineTo(dc, arrowRect.left, arrowRect.bottom - 1);
+
+    const int centerX = (arrowRect.left + arrowRect.right) / 2;
+    const int centerY = (arrowRect.top + arrowRect.bottom) / 2 + sy(combo, 1);
+    POINT triangle[] = {
+        {centerX - sx(combo, 5), centerY - sy(combo, 3)},
+        {centerX + sx(combo, 5), centerY - sy(combo, 3)},
+        {centerX, centerY + sy(combo, 4)},
+    };
+    HBRUSH arrow = CreateSolidBrush(colorRef(tokens.ink));
+    HGDIOBJ oldBrush = SelectObject(dc, arrow);
+    Polygon(dc, triangle, 3);
+    SelectObject(dc, oldBrush);
+    SelectObject(dc, oldPen);
+    DeleteObject(arrow);
+    DeleteObject(line);
+    ReleaseDC(combo, dc);
+}
+
+LRESULT CALLBACK themedComboProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    auto original = reinterpret_cast<WNDPROC>(GetPropW(hwnd, kOriginalComboProcProp));
+    if (!original) {
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+    if (message == WM_NCDESTROY) {
+        RemovePropW(hwnd, kOriginalComboProcProp);
+        SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(original));
+        return CallWindowProcW(original, hwnd, message, wParam, lParam);
+    }
+
+    const LRESULT result = CallWindowProcW(original, hwnd, message, wParam, lParam);
+    if (message == WM_PAINT || message == WM_ENABLE || message == WM_SETTEXT || message == CB_SETCURSEL) {
+        drawComboArrow(hwnd);
+    }
+    return result;
+}
+
+void subclassComboBox(HWND combo) {
+    if (!combo || GetPropW(combo, kOriginalComboProcProp)) {
+        return;
+    }
+    auto original = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(combo, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(themedComboProc)));
+    SetPropW(combo, kOriginalComboProcProp, reinterpret_cast<HANDLE>(original));
+}
+
 HWND createDialogControl(DWORD exStyle,
                          const wchar_t* className,
                          const wchar_t* text,
@@ -268,7 +343,7 @@ HWND createDialogControl(DWORD exStyle,
     const bool ownerDrawButton = button && !groupBox && !hasStyle(style, BS_AUTOCHECKBOX);
     const bool listBox = wcscmp(className, L"LISTBOX") == 0;
     const bool comboBox = wcscmp(className, L"COMBOBOX") == 0;
-    const bool editable = wcscmp(className, L"EDIT") == 0 || listBox || comboBox;
+    const bool editable = wcscmp(className, L"EDIT") == 0 || comboBox;
 
     if (editable) {
         exStyle &= ~WS_EX_CLIENTEDGE;
@@ -278,7 +353,9 @@ HWND createDialogControl(DWORD exStyle,
         style |= BS_OWNERDRAW;
     }
     if (listBox) {
-        style |= LBS_OWNERDRAWFIXED | LBS_HASSTRINGS;
+        exStyle &= ~WS_EX_CLIENTEDGE;
+        style &= ~WS_BORDER;
+        style |= settingsDialogListBoxStyle();
     }
     if (comboBox) {
         style |= settingsDialogComboBoxStyle();
@@ -300,6 +377,9 @@ HWND createDialogControl(DWORD exStyle,
                                    nullptr);
     if (control) {
         setControlFont(control, parent);
+        if (comboBox) {
+            subclassComboBox(control);
+        }
     }
     return control;
 }
@@ -348,7 +428,9 @@ void drawControlFrame(HDC dc, HWND hwnd, HWND control, const ThemeTokens& tokens
         return;
     }
     RECT rect = childRect(hwnd, control);
-    InflateRect(&rect, 1, 1);
+    if (GetDlgCtrlID(control) != kCategoryListId) {
+        InflateRect(&rect, 1, 1);
+    }
     HPEN line = CreatePen(PS_SOLID, 1, colorRef(tokens.appLine));
     HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(HOLLOW_BRUSH));
     HGDIOBJ oldPen = SelectObject(dc, line);
@@ -388,6 +470,15 @@ void moveControl(HWND hwnd, int id, int x, int y, int width, int height) {
     }
 }
 
+void moveComboControl(HWND hwnd, int id, int x, int y, int width, int closedHeight, int visibleItems) {
+    HWND control = GetDlgItem(hwnd, id);
+    if (control) {
+        const int itemHeight = static_cast<int>(SendMessageW(control, CB_GETITEMHEIGHT, 0, 0));
+        const int droppedHeight = settingsDialogComboDroppedHeight(itemHeight > 0 ? itemHeight : closedHeight, visibleItems);
+        SetWindowPos(control, nullptr, x, y, width, droppedHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+}
+
 void moveHandle(HWND control, int x, int y, int width, int height) {
     if (control) {
         SetWindowPos(control, nullptr, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -418,15 +509,15 @@ void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
     const int labelW = sc(170);
     const int inputX = innerX + labelW + sc(18);
     const int inputW = (std::max)(sc(120), panelX + panelW - inputX - sc(24));
-    const int rowH = sc(32);
+    const int rowH = sc(24);
     const int labelH = sc(26);
     const int rowGap = sc(48);
-    const int buttonH = sc(32);
+    const int buttonH = sc(30);
 
     moveHandle(state.titleControl, sc(24), sc(18), width - sc(48), sc(28));
     moveHandle(state.subtitleControl, sc(24), sc(48), width - sc(48), sc(26));
 
-    moveControl(hwnd, kCategoryListId, left, top, sidebarWidth, contentHeight);
+    moveControl(hwnd, kCategoryListId, left, top, sidebarWidth, panelH);
     moveControl(hwnd, kOkId, width - sc(196), actionTop + sc(18), sc(76), buttonH);
     moveControl(hwnd, kCancelId, width - sc(108), actionTop + sc(18), sc(84), buttonH);
 
@@ -439,10 +530,10 @@ void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
         moveHandle(state.panelControls[5], panelX, panelY, panelW, panelH);
     }
 
-    if (state.appearanceControls.size() >= 11) {
+    if (state.appearanceControls.size() >= 13) {
         const int y0 = panelY + sc(38);
         moveHandle(state.appearanceControls[1], innerX, y0 + sc(3), labelW, labelH);
-        moveControl(hwnd, kFontFamilyComboId, inputX, y0, (std::min)(inputW, sc(320)), rowH);
+        moveComboControl(hwnd, kFontFamilyComboId, inputX, y0, (std::min)(inputW, sc(320)), rowH + sc(4), 16);
         moveHandle(state.appearanceControls[3], innerX, y0 + rowGap + sc(3), labelW, labelH);
         moveControl(hwnd, kFontEditId, inputX, y0 + rowGap, sc(130), rowH);
         moveHandle(state.appearanceControls[5], innerX, y0 + rowGap * 2 + sc(3), labelW, labelH);
@@ -450,7 +541,9 @@ void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
         moveHandle(state.appearanceControls[7], innerX, y0 + rowGap * 3 + sc(3), labelW, labelH);
         moveControl(hwnd, kIconEditId, inputX, y0 + rowGap * 3, sc(130), rowH);
         moveHandle(state.appearanceControls[9], innerX, y0 + rowGap * 4 + sc(3), labelW, labelH);
-        moveControl(hwnd, kThemeComboId, inputX, y0 + rowGap * 4, sc(160), rowH);
+        moveControl(hwnd, kItemPaddingEditId, inputX, y0 + rowGap * 4, sc(130), rowH);
+        moveHandle(state.appearanceControls[11], innerX, y0 + rowGap * 5 + sc(3), labelW, labelH);
+        moveComboControl(hwnd, kThemeComboId, inputX, y0 + rowGap * 5, sc(160), rowH + sc(4), 4);
     }
 
     if (state.startupControls.size() >= 9) {
@@ -618,8 +711,8 @@ void drawOwnerComboItem(SettingsDialogState& state, const DRAWITEMSTRUCT& item) 
     SetBkMode(item.hDC, TRANSPARENT);
     SetTextColor(item.hDC, colorRef(tokens.ink));
     RECT textRect = item.rcItem;
-    textRect.left += 10;
-    textRect.right -= 10;
+    textRect.left += sx(item.hwndItem, 10);
+    textRect.right -= sx(item.hwndItem, 36);
     DrawTextW(item.hDC, text.c_str(), -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_END_ELLIPSIS);
 }
 
@@ -663,6 +756,7 @@ bool tryParseFloat(const std::wstring& text, float& value) {
 bool settingsEqual(const AppSettings& left, const AppSettings& right) {
     if (left.fontSize != right.fontSize || left.fontFamily != right.fontFamily
         || left.contextMenuFontSize != right.contextMenuFontSize || left.iconSize != right.iconSize
+        || left.itemPadding != right.itemPadding
         || left.windowWidth != right.windowWidth || left.windowHeight != right.windowHeight
         || left.rememberWindowSize != right.rememberWindowSize
         || left.startupFolder != right.startupFolder
@@ -693,18 +787,41 @@ bool settingsEqual(const AppSettings& left, const AppSettings& right) {
     return true;
 }
 
-void populateFontFamilyCombo(HWND combo, const std::wstring& selectedFontFamily) {
-    static constexpr const wchar_t* kFontFamilies[] = {
-        L"Segoe UI",
-        L"Microsoft YaHei UI",
-        L"Microsoft YaHei",
-        L"SimSun",
-        L"Consolas",
-        L"Arial",
-    };
+int CALLBACK collectFontFamily(const LOGFONTW* font, const TEXTMETRICW*, DWORD type, LPARAM param) {
+    if ((type & TRUETYPE_FONTTYPE) == 0 && (type & DEVICE_FONTTYPE) != 0) {
+        return 1;
+    }
+    if (!font || font->lfFaceName[0] == L'\0' || font->lfFaceName[0] == L'@') {
+        return 1;
+    }
 
-    for (const wchar_t* fontFamily : kFontFamilies) {
-        SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(fontFamily));
+    auto* fonts = reinterpret_cast<std::set<std::wstring>*>(param);
+    fonts->insert(font->lfFaceName);
+    return 1;
+}
+
+std::set<std::wstring> installedFontFamilies() {
+    std::set<std::wstring> fonts;
+    fonts.insert(L"Segoe UI");
+    fonts.insert(L"Microsoft YaHei UI");
+    fonts.insert(L"Consolas");
+
+    HDC dc = GetDC(nullptr);
+    if (dc) {
+        LOGFONTW query{};
+        query.lfCharSet = DEFAULT_CHARSET;
+        EnumFontFamiliesExW(dc, &query, collectFontFamily, reinterpret_cast<LPARAM>(&fonts), 0);
+        ReleaseDC(nullptr, dc);
+    }
+    return fonts;
+}
+
+void populateFontFamilyCombo(HWND combo, const std::wstring& selectedFontFamily) {
+    SendMessageW(combo, CB_RESETCONTENT, 0, 0);
+
+    const std::set<std::wstring> fonts = installedFontFamilies();
+    for (const std::wstring& fontFamily : fonts) {
+        SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(fontFamily.c_str()));
     }
 
     LRESULT selected = SendMessageW(combo, CB_FINDSTRINGEXACT, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(selectedFontFamily.c_str()));
@@ -1064,12 +1181,32 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             24,
                                             hwnd,
                                             kIconEditId);
+        HWND itemPaddingLabel = createDialogControl(0,
+                                                    L"STATIC",
+                                                    L"Item padding",
+                                                    WS_CHILD | WS_VISIBLE,
+                                                    214,
+                                                    250,
+                                                    164,
+                                                    22,
+                                                    hwnd,
+                                                    0);
+        HWND itemPaddingEdit = createDialogControl(WS_EX_CLIENTEDGE,
+                                                   L"EDIT",
+                                                   formatSettingValue(state->initialSettings.itemPadding).c_str(),
+                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                                   392,
+                                                   246,
+                                                   164,
+                                                   24,
+                                                   hwnd,
+                                                   kItemPaddingEditId);
         HWND themeLabel = createDialogControl(0,
                                               L"STATIC",
                                               L"Theme",
                                               WS_CHILD | WS_VISIBLE,
                                               214,
-                                              254,
+                                              286,
                                               164,
                                               22,
                                               hwnd,
@@ -1079,7 +1216,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               L"",
                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
                                               392,
-                                              250,
+                                              282,
                                               164,
                                               120,
                                               hwnd,
@@ -1389,7 +1526,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                           28,
                                           hwnd,
                                           kCancelId);
-        if (!title || !subtitle || !categoryList || !appearanceGroup || !fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !contextMenuFontLabel || !contextMenuFontEdit || !iconLabel || !iconEdit || !themeLabel || !themeCombo
+        if (!title || !subtitle || !categoryList || !appearanceGroup || !fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !contextMenuFontLabel || !contextMenuFontEdit || !iconLabel || !iconEdit || !itemPaddingLabel || !itemPaddingEdit || !themeLabel || !themeCombo
             || !behaviorGroup || !showHiddenAndSystem || !windowGroup
             || !windowWidthLabel || !windowWidthEdit || !windowHeightLabel || !windowHeightEdit || !rememberWindowSize
             || !startupFolderLabel || !startupFolderEdit || !useCurrentFolder
@@ -1402,7 +1539,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             return -1;
         }
 
-        state->appearanceControls = {appearanceGroup, fontFamilyLabel, fontFamilyCombo, fontLabel, fontEdit, contextMenuFontLabel, contextMenuFontEdit, iconLabel, iconEdit, themeLabel, themeCombo};
+        state->appearanceControls = {appearanceGroup, fontFamilyLabel, fontFamilyCombo, fontLabel, fontEdit, contextMenuFontLabel, contextMenuFontEdit, iconLabel, iconEdit, itemPaddingLabel, itemPaddingEdit, themeLabel, themeCombo};
         state->startupControls = {windowGroup, windowWidthLabel, windowWidthEdit, windowHeightLabel, windowHeightEdit, rememberWindowSize, startupFolderLabel, startupFolderEdit, useCurrentFolder};
         state->filesControls = {behaviorGroup, showHiddenAndSystem, favoritesGroup, favoritesLabel, favoritesList, favoriteNameLabel, favoriteLabelEdit, favoritePathLabel, favoritePathEdit, favoriteUp, favoriteDown, favoriteRemove};
         state->shortcutsControls = {shortcutsGroup, shortcuts};
@@ -1414,6 +1551,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             fontEdit,
             contextMenuFontEdit,
             iconEdit,
+            itemPaddingEdit,
             themeCombo,
             windowWidthEdit,
             windowHeightEdit,
@@ -1701,6 +1839,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             syncSelectedContextTool(hwnd, *state);
             state->values.fontSizeText = getEditText(GetDlgItem(hwnd, kFontEditId));
             state->values.iconSizeText = getEditText(GetDlgItem(hwnd, kIconEditId));
+            state->values.itemPaddingText = getEditText(GetDlgItem(hwnd, kItemPaddingEditId));
             state->values.themeModeText = comboSelectedText(GetDlgItem(hwnd, kThemeComboId));
             state->values.fontFamilyText = comboSelectedText(GetDlgItem(hwnd, kFontFamilyComboId));
             state->values.contextMenuFontSizeText = getEditText(GetDlgItem(hwnd, kContextMenuFontEditId));
@@ -1774,6 +1913,9 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
     if (tryParseFloat(values.iconSizeText, parsed)) {
         settings.iconSize = parsed;
     }
+    if (tryParseFloat(values.itemPaddingText, parsed)) {
+        settings.itemPadding = parsed;
+    }
     if (tryParseFloat(values.windowWidthText, parsed)) {
         settings.windowWidth = static_cast<int>(parsed);
     }
@@ -1803,8 +1945,18 @@ DWORD settingsDialogWindowStyle() {
     return WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX;
 }
 
+DWORD settingsDialogListBoxStyle() {
+    return LBS_OWNERDRAWFIXED | LBS_HASSTRINGS | LBS_NOINTEGRALHEIGHT;
+}
+
 DWORD settingsDialogComboBoxStyle() {
-    return CBS_OWNERDRAWFIXED | CBS_HASSTRINGS;
+    return CBS_OWNERDRAWVARIABLE | CBS_HASSTRINGS | WS_VSCROLL;
+}
+
+int settingsDialogComboDroppedHeight(int itemHeight, int visibleItems) {
+    const int safeItemHeight = (std::max)(18, itemHeight);
+    const int safeVisibleItems = (std::clamp)(visibleItems, 2, 16);
+    return safeItemHeight * (safeVisibleItems + 1) + 4;
 }
 
 bool promptForSettings(HWND owner, AppSettings& settings, const std::wstring& currentFolder) {

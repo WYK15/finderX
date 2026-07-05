@@ -10,6 +10,7 @@ namespace finderx {
 inline constexpr float kDefaultFontSize = 13.0f;
 inline constexpr float kDefaultContextMenuFontSize = 12.0f;
 inline constexpr float kDefaultIconSize = 14.0f;
+inline constexpr float kDefaultItemPadding = 8.0f;
 inline constexpr wchar_t kDefaultFontFamily[] = L"Segoe UI";
 inline constexpr float kMinFontSize = 11.0f;
 inline constexpr float kMaxFontSize = 18.0f;
@@ -17,6 +18,8 @@ inline constexpr float kMinContextMenuFontSize = 10.0f;
 inline constexpr float kMaxContextMenuFontSize = 16.0f;
 inline constexpr float kMinIconSize = 12.0f;
 inline constexpr float kMaxIconSize = 24.0f;
+inline constexpr float kMinItemPadding = 4.0f;
+inline constexpr float kMaxItemPadding = 18.0f;
 inline constexpr float kDefaultModifiedColumnWidth = 150.0f;
 inline constexpr float kDefaultSizeColumnWidth = 80.0f;
 inline constexpr float kDefaultKindColumnWidth = 120.0f;
@@ -79,6 +82,7 @@ struct AppSettings {
     std::wstring fontFamily = kDefaultFontFamily;
     float contextMenuFontSize = kDefaultContextMenuFontSize;
     float iconSize = kDefaultIconSize;
+    float itemPadding = kDefaultItemPadding;
     float modifiedColumnWidth = kDefaultModifiedColumnWidth;
     float sizeColumnWidth = kDefaultSizeColumnWidth;
     float kindColumnWidth = kDefaultKindColumnWidth;

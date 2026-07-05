@@ -11,6 +11,7 @@ namespace finderx::ui {
 struct SettingsDialogValues {
     std::wstring fontSizeText;
     std::wstring iconSizeText;
+    std::wstring itemPaddingText;
     std::wstring themeModeText;
     std::wstring fontFamilyText;
     std::wstring contextMenuFontSizeText;
@@ -26,6 +27,8 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
 float settingsDialogBodyFontSize();
 float settingsDialogTitleFontSize();
 DWORD settingsDialogWindowStyle();
+DWORD settingsDialogListBoxStyle();
 DWORD settingsDialogComboBoxStyle();
+int settingsDialogComboDroppedHeight(int itemHeight, int visibleItems);
 
 } // namespace finderx::ui

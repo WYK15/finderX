@@ -78,7 +78,7 @@ void drawDisclosure(RenderContext& render, const FileNode& node, float x, float 
     const wchar_t* glyph = node.expanded ? L"\u25BE" : L"\u25B8";
     render.drawText(
         glyph,
-        D2D1::RectF(x, y + 2.0f, x + kDisclosureWidth, y + rowHeight + 2.0f),
+        listRowTextRect(x, y, x + kDisclosureWidth, rowHeight, kListMaxFontSize),
         render.textFormat(),
         color);
 }
@@ -235,6 +235,12 @@ bool nameMatchesFilter(const FileNode& node, const std::wstring& loweredFilter) 
 
 }
 
+D2D1_RECT_F listRowTextRect(float left, float rowTop, float right, float rowHeight, float fontSize) {
+    const float textHeight = (std::min)(rowHeight, (std::max)(fontSize + 6.0f, 18.0f));
+    const float top = rowTop + (rowHeight - textHeight) * 0.5f;
+    return D2D1::RectF(left, top, right, top + textHeight);
+}
+
 FinderListView::FinderListView(FileTree* tree) : tree_(tree) {
     rebuildRows();
     if (!rows_.empty()) {
@@ -245,6 +251,7 @@ FinderListView::FinderListView(FileTree* tree) : tree_(tree) {
 void FinderListView::setStyle(ListViewStyle style) {
     style.fontSize = (std::clamp)(style.fontSize, kListMinFontSize, kListMaxFontSize);
     style.iconSize = (std::clamp)(style.iconSize, kListMinIconSize, kListMaxIconSize);
+    style.itemPadding = (std::clamp)(style.itemPadding, kMinItemPadding, kMaxItemPadding);
     style.modifiedColumnWidth = (std::clamp)(style.modifiedColumnWidth, kMinModifiedColumnWidth, kMaxModifiedColumnWidth);
     style.sizeColumnWidth = (std::clamp)(style.sizeColumnWidth, kMinSizeColumnWidth, kMaxSizeColumnWidth);
     style.kindColumnWidth = (std::clamp)(style.kindColumnWidth, kMinKindColumnWidth, kMaxKindColumnWidth);
@@ -575,7 +582,7 @@ void FinderListView::clampScroll() {
 }
 
 float FinderListView::rowHeight() const {
-    return (std::max)(20.0f, (std::max)(iconSize() + 6.0f, style_.fontSize + 8.0f));
+    return (std::max)(20.0f, (std::max)(iconSize() + 6.0f, style_.fontSize + style_.itemPadding));
 }
 
 float FinderListView::iconSize() const {
@@ -800,15 +807,15 @@ void FinderListView::draw(RenderContext& render, const D2D1_RECT_F& bounds) {
         if (iconX + icon <= nameRight) {
             drawNodeIcon(render, node, iconX, iconY, icon, selected, style_.themeMode);
         }
-        drawTextIfWide(render, node.name, D2D1::RectF(nameX, y + 2.0f, nameRight, y + height + 2.0f), render.textFormat(), textColor);
+        drawTextIfWide(render, node.name, listRowTextRect(nameX, y, nameRight, height, style_.fontSize), render.textFormat(), textColor);
         if (dateWidth > 0.0f) {
-            drawTextIfWide(render, node.modified, D2D1::RectF(dateX, y + 2.0f, sizeX - 6.0f, y + height + 2.0f), render.textFormat(), mutedColor);
+            drawTextIfWide(render, node.modified, listRowTextRect(dateX, y, sizeX - 6.0f, height, style_.fontSize), render.textFormat(), mutedColor);
         }
         if (sizeWidth > 0.0f) {
-            drawTextIfWide(render, node.size, D2D1::RectF(sizeX, y + 2.0f, kindX - 6.0f, y + height + 2.0f), render.textFormat(), mutedColor);
+            drawTextIfWide(render, node.size, listRowTextRect(sizeX, y, kindX - 6.0f, height, style_.fontSize), render.textFormat(), mutedColor);
         }
         if (kindWidth > 0.0f) {
-            drawTextIfWide(render, node.kindText, D2D1::RectF(kindX, y + 2.0f, contentRight, y + height + 2.0f), render.textFormat(), mutedColor);
+            drawTextIfWide(render, node.kindText, listRowTextRect(kindX, y, contentRight, height, style_.fontSize), render.textFormat(), mutedColor);
         }
 
         y += height;
