@@ -210,6 +210,18 @@ finderx_enable_utf8(finderx_theme_tokens_tests)
 finderx_enable_windows_unicode(finderx_theme_tokens_tests)
 add_test(NAME finderx_theme_tokens_tests COMMAND finderx_theme_tokens_tests)
 
+add_executable(finderx_context_menu_presenter_tests
+    src/ui/ContextMenuPresenterTests.cpp
+    src/ui/ContextMenuPresenter.cpp
+    src/ui/ThemeTokens.cpp
+)
+
+target_include_directories(finderx_context_menu_presenter_tests PRIVATE src)
+target_link_libraries(finderx_context_menu_presenter_tests PRIVATE d2d1)
+finderx_enable_utf8(finderx_context_menu_presenter_tests)
+finderx_enable_windows_unicode(finderx_context_menu_presenter_tests)
+add_test(NAME finderx_context_menu_presenter_tests COMMAND finderx_context_menu_presenter_tests)
+
 add_executable(finderx_file_icon_resolver_tests
     src/ui/FileIconResolverTests.cpp
     src/ui/FileIconResolver.cpp
@@ -318,6 +330,7 @@ set(FINDERX_APP_SOURCES
     src/shell/ShellActions.cpp
     src/shell/ShellFileOperations.cpp
     src/ui/AddressEditor.cpp
+    src/ui/ContextMenuPresenter.cpp
     src/ui/FileOperationState.cpp
     src/ui/DragFeedback.cpp
     src/ui/FileIconResolver.cpp

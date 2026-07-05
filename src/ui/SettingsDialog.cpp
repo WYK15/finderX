@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cwchar>
+#include <vector>
 
 #include <commdlg.h>
 
@@ -22,6 +23,12 @@ struct SettingsDialogState {
     HBRUSH backgroundBrush = nullptr;
     HBRUSH inputBrush = nullptr;
     HBRUSH panelBrush = nullptr;
+    HFONT bodyFont = nullptr;
+    HFONT titleFont = nullptr;
+    HWND titleControl = nullptr;
+    HWND subtitleControl = nullptr;
+    std::vector<HWND> panelControls;
+    std::vector<HWND> framedControls;
     std::vector<HWND> appearanceControls;
     std::vector<HWND> startupControls;
     std::vector<HWND> filesControls;
@@ -41,6 +48,7 @@ constexpr int kWindowHeightEditId = 107;
 constexpr int kRememberWindowSizeId = 108;
 constexpr int kStartupFolderEditId = 109;
 constexpr int kUseCurrentFolderId = 110;
+constexpr int kContextMenuFontEditId = 111;
 constexpr int kFavoritesListId = 201;
 constexpr int kFavoriteLabelEditId = 202;
 constexpr int kFavoritePathEditId = 203;
@@ -60,11 +68,58 @@ constexpr int kContextToolUpId = 310;
 constexpr int kContextToolDownId = 311;
 constexpr int kContextToolBrowseId = 312;
 constexpr int kContextToolVsCodeId = 313;
-constexpr int kContextToolZedId = 314;
 constexpr int kOkId = IDOK;
 constexpr int kCancelId = IDCANCEL;
-constexpr int kDialogWidth = 900;
+constexpr int kDialogWidth = 940;
 constexpr int kDialogHeight = 720;
+constexpr int kDialogMinWidth = 840;
+constexpr int kDialogMinHeight = 560;
+constexpr wchar_t kSettingsUiFontFamily[] = L"Segoe UI";
+constexpr float kSettingsBodyFontSize = 10.5f;
+constexpr float kSettingsTitleFontSize = 13.0f;
+constexpr int kPanelRadius = 8;
+constexpr int kDialogMargin = 24;
+constexpr int kDialogTop = 78;
+constexpr int kDialogSidebarWidth = 180;
+constexpr int kDialogGap = 20;
+constexpr int kDialogActionHeight = 58;
+
+bool hasStyle(DWORD style, DWORD flag) {
+    return (style & flag) == flag;
+}
+
+UINT dpiForWindow(HWND hwnd) {
+    UINT dpi = hwnd ? GetDpiForWindow(hwnd) : GetDpiForSystem();
+    return dpi == 0 ? 96 : dpi;
+}
+
+int scaleForDpi(UINT dpi, int value) {
+    return MulDiv(value, static_cast<int>(dpi), 96);
+}
+
+int sx(HWND hwnd, int value) {
+    return scaleForDpi(dpiForWindow(hwnd), value);
+}
+
+int sy(HWND hwnd, int value) {
+    return scaleForDpi(dpiForWindow(hwnd), value);
+}
+
+int settingsDialogWidthForDpi(UINT dpi) {
+    return scaleForDpi(dpi, kDialogWidth);
+}
+
+int settingsDialogHeightForDpi(UINT dpi) {
+    return scaleForDpi(dpi, kDialogHeight);
+}
+
+int settingsDialogMinWidthForDpi(UINT dpi) {
+    return scaleForDpi(dpi, kDialogMinWidth);
+}
+
+int settingsDialogMinHeightForDpi(UINT dpi) {
+    return scaleForDpi(dpi, kDialogMinHeight);
+}
 
 COLORREF colorRef(D2D1_COLOR_F color) {
     const auto channel = [](float value) {
@@ -79,6 +134,7 @@ bool isInputControl(HWND control) {
     }
     const int id = GetDlgCtrlID(control);
     return id == kFontEditId
+        || id == kContextMenuFontEditId
         || id == kIconEditId
         || id == kWindowWidthEditId
         || id == kWindowHeightEditId
@@ -92,6 +148,31 @@ bool isInputControl(HWND control) {
         || id == kFavoritesListId
         || id == kThemeComboId
         || id == kFontFamilyComboId;
+}
+
+bool isOwnerDrawButtonId(int id) {
+    switch (id) {
+    case kUseCurrentFolderId:
+    case kFavoriteUpId:
+    case kFavoriteDownId:
+    case kFavoriteRemoveId:
+    case kContextToolAddId:
+    case kContextToolUpdateId:
+    case kContextToolRemoveId:
+    case kContextToolUpId:
+    case kContextToolDownId:
+    case kContextToolBrowseId:
+    case kContextToolVsCodeId:
+    case kOkId:
+    case kCancelId:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isThemedListId(int id) {
+    return id == kCategoryListId || id == kFavoritesListId || id == kContextToolListId;
 }
 
 void showControls(const std::vector<HWND>& controls, bool visible) {
@@ -109,6 +190,15 @@ void showSettingsPage(SettingsDialogState& state, int page) {
     showControls(state.filesControls, page == 2);
     showControls(state.shortcutsControls, page == 3);
     showControls(state.contextMenuControls, page == 4);
+    showControls(state.panelControls, false);
+}
+
+HFONT createDialogFont(const std::wstring& family, float size, UINT dpi, int weight = FW_NORMAL) {
+    LOGFONTW logFont{};
+    logFont.lfHeight = -MulDiv(static_cast<int>(std::round(size * 10.0f)), static_cast<int>(dpi), 720);
+    logFont.lfWeight = weight;
+    wcscpy_s(logFont.lfFaceName, family.empty() ? L"Segoe UI" : family.c_str());
+    return CreateFontIndirectW(&logFont);
 }
 
 void ensureThemeBrushes(SettingsDialogState& state) {
@@ -134,6 +224,14 @@ void deleteThemeBrushes(SettingsDialogState& state) {
         DeleteObject(state.panelBrush);
         state.panelBrush = nullptr;
     }
+    if (state.bodyFont) {
+        DeleteObject(state.bodyFont);
+        state.bodyFont = nullptr;
+    }
+    if (state.titleFont) {
+        DeleteObject(state.titleFont);
+        state.titleFont = nullptr;
+    }
 }
 
 std::wstring shortcutHelpText() {
@@ -149,8 +247,10 @@ std::wstring shortcutHelpText() {
            L"Ctrl+V  Paste";
 }
 
-void setControlFont(HWND control) {
-    SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
+void setControlFont(HWND control, HWND parent) {
+    auto* state = reinterpret_cast<SettingsDialogState*>(GetWindowLongPtrW(parent, GWLP_USERDATA));
+    HFONT font = state && state->bodyFont ? state->bodyFont : reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
 }
 
 HWND createDialogControl(DWORD exStyle,
@@ -163,10 +263,33 @@ HWND createDialogControl(DWORD exStyle,
                          int height,
                          HWND parent,
                          int id) {
+    const bool button = wcscmp(className, L"BUTTON") == 0;
+    const bool groupBox = button && hasStyle(style, BS_GROUPBOX);
+    const bool ownerDrawButton = button && !groupBox && !hasStyle(style, BS_AUTOCHECKBOX);
+    const bool listBox = wcscmp(className, L"LISTBOX") == 0;
+    const bool comboBox = wcscmp(className, L"COMBOBOX") == 0;
+    const bool editable = wcscmp(className, L"EDIT") == 0 || listBox || comboBox;
+
+    if (editable) {
+        exStyle &= ~WS_EX_CLIENTEDGE;
+        style |= WS_BORDER;
+    }
+    if (ownerDrawButton) {
+        style |= BS_OWNERDRAW;
+    }
+    if (listBox) {
+        style |= LBS_OWNERDRAWFIXED | LBS_HASSTRINGS;
+    }
+    if (comboBox) {
+        style |= settingsDialogComboBoxStyle();
+    }
+
+    const wchar_t* actualClass = groupBox ? L"STATIC" : className;
+    DWORD actualStyle = groupBox ? WS_CHILD : style;
     HWND control = CreateWindowExW(exStyle,
-                                   className,
+                                   actualClass,
                                    text,
-                                   style,
+                                   actualStyle,
                                    x,
                                    y,
                                    width,
@@ -176,9 +299,328 @@ HWND createDialogControl(DWORD exStyle,
                                    GetModuleHandleW(nullptr),
                                    nullptr);
     if (control) {
-        setControlFont(control);
+        setControlFont(control, parent);
     }
     return control;
+}
+
+RECT childRect(HWND parent, HWND child) {
+    RECT rect{};
+    GetWindowRect(child, &rect);
+    MapWindowPoints(nullptr, parent, reinterpret_cast<POINT*>(&rect), 2);
+    return rect;
+}
+
+bool isTopHeaderControl(HWND hwnd, HWND control) {
+    if (!control) {
+        return false;
+    }
+    RECT rect = childRect(hwnd, control);
+    return rect.top < kDialogTop;
+}
+
+void drawPanelFrame(HDC dc, HWND hwnd, HWND panel, const ThemeTokens& tokens) {
+    if (!panel) {
+        return;
+    }
+    RECT rect = childRect(hwnd, panel);
+    HBRUSH fill = CreateSolidBrush(colorRef(tokens.appOverlay));
+    HPEN line = CreatePen(PS_SOLID, 1, colorRef(tokens.appLine));
+    HGDIOBJ oldBrush = SelectObject(dc, fill);
+    HGDIOBJ oldPen = SelectObject(dc, line);
+    const int radius = sx(hwnd, kPanelRadius);
+    RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, radius, radius);
+    SelectObject(dc, oldPen);
+    SelectObject(dc, oldBrush);
+    DeleteObject(line);
+    DeleteObject(fill);
+
+    wchar_t text[128]{};
+    GetWindowTextW(panel, text, static_cast<int>(std::size(text)));
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, colorRef(tokens.inkDull));
+    RECT textRect{rect.left + sx(hwnd, 14), rect.top + sy(hwnd, 8), rect.right - sx(hwnd, 14), rect.top + sy(hwnd, 30)};
+    DrawTextW(dc, text, -1, &textRect, DT_SINGLELINE | DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
+}
+
+void drawControlFrame(HDC dc, HWND hwnd, HWND control, const ThemeTokens& tokens) {
+    if (!control || !IsWindowVisible(control)) {
+        return;
+    }
+    RECT rect = childRect(hwnd, control);
+    InflateRect(&rect, 1, 1);
+    HPEN line = CreatePen(PS_SOLID, 1, colorRef(tokens.appLine));
+    HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(HOLLOW_BRUSH));
+    HGDIOBJ oldPen = SelectObject(dc, line);
+    const int radius = sx(hwnd, 6);
+    RoundRect(dc, rect.left, rect.top, rect.right, rect.bottom, radius, radius);
+    SelectObject(dc, oldPen);
+    SelectObject(dc, oldBrush);
+    DeleteObject(line);
+}
+
+void paintSettingsDialog(HWND hwnd, SettingsDialogState& state, HDC dc) {
+    ensureThemeBrushes(state);
+    const ThemeTokens tokens = themeTokens(state.resultSettings.themeMode);
+    RECT client{};
+    GetClientRect(hwnd, &client);
+    FillRect(dc, &client, state.backgroundBrush);
+
+    for (std::size_t index = 0; index < state.panelControls.size(); ++index) {
+        const bool visible = (index == 0 && state.selectedPage == 0)
+            || (index == 1 && state.selectedPage == 1)
+            || ((index == 2 || index == 3) && state.selectedPage == 2)
+            || (index == 4 && state.selectedPage == 3)
+            || (index == 5 && state.selectedPage == 4);
+        if (visible) {
+            drawPanelFrame(dc, hwnd, state.panelControls[index], tokens);
+        }
+    }
+    for (HWND control : state.framedControls) {
+        drawControlFrame(dc, hwnd, control, tokens);
+    }
+}
+
+void moveControl(HWND hwnd, int id, int x, int y, int width, int height) {
+    HWND control = GetDlgItem(hwnd, id);
+    if (control) {
+        SetWindowPos(control, nullptr, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+}
+
+void moveHandle(HWND control, int x, int y, int width, int height) {
+    if (control) {
+        SetWindowPos(control, nullptr, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+}
+
+void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
+    RECT client{};
+    GetClientRect(hwnd, &client);
+    const UINT dpi = dpiForWindow(hwnd);
+    const auto sc = [dpi](int value) { return scaleForDpi(dpi, value); };
+    const int width = (std::max)(static_cast<int>(client.right - client.left), settingsDialogMinWidthForDpi(dpi));
+    const int height = (std::max)(static_cast<int>(client.bottom - client.top), settingsDialogMinHeightForDpi(dpi));
+    const int left = sc(kDialogMargin);
+    const int top = sc(kDialogTop);
+    const int actionTop = height - sc(kDialogActionHeight);
+    const int contentBottom = actionTop - sc(18);
+    const int sidebarWidth = sc(kDialogSidebarWidth);
+    const int contentLeft = left + sidebarWidth + sc(kDialogGap);
+    const int contentRight = width - sc(kDialogMargin);
+    const int contentWidth = (std::max)(sc(360), contentRight - contentLeft);
+    const int contentHeight = (std::max)(sc(260), contentBottom - top);
+    const int panelX = contentLeft;
+    const int panelY = top;
+    const int panelW = contentWidth;
+    const int panelH = contentHeight;
+    const int innerX = panelX + sc(24);
+    const int labelW = sc(170);
+    const int inputX = innerX + labelW + sc(18);
+    const int inputW = (std::max)(sc(120), panelX + panelW - inputX - sc(24));
+    const int rowH = sc(32);
+    const int labelH = sc(26);
+    const int rowGap = sc(48);
+    const int buttonH = sc(32);
+
+    moveHandle(state.titleControl, sc(24), sc(18), width - sc(48), sc(28));
+    moveHandle(state.subtitleControl, sc(24), sc(48), width - sc(48), sc(26));
+
+    moveControl(hwnd, kCategoryListId, left, top, sidebarWidth, contentHeight);
+    moveControl(hwnd, kOkId, width - sc(196), actionTop + sc(18), sc(76), buttonH);
+    moveControl(hwnd, kCancelId, width - sc(108), actionTop + sc(18), sc(84), buttonH);
+
+    if (state.panelControls.size() >= 6) {
+        moveHandle(state.panelControls[0], panelX, panelY, panelW, panelH);
+        moveHandle(state.panelControls[1], panelX, panelY, panelW, panelH);
+        moveHandle(state.panelControls[2], panelX, panelY, panelW, sc(92));
+        moveHandle(state.panelControls[3], panelX, panelY + sc(112), panelW, panelH - sc(112));
+        moveHandle(state.panelControls[4], panelX, panelY, panelW, panelH);
+        moveHandle(state.panelControls[5], panelX, panelY, panelW, panelH);
+    }
+
+    if (state.appearanceControls.size() >= 11) {
+        const int y0 = panelY + sc(38);
+        moveHandle(state.appearanceControls[1], innerX, y0 + sc(3), labelW, labelH);
+        moveControl(hwnd, kFontFamilyComboId, inputX, y0, (std::min)(inputW, sc(320)), rowH);
+        moveHandle(state.appearanceControls[3], innerX, y0 + rowGap + sc(3), labelW, labelH);
+        moveControl(hwnd, kFontEditId, inputX, y0 + rowGap, sc(130), rowH);
+        moveHandle(state.appearanceControls[5], innerX, y0 + rowGap * 2 + sc(3), labelW, labelH);
+        moveControl(hwnd, kContextMenuFontEditId, inputX, y0 + rowGap * 2, sc(130), rowH);
+        moveHandle(state.appearanceControls[7], innerX, y0 + rowGap * 3 + sc(3), labelW, labelH);
+        moveControl(hwnd, kIconEditId, inputX, y0 + rowGap * 3, sc(130), rowH);
+        moveHandle(state.appearanceControls[9], innerX, y0 + rowGap * 4 + sc(3), labelW, labelH);
+        moveControl(hwnd, kThemeComboId, inputX, y0 + rowGap * 4, sc(160), rowH);
+    }
+
+    if (state.startupControls.size() >= 9) {
+        const int y0 = panelY + sc(38);
+        moveHandle(state.startupControls[1], innerX, y0 + sc(3), labelW, labelH);
+        moveControl(hwnd, kWindowWidthEditId, inputX, y0, sc(142), rowH);
+        moveHandle(state.startupControls[3], innerX, y0 + rowGap + sc(3), labelW, labelH);
+        moveControl(hwnd, kWindowHeightEditId, inputX, y0 + rowGap, sc(142), rowH);
+        moveControl(hwnd, kRememberWindowSizeId, innerX, y0 + rowGap * 2, (std::min)(panelW - sc(48), sc(460)), rowH);
+
+        const int folderY = y0 + rowGap * 3 + sc(10);
+        const int buttonW = sc(126);
+        moveHandle(state.startupControls[6], innerX, folderY + sc(3), labelW, labelH);
+        moveControl(hwnd, kStartupFolderEditId, inputX, folderY, (std::max)(sc(180), inputW - buttonW - sc(12)), rowH);
+        moveControl(hwnd, kUseCurrentFolderId, panelX + panelW - sc(24) - buttonW, folderY, buttonW, buttonH);
+    }
+
+    if (state.filesControls.size() >= 12) {
+        moveControl(hwnd, kShowHiddenAndSystemId, innerX, panelY + sc(38), (std::min)(panelW - sc(48), sc(460)), rowH);
+        const int favY = panelY + sc(148);
+        const int listW = (std::min)(sc(320), (std::max)(sc(230), panelW * 38 / 100));
+        const int formX = innerX + listW + sc(28);
+        const int formW = (std::max)(sc(260), panelX + panelW - formX - sc(24));
+        moveHandle(state.filesControls[3], innerX, favY + sc(28), listW, labelH);
+        moveControl(hwnd, kFavoritesListId, innerX, favY + sc(60), listW, (std::max)(sc(150), panelH - sc(214)));
+        moveHandle(state.filesControls[5], formX, favY + sc(50), sc(190), labelH);
+        moveControl(hwnd, kFavoriteLabelEditId, formX, favY + sc(82), formW, rowH);
+        moveHandle(state.filesControls[7], formX, favY + sc(132), sc(190), labelH);
+        moveControl(hwnd, kFavoritePathEditId, formX, favY + sc(164), formW, rowH);
+        moveControl(hwnd, kFavoriteUpId, formX, favY + sc(214), sc(74), buttonH);
+        moveControl(hwnd, kFavoriteDownId, formX + sc(86), favY + sc(214), sc(88), buttonH);
+        moveControl(hwnd, kFavoriteRemoveId, formX + sc(186), favY + sc(214), sc(104), buttonH);
+    }
+
+    if (state.shortcutsControls.size() >= 2) {
+        moveHandle(state.shortcutsControls[1], innerX, panelY + sc(38), panelW - sc(48), panelH - sc(72));
+    }
+
+    if (state.contextMenuControls.size() >= 17) {
+        const int buttonY = panelY + panelH - sc(52);
+        const int listW = (std::min)(sc(320), (std::max)(sc(230), panelW * 38 / 100));
+        moveControl(hwnd, kContextToolListId, innerX, panelY + sc(38), listW, (std::max)(sc(150), buttonY - panelY - sc(56)));
+        const int formX = innerX + listW + sc(28);
+        const int formW = (std::max)(sc(280), panelX + panelW - formX - sc(24));
+        const int browseW = sc(100);
+        moveHandle(state.contextMenuControls[2], formX, panelY + sc(38), sc(200), labelH);
+        moveControl(hwnd, kContextToolLabelEditId, formX, panelY + sc(70), formW, rowH);
+        moveHandle(state.contextMenuControls[4], formX, panelY + sc(120), sc(200), labelH);
+        moveControl(hwnd, kContextToolExeEditId, formX, panelY + sc(152), (std::max)(sc(150), formW - browseW - sc(12)), rowH);
+        moveControl(hwnd, kContextToolBrowseId, formX + formW - browseW, panelY + sc(152), browseW, buttonH);
+        moveHandle(state.contextMenuControls[7], formX, panelY + sc(202), sc(200), labelH);
+        moveControl(hwnd, kContextToolArgsEditId, formX, panelY + sc(234), formW, rowH);
+        moveControl(hwnd, kContextToolFilesId, formX, panelY + sc(284), sc(180), rowH);
+        moveControl(hwnd, kContextToolFoldersId, formX, panelY + sc(324), sc(200), rowH);
+        moveControl(hwnd, kContextToolVsCodeId, formX, panelY + sc(376), sc(120), buttonH);
+        moveControl(hwnd, kContextToolAddId, innerX, buttonY, sc(70), buttonH);
+        moveControl(hwnd, kContextToolUpdateId, innerX + sc(82), buttonY, sc(88), buttonH);
+        moveControl(hwnd, kContextToolRemoveId, innerX + sc(182), buttonY, sc(100), buttonH);
+        moveControl(hwnd, kContextToolUpId, innerX + sc(294), buttonY, sc(66), buttonH);
+        moveControl(hwnd, kContextToolDownId, innerX + sc(372), buttonY, sc(82), buttonH);
+    }
+
+    InvalidateRect(hwnd, nullptr, TRUE);
+}
+
+void drawOwnerButton(HWND hwnd, SettingsDialogState& state, const DRAWITEMSTRUCT& item) {
+    const ThemeTokens tokens = themeTokens(state.resultSettings.themeMode);
+    const bool pressed = (item.itemState & ODS_SELECTED) != 0;
+    const bool focused = (item.itemState & ODS_FOCUS) != 0;
+    const bool primary = item.CtlID == kOkId;
+    D2D1_COLOR_F fill = primary ? tokens.accent : tokens.appOverlay;
+    if (pressed) {
+        fill = primary ? tokens.accentDeep : tokens.appActive;
+    } else if (focused) {
+        fill = primary ? tokens.accent : tokens.appHover;
+    }
+
+    HBRUSH fillBrush = CreateSolidBrush(colorRef(fill));
+    HPEN linePen = CreatePen(PS_SOLID, 1, colorRef(primary ? tokens.accent : tokens.appLine));
+    HGDIOBJ oldBrush = SelectObject(item.hDC, fillBrush);
+    HGDIOBJ oldPen = SelectObject(item.hDC, linePen);
+    RoundRect(item.hDC, item.rcItem.left, item.rcItem.top, item.rcItem.right, item.rcItem.bottom, 7, 7);
+    SelectObject(item.hDC, oldPen);
+    SelectObject(item.hDC, oldBrush);
+    DeleteObject(linePen);
+    DeleteObject(fillBrush);
+
+    wchar_t text[128]{};
+    GetWindowTextW(item.hwndItem, text, static_cast<int>(std::size(text)));
+    SetBkMode(item.hDC, TRANSPARENT);
+    SetTextColor(item.hDC, colorRef(primary ? tokens.inkOnAccent : tokens.ink));
+    if (state.bodyFont) {
+        SelectObject(item.hDC, state.bodyFont);
+    }
+    RECT textRect = item.rcItem;
+    DrawTextW(item.hDC, text, -1, &textRect, DT_SINGLELINE | DT_CENTER | DT_VCENTER | DT_END_ELLIPSIS);
+}
+
+void drawOwnerListItem(SettingsDialogState& state, const DRAWITEMSTRUCT& item) {
+    const ThemeTokens tokens = themeTokens(state.resultSettings.themeMode);
+    HBRUSH background = CreateSolidBrush(colorRef(tokens.appInput));
+    FillRect(item.hDC, &item.rcItem, background);
+    DeleteObject(background);
+
+    if (item.itemID == static_cast<UINT>(-1)) {
+        return;
+    }
+
+    const bool selected = (item.itemState & ODS_SELECTED) != 0;
+    if (selected) {
+        RECT selectedRect = item.rcItem;
+        InflateRect(&selectedRect, -3, -2);
+        HBRUSH selectedBrush = CreateSolidBrush(colorRef(tokens.rowSelected));
+        FillRect(item.hDC, &selectedRect, selectedBrush);
+        DeleteObject(selectedBrush);
+    }
+
+    const LRESULT length = SendMessageW(item.hwndItem, LB_GETTEXTLEN, item.itemID, 0);
+    if (length == LB_ERR || length < 0) {
+        return;
+    }
+    std::wstring text(static_cast<std::size_t>(length) + 1, L'\0');
+    SendMessageW(item.hwndItem, LB_GETTEXT, item.itemID, reinterpret_cast<LPARAM>(text.data()));
+    text.resize(static_cast<std::size_t>(length));
+
+    if (state.bodyFont) {
+        SelectObject(item.hDC, state.bodyFont);
+    }
+    SetBkMode(item.hDC, TRANSPARENT);
+    SetTextColor(item.hDC, colorRef(selected ? tokens.inkOnAccent : tokens.ink));
+    RECT textRect = item.rcItem;
+    textRect.left += 10;
+    textRect.right -= 10;
+    DrawTextW(item.hDC, text.c_str(), -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_END_ELLIPSIS);
+}
+
+void drawOwnerComboItem(SettingsDialogState& state, const DRAWITEMSTRUCT& item) {
+    const ThemeTokens tokens = themeTokens(state.resultSettings.themeMode);
+    HBRUSH background = CreateSolidBrush(colorRef(tokens.appInput));
+    FillRect(item.hDC, &item.rcItem, background);
+    DeleteObject(background);
+
+    if (item.itemID == static_cast<UINT>(-1)) {
+        return;
+    }
+
+    const bool selected = (item.itemState & ODS_SELECTED) != 0;
+    if (selected) {
+        HBRUSH selectedBrush = CreateSolidBrush(colorRef(tokens.appActive));
+        FillRect(item.hDC, &item.rcItem, selectedBrush);
+        DeleteObject(selectedBrush);
+    }
+
+    const LRESULT length = SendMessageW(item.hwndItem, CB_GETLBTEXTLEN, item.itemID, 0);
+    if (length == CB_ERR || length < 0) {
+        return;
+    }
+    std::wstring text(static_cast<std::size_t>(length) + 1, L'\0');
+    SendMessageW(item.hwndItem, CB_GETLBTEXT, item.itemID, reinterpret_cast<LPARAM>(text.data()));
+    text.resize(static_cast<std::size_t>(length));
+
+    if (state.bodyFont) {
+        SelectObject(item.hDC, state.bodyFont);
+    }
+    SetBkMode(item.hDC, TRANSPARENT);
+    SetTextColor(item.hDC, colorRef(tokens.ink));
+    RECT textRect = item.rcItem;
+    textRect.left += 10;
+    textRect.right -= 10;
+    DrawTextW(item.hDC, text.c_str(), -1, &textRect, DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_END_ELLIPSIS);
 }
 
 std::wstring getEditText(HWND edit) {
@@ -219,7 +661,8 @@ bool tryParseFloat(const std::wstring& text, float& value) {
 }
 
 bool settingsEqual(const AppSettings& left, const AppSettings& right) {
-    if (left.fontSize != right.fontSize || left.fontFamily != right.fontFamily || left.iconSize != right.iconSize
+    if (left.fontSize != right.fontSize || left.fontFamily != right.fontFamily
+        || left.contextMenuFontSize != right.contextMenuFontSize || left.iconSize != right.iconSize
         || left.windowWidth != right.windowWidth || left.windowHeight != right.windowHeight
         || left.rememberWindowSize != right.rememberWindowSize
         || left.startupFolder != right.startupFolder
@@ -444,10 +887,15 @@ void syncSelectedContextTool(HWND hwnd, SettingsDialogState& state) {
 }
 
 void centerDialog(HWND hwnd, HWND owner) {
+    RECT dialogRect{};
+    GetWindowRect(hwnd, &dialogRect);
+    const int dialogWidth = dialogRect.right - dialogRect.left;
+    const int dialogHeight = dialogRect.bottom - dialogRect.top;
+
     RECT anchor{};
     if (owner && GetWindowRect(owner, &anchor)) {
-        const int x = anchor.left + ((anchor.right - anchor.left) - kDialogWidth) / 2;
-        const int y = anchor.top + ((anchor.bottom - anchor.top) - kDialogHeight) / 2;
+        const int x = anchor.left + ((anchor.right - anchor.left) - dialogWidth) / 2;
+        const int y = anchor.top + ((anchor.bottom - anchor.top) - dialogHeight) / 2;
         SetWindowPos(hwnd, nullptr, x, y, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
         return;
     }
@@ -457,8 +905,8 @@ void centerDialog(HWND hwnd, HWND owner) {
         workArea = {0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)};
     }
 
-    const int x = workArea.left + ((workArea.right - workArea.left) - kDialogWidth) / 2;
-    const int y = workArea.top + ((workArea.bottom - workArea.top) - kDialogHeight) / 2;
+    const int x = workArea.left + ((workArea.right - workArea.left) - dialogWidth) / 2;
+    const int y = workArea.top + ((workArea.bottom - workArea.top) - dialogHeight) / 2;
     SetWindowPos(hwnd, nullptr, x, y, 0, 0, SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
@@ -476,6 +924,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             return -1;
         }
         ensureThemeBrushes(*state);
+        const UINT dpi = dpiForWindow(hwnd);
+        state->bodyFont = createDialogFont(kSettingsUiFontFamily, settingsDialogBodyFontSize(), dpi);
+        state->titleFont = createDialogFont(kSettingsUiFontFamily, settingsDialogTitleFontSize(), dpi, FW_SEMIBOLD);
 
         HWND title = createDialogControl(0,
                                          L"STATIC",
@@ -487,6 +938,10 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                          24,
                                          hwnd,
                                          0);
+        if (title && state->titleFont) {
+            SendMessageW(title, WM_SETFONT, reinterpret_cast<WPARAM>(state->titleFont), TRUE);
+        }
+        state->titleControl = title;
         HWND subtitle = createDialogControl(0,
                                             L"STATIC",
                                             L"Configure appearance, browsing behavior, window startup, favorites, and shortcuts.",
@@ -497,6 +952,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             22,
                                             hwnd,
                                             0);
+        state->subtitleControl = subtitle;
         HWND categoryList = createDialogControl(WS_EX_CLIENTEDGE,
                                                 L"LISTBOX",
                                                 L"",
@@ -504,7 +960,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                 24,
                                                 78,
                                                 140,
-                                                508,
+                                                534,
                                                 hwnd,
                                                 kCategoryListId);
         if (categoryList) {
@@ -522,7 +978,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                    190,
                                                    78,
                                                    640,
-                                                   176,
+                                                   534,
                                                    hwnd,
                                                    0);
         HWND fontFamilyLabel = createDialogControl(0,
@@ -531,7 +987,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                    WS_CHILD | WS_VISIBLE,
                                                    214,
                                                    110,
-                                                   110,
+                                                   164,
                                                    22,
                                                    hwnd,
                                                    0);
@@ -539,9 +995,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                    L"COMBOBOX",
                                                    L"",
                                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
-                                                   342,
+                                                   392,
                                                    106,
-                                                   220,
+                                                   240,
                                                    160,
                                                    hwnd,
                                                    kFontFamilyComboId);
@@ -554,7 +1010,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              WS_CHILD | WS_VISIBLE,
                                              214,
                                              146,
-                                             110,
+                                             164,
                                              22,
                                              hwnd,
                                              0);
@@ -562,19 +1018,39 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             L"EDIT",
                                             formatSettingValue(state->initialSettings.fontSize).c_str(),
                                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                            342,
+                                            392,
                                             142,
                                             164,
                                             24,
                                             hwnd,
                                             kFontEditId);
+        HWND contextMenuFontLabel = createDialogControl(0,
+                                                        L"STATIC",
+                                                        L"Menu text size",
+                                                        WS_CHILD | WS_VISIBLE,
+                                                        214,
+                                                        182,
+                                                        164,
+                                                        22,
+                                                        hwnd,
+                                                        0);
+        HWND contextMenuFontEdit = createDialogControl(WS_EX_CLIENTEDGE,
+                                                       L"EDIT",
+                                                       formatSettingValue(state->initialSettings.contextMenuFontSize).c_str(),
+                                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                                       392,
+                                                       178,
+                                                       164,
+                                                       24,
+                                                       hwnd,
+                                                       kContextMenuFontEditId);
         HWND iconLabel = createDialogControl(0,
                                              L"STATIC",
                                              L"Icon size",
                                              WS_CHILD | WS_VISIBLE,
                                              214,
-                                             182,
-                                             110,
+                                             218,
+                                             164,
                                              22,
                                              hwnd,
                                              0);
@@ -582,8 +1058,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             L"EDIT",
                                             formatSettingValue(state->initialSettings.iconSize).c_str(),
                                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                            342,
-                                            178,
+                                            392,
+                                            214,
                                             164,
                                             24,
                                             hwnd,
@@ -593,8 +1069,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               L"Theme",
                                               WS_CHILD | WS_VISIBLE,
                                               214,
-                                              218,
-                                              110,
+                                              254,
+                                              164,
                                               22,
                                               hwnd,
                                               0);
@@ -602,8 +1078,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               L"COMBOBOX",
                                               L"",
                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
-                                              342,
-                                              214,
+                                              392,
+                                              250,
                                               164,
                                               120,
                                               hwnd,
@@ -641,12 +1117,12 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         }
         HWND windowGroup = createDialogControl(0,
                                                L"BUTTON",
-                                               L"Window",
+                                               L"Startup",
                                                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                190,
-                                               176,
+                                               78,
                                                640,
-                                               120,
+                                               534,
                                                hwnd,
                                                0);
         HWND windowWidthLabel = createDialogControl(0,
@@ -654,7 +1130,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     L"Width",
                                                     WS_CHILD | WS_VISIBLE,
                                                     214,
-                                                    208,
+                                                    112,
                                                     48,
                                                     22,
                                                     hwnd,
@@ -664,7 +1140,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                    std::to_wstring(state->initialSettings.windowWidth).c_str(),
                                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                                    268,
-                                                   204,
+                                                   108,
                                                    74,
                                                    24,
                                                    hwnd,
@@ -674,7 +1150,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"Height",
                                                      WS_CHILD | WS_VISIBLE,
                                                      372,
-                                                     208,
+                                                     112,
                                                      52,
                                                      22,
                                                      hwnd,
@@ -684,7 +1160,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     std::to_wstring(state->initialSettings.windowHeight).c_str(),
                                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                                     434,
-                                                    204,
+                                                    108,
                                                     74,
                                                     24,
                                                     hwnd,
@@ -694,7 +1170,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                       L"Remember last window size",
                                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                                       214,
-                                                      240,
+                                                      146,
                                                       340,
                                                       22,
                                                       hwnd,
@@ -710,8 +1186,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                       L"Startup folder",
                                                       WS_CHILD | WS_VISIBLE,
                                                       214,
-                                                      266,
-                                                      110,
+                                                      198,
+                                                      164,
                                                       22,
                                                       hwnd,
                                                       0);
@@ -719,9 +1195,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"EDIT",
                                                      state->initialSettings.startupFolder.c_str(),
                                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                                     324,
-                                                     262,
-                                                     330,
+                                                     392,
+                                                     194,
+                                                     260,
                                                      24,
                                                      hwnd,
                                                      kStartupFolderEditId);
@@ -730,8 +1206,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     L"Use current",
                                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                     664,
-                                                    260,
-                                                    84,
+                                                    192,
+                                                    108,
                                                     28,
                                                     hwnd,
                                                     kUseCurrentFolderId);
@@ -743,9 +1219,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"Favorites",
                                                   WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                   190,
-                                                  318,
+                                                  176,
                                                   640,
-                                                  268,
+                                                  436,
                                                   hwnd,
                                                   0);
         HWND favoritesLabel = createDialogControl(0,
@@ -753,7 +1229,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"Order and rename sidebar favorites.",
                                                   WS_CHILD | WS_VISIBLE,
                                                   214,
-                                                  348,
+                                                  206,
                                                   260,
                                                   18,
                                                   hwnd,
@@ -763,9 +1239,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                  L"",
                                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY,
                                                  214,
-                                                 372,
+                                                 230,
                                                  180,
-                                                 174,
+                                                 286,
                                                  hwnd,
                                                  kFavoritesListId);
         HWND favoriteNameLabel = createDialogControl(0,
@@ -773,7 +1249,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"Display name",
                                                      WS_CHILD | WS_VISIBLE,
                                                      442,
-                                                     374,
+                                                     232,
                                                      120,
                                                      18,
                                                      hwnd,
@@ -783,7 +1259,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"",
                                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                                      442,
-                                                     396,
+                                                     254,
                                                      200,
                                                      24,
                                                      hwnd,
@@ -793,7 +1269,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      L"Target path",
                                                      WS_CHILD | WS_VISIBLE,
                                                      442,
-                                                     434,
+                                                     292,
                                                      120,
                                                      18,
                                                      hwnd,
@@ -803,7 +1279,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     L"",
                                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_READONLY,
                                                     442,
-                                                    456,
+                                                    314,
                                                     200,
                                                     24,
                                                     hwnd,
@@ -813,7 +1289,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               L"Up",
                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                               442,
-                                              502,
+                                              360,
                                               58,
                                               28,
                                               hwnd,
@@ -823,7 +1299,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                 L"Down",
                                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                 508,
-                                                502,
+                                                360,
                                                 62,
                                                 28,
                                                 hwnd,
@@ -833,7 +1309,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"Remove",
                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                   578,
-                                                  502,
+                                                  360,
                                                   64,
                                                   28,
                                                   hwnd,
@@ -843,9 +1319,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   L"Keyboard",
                                                   WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                   190,
-                                                  318,
+                                                  78,
                                                   640,
-                                                  268,
+                                                  534,
                                                   hwnd,
                                                   0);
         HWND shortcuts = createDialogControl(WS_EX_CLIENTEDGE,
@@ -853,9 +1329,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              shortcutHelpText().c_str(),
                                              WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL,
                                              214,
-                                             348,
+                                             112,
                                              592,
-                                             198,
+                                             454,
                                              hwnd,
                                              0);
         HWND contextGroup = createDialogControl(0,
@@ -865,7 +1341,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                 190,
                                                 78,
                                                 640,
-                                                508,
+                                                534,
                                                 hwnd,
                                                 0);
         HWND contextList = createDialogControl(WS_EX_CLIENTEDGE,
@@ -888,7 +1364,6 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         HWND contextFiles = createDialogControl(0, L"BUTTON", L"Show for files", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 438, 296, 150, 22, hwnd, kContextToolFilesId);
         HWND contextFolders = createDialogControl(0, L"BUTTON", L"Show for folders", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 600, 296, 170, 22, hwnd, kContextToolFoldersId);
         HWND contextVsCode = createDialogControl(0, L"BUTTON", L"VS Code", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 438, 334, 78, 28, hwnd, kContextToolVsCodeId);
-        HWND contextZed = createDialogControl(0, L"BUTTON", L"Zed", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 524, 334, 62, 28, hwnd, kContextToolZedId);
         HWND contextAdd = createDialogControl(0, L"BUTTON", L"Add", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 214, 404, 62, 28, hwnd, kContextToolAddId);
         HWND contextUpdate = createDialogControl(0, L"BUTTON", L"Update", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 284, 404, 72, 28, hwnd, kContextToolUpdateId);
         HWND contextRemove = createDialogControl(0, L"BUTTON", L"Remove", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 364, 404, 76, 28, hwnd, kContextToolRemoveId);
@@ -914,7 +1389,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                           28,
                                           hwnd,
                                           kCancelId);
-        if (!title || !subtitle || !categoryList || !appearanceGroup || !fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !iconLabel || !iconEdit || !themeLabel || !themeCombo
+        if (!title || !subtitle || !categoryList || !appearanceGroup || !fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !contextMenuFontLabel || !contextMenuFontEdit || !iconLabel || !iconEdit || !themeLabel || !themeCombo
             || !behaviorGroup || !showHiddenAndSystem || !windowGroup
             || !windowWidthLabel || !windowWidthEdit || !windowHeightLabel || !windowHeightEdit || !rememberWindowSize
             || !startupFolderLabel || !startupFolderEdit || !useCurrentFolder
@@ -922,26 +1397,63 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             || !favoriteNameLabel || !favoriteLabelEdit || !favoritePathLabel || !favoritePathEdit
             || !favoriteUp || !favoriteDown || !favoriteRemove || !shortcutsGroup || !shortcuts
             || !contextGroup || !contextList || !contextLabelText || !contextLabelEdit || !contextExeText || !contextExeEdit || !contextBrowse
-            || !contextArgsText || !contextArgsEdit || !contextFiles || !contextFolders || !contextVsCode || !contextZed || !contextAdd || !contextUpdate
+            || !contextArgsText || !contextArgsEdit || !contextFiles || !contextFolders || !contextVsCode || !contextAdd || !contextUpdate
             || !contextRemove || !contextUp || !contextDown || !ok || !cancel) {
             return -1;
         }
 
-        state->appearanceControls = {appearanceGroup, fontFamilyLabel, fontFamilyCombo, fontLabel, fontEdit, iconLabel, iconEdit, themeLabel, themeCombo};
+        state->appearanceControls = {appearanceGroup, fontFamilyLabel, fontFamilyCombo, fontLabel, fontEdit, contextMenuFontLabel, contextMenuFontEdit, iconLabel, iconEdit, themeLabel, themeCombo};
         state->startupControls = {windowGroup, windowWidthLabel, windowWidthEdit, windowHeightLabel, windowHeightEdit, rememberWindowSize, startupFolderLabel, startupFolderEdit, useCurrentFolder};
         state->filesControls = {behaviorGroup, showHiddenAndSystem, favoritesGroup, favoritesLabel, favoritesList, favoriteNameLabel, favoriteLabelEdit, favoritePathLabel, favoritePathEdit, favoriteUp, favoriteDown, favoriteRemove};
         state->shortcutsControls = {shortcutsGroup, shortcuts};
-        state->contextMenuControls = {contextGroup, contextList, contextLabelText, contextLabelEdit, contextExeText, contextExeEdit, contextBrowse, contextArgsText, contextArgsEdit, contextFiles, contextFolders, contextVsCode, contextZed, contextAdd, contextUpdate, contextRemove, contextUp, contextDown};
+        state->contextMenuControls = {contextGroup, contextList, contextLabelText, contextLabelEdit, contextExeText, contextExeEdit, contextBrowse, contextArgsText, contextArgsEdit, contextFiles, contextFolders, contextVsCode, contextAdd, contextUpdate, contextRemove, contextUp, contextDown};
+        state->panelControls = {appearanceGroup, windowGroup, behaviorGroup, favoritesGroup, shortcutsGroup, contextGroup};
+        state->framedControls = {
+            categoryList,
+            fontFamilyCombo,
+            fontEdit,
+            contextMenuFontEdit,
+            iconEdit,
+            themeCombo,
+            windowWidthEdit,
+            windowHeightEdit,
+            startupFolderEdit,
+            favoritesList,
+            favoriteLabelEdit,
+            favoritePathEdit,
+            shortcuts,
+            contextList,
+            contextLabelEdit,
+            contextExeEdit,
+            contextArgsEdit,
+        };
 
         populateFavoritesList(hwnd, state->resultSettings, state->resultSettings.favorites.empty() ? -1 : 0);
         selectFavorite(hwnd, *state, state->resultSettings.favorites.empty() ? -1 : 0);
         populateContextToolList(hwnd, state->resultSettings, state->resultSettings.contextMenuTools.empty() ? -1 : 0);
         selectContextTool(hwnd, *state, state->resultSettings.contextMenuTools.empty() ? -1 : 0);
         showSettingsPage(*state, 0);
+        layoutSettingsDialog(hwnd, *state);
         SetFocus(fontEdit);
         SendMessageW(fontEdit, EM_SETSEL, 0, -1);
         return 0;
     }
+    case WM_PAINT: {
+        if (!state) {
+            break;
+        }
+        PAINTSTRUCT paint{};
+        HDC dc = BeginPaint(hwnd, &paint);
+        paintSettingsDialog(hwnd, *state, dc);
+        EndPaint(hwnd, &paint);
+        return 0;
+    }
+    case WM_SIZE:
+        if (state) {
+            layoutSettingsDialog(hwnd, *state);
+            return 0;
+        }
+        break;
     case WM_CTLCOLORDLG:
         if (state) {
             ensureThemeBrushes(*state);
@@ -957,6 +1469,16 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             return 1;
         }
         break;
+    case WM_GETMINMAXINFO: {
+        auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
+        if (info) {
+            const UINT dpi = dpiForWindow(hwnd);
+            info->ptMinTrackSize.x = settingsDialogMinWidthForDpi(dpi);
+            info->ptMinTrackSize.y = settingsDialogMinHeightForDpi(dpi);
+            return 0;
+        }
+        break;
+    }
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLORBTN:
     case WM_CTLCOLOREDIT:
@@ -969,16 +1491,63 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         HDC dc = reinterpret_cast<HDC>(wParam);
         HWND control = reinterpret_cast<HWND>(lParam);
         SetTextColor(dc, colorRef(tokens.ink));
-        SetBkMode(dc, TRANSPARENT);
+        SetBkMode(dc, OPAQUE);
         if (message == WM_CTLCOLOREDIT || message == WM_CTLCOLORLISTBOX || isInputControl(control)) {
-            SetBkMode(dc, OPAQUE);
             SetBkColor(dc, colorRef(tokens.appInput));
             return reinterpret_cast<LRESULT>(state->inputBrush);
         }
+        if (message == WM_CTLCOLORSTATIC && isTopHeaderControl(hwnd, control)) {
+            SetBkMode(dc, TRANSPARENT);
+            SetBkColor(dc, colorRef(tokens.app));
+            return reinterpret_cast<LRESULT>(state->backgroundBrush);
+        }
+        if (message == WM_CTLCOLORSTATIC) {
+            SetBkMode(dc, TRANSPARENT);
+            SetBkColor(dc, colorRef(tokens.appOverlay));
+            return reinterpret_cast<LRESULT>(state->panelBrush);
+        }
         if (message == WM_CTLCOLORBTN) {
+            SetBkColor(dc, colorRef(tokens.appOverlay));
             return reinterpret_cast<LRESULT>(state->panelBrush);
         }
         return reinterpret_cast<LRESULT>(state->backgroundBrush);
+    }
+    case WM_MEASUREITEM: {
+        auto* measure = reinterpret_cast<MEASUREITEMSTRUCT*>(lParam);
+        if (measure && measure->CtlType == ODT_LISTBOX && isThemedListId(static_cast<int>(measure->CtlID))) {
+            measure->itemHeight = sy(hwnd, 28);
+            return TRUE;
+        }
+        if (measure && measure->CtlType == ODT_COMBOBOX) {
+            measure->itemHeight = sy(hwnd, 28);
+            return TRUE;
+        }
+        break;
+    }
+    case WM_DRAWITEM: {
+        if (!state) {
+            break;
+        }
+        const auto* draw = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
+        if (!draw) {
+            break;
+        }
+        if (draw->CtlType == ODT_BUTTON && isOwnerDrawButtonId(static_cast<int>(draw->CtlID))) {
+            drawOwnerButton(hwnd, *state, *draw);
+            return TRUE;
+        }
+        if (draw->CtlType == ODT_LISTBOX && isThemedListId(static_cast<int>(draw->CtlID))) {
+            drawOwnerListItem(*state, *draw);
+            return TRUE;
+        }
+        if (draw->CtlType == ODT_COMBOBOX) {
+            drawOwnerComboItem(*state, *draw);
+            return TRUE;
+        }
+        if (draw->CtlType == ODT_STATIC) {
+            return TRUE;
+        }
+        break;
     }
     case WM_COMMAND:
         if (!state) {
@@ -988,6 +1557,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         if (LOWORD(wParam) == kCategoryListId && HIWORD(wParam) == LBN_SELCHANGE) {
             const LRESULT index = SendMessageW(GetDlgItem(hwnd, kCategoryListId), LB_GETCURSEL, 0, 0);
             showSettingsPage(*state, index == LB_ERR ? 0 : static_cast<int>(index));
+            layoutSettingsDialog(hwnd, *state);
             return 0;
         }
 
@@ -1011,11 +1581,6 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
         if (LOWORD(wParam) == kContextToolVsCodeId) {
             setContextToolTemplate(hwnd, L"Open in VS Code", L"Code.exe");
-            return 0;
-        }
-
-        if (LOWORD(wParam) == kContextToolZedId) {
-            setContextToolTemplate(hwnd, L"Open in Zed", L"zed.exe");
             return 0;
         }
 
@@ -1138,6 +1703,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             state->values.iconSizeText = getEditText(GetDlgItem(hwnd, kIconEditId));
             state->values.themeModeText = comboSelectedText(GetDlgItem(hwnd, kThemeComboId));
             state->values.fontFamilyText = comboSelectedText(GetDlgItem(hwnd, kFontFamilyComboId));
+            state->values.contextMenuFontSizeText = getEditText(GetDlgItem(hwnd, kContextMenuFontEditId));
             state->values.showHiddenAndSystemItems = SendMessageW(GetDlgItem(hwnd, kShowHiddenAndSystemId), BM_GETCHECK, 0, 0) == BST_CHECKED;
             state->values.windowWidthText = getEditText(GetDlgItem(hwnd, kWindowWidthEditId));
             state->values.windowHeightText = getEditText(GetDlgItem(hwnd, kWindowHeightEditId));
@@ -1201,6 +1767,9 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
     if (!values.fontFamilyText.empty()) {
         settings.fontFamily = values.fontFamilyText;
     }
+    if (tryParseFloat(values.contextMenuFontSizeText, parsed)) {
+        settings.contextMenuFontSize = parsed;
+    }
     settings.showHiddenAndSystemItems = values.showHiddenAndSystemItems;
     if (tryParseFloat(values.iconSizeText, parsed)) {
         settings.iconSize = parsed;
@@ -1222,6 +1791,22 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
     clampSettings(settings);
 }
 
+float settingsDialogBodyFontSize() {
+    return kSettingsBodyFontSize;
+}
+
+float settingsDialogTitleFontSize() {
+    return kSettingsTitleFontSize;
+}
+
+DWORD settingsDialogWindowStyle() {
+    return WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MAXIMIZEBOX;
+}
+
+DWORD settingsDialogComboBoxStyle() {
+    return CBS_OWNERDRAWFIXED | CBS_HASSTRINGS;
+}
+
 bool promptForSettings(HWND owner, AppSettings& settings, const std::wstring& currentFolder) {
     HINSTANCE instance = GetModuleHandleW(nullptr);
     if (!registerSettingsDialogClass(instance)) {
@@ -1234,15 +1819,16 @@ bool promptForSettings(HWND owner, AppSettings& settings, const std::wstring& cu
     state.currentFolder = currentFolder;
 
     const DWORD exStyle = WS_EX_CONTROLPARENT | WS_EX_DLGMODALFRAME;
-    const DWORD style = WS_POPUP | WS_CAPTION | WS_SYSMENU;
+    const DWORD style = settingsDialogWindowStyle();
+    const UINT dpi = owner ? dpiForWindow(owner) : dpiForWindow(nullptr);
     HWND dialog = CreateWindowExW(exStyle,
                                   kDialogClassName,
                                   L"Settings",
                                   style,
                                   CW_USEDEFAULT,
                                   CW_USEDEFAULT,
-                                  kDialogWidth,
-                                  kDialogHeight,
+                                  settingsDialogWidthForDpi(dpi),
+                                  settingsDialogHeightForDpi(dpi),
                                   owner,
                                   nullptr,
                                   instance,

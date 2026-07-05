@@ -290,6 +290,31 @@ NodeId FinderListView::nodeAtPoint(float x, float y, const D2D1_RECT_F& bounds) 
     return rows_[static_cast<std::size_t>(index)].nodeId;
 }
 
+bool FinderListView::isFileDragHotspot(float x, float y, const D2D1_RECT_F& bounds) {
+    if (!tree_) {
+        return false;
+    }
+
+    rebuildRows();
+    ensureSelection();
+    viewportHeight_ = (std::max)(0.0f, bounds.bottom - bounds.top);
+    clampScroll();
+
+    const int index = hitTestRow(x, y, bounds);
+    if (index < 0) {
+        return false;
+    }
+
+    const VisibleRow& row = rows_[static_cast<std::size_t>(index)];
+    const FileNode& node = tree_->node(row.nodeId);
+    const float disclosureX = bounds.left + kNameStartOffset + static_cast<float>(row.depth) * kIndentPerDepth;
+    const float iconX = disclosureX + kDisclosureWidth;
+    const float nameX = iconX + iconSize() + kIconTextGap;
+    const float estimatedNameRight = nameX + (std::min)(260.0f, 12.0f + static_cast<float>(node.name.size()) * style_.fontSize * 0.58f);
+    const float hotspotRight = (std::max)(iconX + iconSize(), estimatedNameRight);
+    return x >= disclosureX && x <= hotspotRight;
+}
+
 D2D1_RECT_F FinderListView::nameEditRectForNode(NodeId id, const D2D1_RECT_F& bounds) {
     if (!tree_ || id == kInvalidNodeId || !hasArea(bounds)) {
         return D2D1::RectF();

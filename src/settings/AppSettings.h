@@ -8,10 +8,13 @@
 namespace finderx {
 
 inline constexpr float kDefaultFontSize = 13.0f;
+inline constexpr float kDefaultContextMenuFontSize = 12.0f;
 inline constexpr float kDefaultIconSize = 14.0f;
 inline constexpr wchar_t kDefaultFontFamily[] = L"Segoe UI";
 inline constexpr float kMinFontSize = 11.0f;
 inline constexpr float kMaxFontSize = 18.0f;
+inline constexpr float kMinContextMenuFontSize = 10.0f;
+inline constexpr float kMaxContextMenuFontSize = 16.0f;
 inline constexpr float kMinIconSize = 12.0f;
 inline constexpr float kMaxIconSize = 24.0f;
 inline constexpr float kDefaultModifiedColumnWidth = 150.0f;
@@ -74,6 +77,7 @@ struct ContextMenuTool {
 struct AppSettings {
     float fontSize = kDefaultFontSize;
     std::wstring fontFamily = kDefaultFontFamily;
+    float contextMenuFontSize = kDefaultContextMenuFontSize;
     float iconSize = kDefaultIconSize;
     float modifiedColumnWidth = kDefaultModifiedColumnWidth;
     float sizeColumnWidth = kDefaultSizeColumnWidth;

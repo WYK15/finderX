@@ -490,7 +490,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         blurSearch();
         blurAddress();
         const NodeId mouseDownNode = activeTab().listView.nodeAtPoint(x, y, rects.list);
-        if (mouseDownNode == kInvalidNodeId && containsPoint(rects.list, dipPoint)) {
+        if ((mouseDownNode == kInvalidNodeId
+                || (mouseDownNode != kInvalidNodeId && !activeTab().listView.isFileDragHotspot(x, y, rects.list)))
+            && containsPoint(rects.list, dipPoint)) {
             pointerMode_ = PointerMode::RubberBand;
             pointerStart_ = dipPoint;
             pointerCurrent_ = dipPoint;
@@ -709,6 +711,19 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
         handleCommand(wParam);
         return 0;
+    case WM_MEASUREITEM:
+        if (activeContextMenuPresenter_
+            && activeContextMenuPresenter_->measure(*reinterpret_cast<MEASUREITEMSTRUCT*>(lParam),
+                *reinterpret_cast<MEASUREITEMSTRUCT*>(lParam))) {
+            return TRUE;
+        }
+        break;
+    case WM_DRAWITEM:
+        if (activeContextMenuPresenter_
+            && activeContextMenuPresenter_->draw(*reinterpret_cast<DRAWITEMSTRUCT*>(lParam))) {
+            return TRUE;
+        }
+        break;
     case WM_CTLCOLOREDIT:
         if (reinterpret_cast<HWND>(lParam) == inlineRenameEdit_ && inlineRenameBackgroundBrush_) {
             SetTextColor(reinterpret_cast<HDC>(wParam), inlineRenameTextColor_);
@@ -1150,6 +1165,7 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
         return;
     }
 
+    ui::ContextMenuPresenter presenter(settings_.themeMode, settings_.contextMenuFontSize, settings_.fontFamily);
     const std::vector<NodeId> targets = commandTargetNodes(true);
     const std::vector<std::wstring> targetPaths = pathsForNodes(targets);
     const bool singleTarget = targets.size() == 1;
@@ -1159,52 +1175,52 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
             return;
         }
         if (!containsFavorite(settings_, tab.history.currentPath())) {
-            AppendMenuW(menu, MF_STRING, kCommandAddFavorite, L"Add to Favorites");
-            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+            presenter.appendItem(menu, kCommandAddFavorite, L"Add to Favorites");
+            presenter.appendSeparator(menu);
         }
-        AppendMenuW(menu, MF_STRING, kCommandNewFolder, L"New Folder");
-        AppendMenuW(menu, MF_STRING, kCommandNewFile, L"New File");
-        AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        presenter.appendItem(menu, kCommandNewFolder, L"New Folder");
+        presenter.appendItem(menu, kCommandNewFile, L"New File");
+        presenter.appendItem(menu, kCommandOpenPowerShell, L"Open in PowerShell");
+        presenter.appendSeparator(menu);
         if (fileOperationState_.hasPendingOperation()) {
-            AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
-            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+            presenter.appendItem(menu, kCommandPaste, L"Paste");
+            presenter.appendSeparator(menu);
         }
     };
     if (hasTarget) {
-        AppendMenuW(menu, MF_STRING, kCommandOpen, L"Open");
+        presenter.appendItem(menu, kCommandOpen, L"Open");
         if (directoryLocation) {
             if (singleTarget && targets.front() < tab.tree.nodes().size()
                 && tab.tree.node(targets.front()).kind == FileKind::Folder) {
-                AppendMenuW(menu, MF_STRING, kCommandOpenInNewTab, L"Open in New Tab");
+                presenter.appendItem(menu, kCommandOpenInNewTab, L"Open in New Tab");
             }
             if (singleTarget) {
-                AppendMenuW(menu, MF_STRING, kCommandRename, L"Rename");
+                presenter.appendItem(menu, kCommandRename, L"Rename");
             }
-            AppendMenuW(menu, MF_STRING, kCommandCopy, L"Copy");
-            AppendMenuW(menu, MF_STRING, kCommandCut, L"Cut");
-            AppendMenuW(menu, MF_STRING, kCommandCompressZip, L"Compress to ZIP");
+            presenter.appendItem(menu, kCommandCopy, L"Copy");
+            presenter.appendItem(menu, kCommandCut, L"Cut");
+            presenter.appendItem(menu, kCommandCompressZip, L"Compress to ZIP");
             if (allZipPaths(targetPaths)) {
-                AppendMenuW(menu, MF_STRING, kCommandExtractZip, L"Extract Here");
+                presenter.appendItem(menu, kCommandExtractZip, L"Extract Here");
             }
             if (fileOperationState_.hasPendingOperation()) {
-                AppendMenuW(menu, MF_STRING, kCommandPaste, L"Paste");
+                presenter.appendItem(menu, kCommandPaste, L"Paste");
             }
             if (singleTarget && targets.front() < tab.tree.nodes().size()
                 && tab.tree.node(targets.front()).kind == FileKind::Folder) {
-                AppendMenuW(menu, MF_STRING, kCommandOpenPowerShell, L"Open in PowerShell");
+                presenter.appendItem(menu, kCommandOpenPowerShell, L"Open in PowerShell");
             }
             if (singleTarget) {
-                AppendMenuW(menu, MF_STRING, kCommandCreateShortcut, L"Create Shortcut");
+                presenter.appendItem(menu, kCommandCreateShortcut, L"Create Shortcut");
             }
         }
         if (singleTarget && targets.front() < tab.tree.nodes().size()
             && !containsFavorite(settings_, tab.tree.node(targets.front()).path)) {
-            AppendMenuW(menu, MF_STRING, kCommandAddFavorite, L"Add to Favorites");
+            presenter.appendItem(menu, kCommandAddFavorite, L"Add to Favorites");
         }
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, kCommandReveal, L"Show in Explorer");
-        AppendMenuW(menu, MF_STRING, kCommandCopyPath, L"Copy Path");
+        presenter.appendSeparator(menu);
+        presenter.appendItem(menu, kCommandReveal, L"Show in Explorer");
+        presenter.appendItem(menu, kCommandCopyPath, L"Copy Path");
         if (singleTarget && targets.front() < tab.tree.nodes().size() && !settings_.contextMenuTools.empty()) {
             const FileNode& node = tab.tree.node(targets.front());
             bool addedTool = false;
@@ -1213,23 +1229,23 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
                 const bool applies = node.kind == FileKind::Folder ? tool.appliesToFolders : tool.appliesToFiles;
                 if (applies && !tool.label.empty() && !tool.executablePath.empty()) {
                     if (!addedTool) {
-                        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+                        presenter.appendSeparator(menu);
                         addedTool = true;
                     }
-                    AppendMenuW(menu, MF_STRING, kCommandContextToolBase + static_cast<UINT>(index), tool.label.c_str());
+                    presenter.appendItem(menu, kCommandContextToolBase + static_cast<UINT>(index), tool.label);
                 }
             }
         }
         if (directoryLocation) {
-            AppendMenuW(menu, MF_STRING, kCommandMoveToTrash, L"Move to Trash");
+            presenter.appendItem(menu, kCommandMoveToTrash, L"Move to Trash");
         }
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        presenter.appendSeparator(menu);
     } else if (directoryLocation) {
         appendCurrentDirectoryActions();
     }
-    AppendMenuW(menu, MF_STRING, kCommandRefresh, L"Refresh");
+    presenter.appendItem(menu, kCommandRefresh, L"Refresh");
 
-    TrackPopupMenu(menu, TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, 0, hwnd_, nullptr);
+    trackContextMenu(menu, presenter, screenPoint);
     DestroyMenu(menu);
 }
 
@@ -1238,8 +1254,9 @@ void MainWindow::showToolbarContextMenu(POINT screenPoint) {
     if (!menu) {
         return;
     }
-    AppendMenuW(menu, MF_STRING, kCommandCustomizeToolbar, L"Customize Toolbar...");
-    TrackPopupMenu(menu, TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, 0, hwnd_, nullptr);
+    ui::ContextMenuPresenter presenter(settings_.themeMode, settings_.contextMenuFontSize, settings_.fontFamily);
+    presenter.appendItem(menu, kCommandCustomizeToolbar, L"Customize Toolbar...");
+    trackContextMenu(menu, presenter, screenPoint);
     DestroyMenu(menu);
 }
 
@@ -1262,9 +1279,16 @@ void MainWindow::showSidebarContextMenu(std::size_t sidebarIndex, POINT screenPo
     }
 
     contextFavoritePath_ = item.path;
-    AppendMenuW(menu, MF_STRING, kCommandRemoveFavorite, L"Remove from Favorites");
-    TrackPopupMenu(menu, TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, 0, hwnd_, nullptr);
+    ui::ContextMenuPresenter presenter(settings_.themeMode, settings_.contextMenuFontSize, settings_.fontFamily);
+    presenter.appendItem(menu, kCommandRemoveFavorite, L"Remove from Favorites");
+    trackContextMenu(menu, presenter, screenPoint);
     DestroyMenu(menu);
+}
+
+void MainWindow::trackContextMenu(HMENU menu, ui::ContextMenuPresenter& presenter, POINT screenPoint) {
+    activeContextMenuPresenter_ = &presenter;
+    presenter.track(hwnd_, menu, screenPoint);
+    activeContextMenuPresenter_ = nullptr;
 }
 
 void MainWindow::handleCommand(WPARAM wParam) {
@@ -2192,22 +2216,16 @@ void MainWindow::showSortMenu(POINT screenPoint) {
         return;
     }
 
-    const auto columnFlags = [&](SortColumn column) {
-        return MF_STRING | (settings_.sortColumn == column ? MF_CHECKED : MF_UNCHECKED);
-    };
-    const auto directionFlags = [&](SortDirection direction) {
-        return MF_STRING | (settings_.sortDirection == direction ? MF_CHECKED : MF_UNCHECKED);
-    };
+    ui::ContextMenuPresenter presenter(settings_.themeMode, settings_.contextMenuFontSize, settings_.fontFamily);
+    presenter.appendItem(menu, kCommandSortName, L"Name", settings_.sortColumn == SortColumn::Name);
+    presenter.appendItem(menu, kCommandSortModified, L"Date Modified", settings_.sortColumn == SortColumn::Modified);
+    presenter.appendItem(menu, kCommandSortSize, L"Size", settings_.sortColumn == SortColumn::Size);
+    presenter.appendItem(menu, kCommandSortKind, L"Kind", settings_.sortColumn == SortColumn::Kind);
+    presenter.appendSeparator(menu);
+    presenter.appendItem(menu, kCommandSortAscending, L"Ascending", settings_.sortDirection == SortDirection::Ascending);
+    presenter.appendItem(menu, kCommandSortDescending, L"Descending", settings_.sortDirection == SortDirection::Descending);
 
-    AppendMenuW(menu, columnFlags(SortColumn::Name), kCommandSortName, L"Name");
-    AppendMenuW(menu, columnFlags(SortColumn::Modified), kCommandSortModified, L"Date Modified");
-    AppendMenuW(menu, columnFlags(SortColumn::Size), kCommandSortSize, L"Size");
-    AppendMenuW(menu, columnFlags(SortColumn::Kind), kCommandSortKind, L"Kind");
-    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, directionFlags(SortDirection::Ascending), kCommandSortAscending, L"Ascending");
-    AppendMenuW(menu, directionFlags(SortDirection::Descending), kCommandSortDescending, L"Descending");
-
-    TrackPopupMenu(menu, TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, 0, hwnd_, nullptr);
+    trackContextMenu(menu, presenter, screenPoint);
     DestroyMenu(menu);
 }
 

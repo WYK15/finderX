@@ -42,6 +42,7 @@ public:
     bool hasSelection() const;
     bool isSelected(NodeId id) const;
     NodeId nodeAtPoint(float x, float y, const D2D1_RECT_F& bounds);
+    bool isFileDragHotspot(float x, float y, const D2D1_RECT_F& bounds);
     D2D1_RECT_F nameEditRectForNode(NodeId id, const D2D1_RECT_F& bounds);
     bool selectNode(NodeId id);
     bool selectNodes(std::span<const NodeId> ids);

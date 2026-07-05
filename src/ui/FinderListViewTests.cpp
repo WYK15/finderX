@@ -179,6 +179,16 @@ int main() {
         FinderListView view(&tree);
         const std::vector<VisibleRow> rows = tree.flatten();
 
+        require(view.isFileDragHotspot(96.0f, rowY(2), bounds), "icon/name area should be a file drag hotspot");
+        require(!view.isFileDragHotspot(520.0f, rowY(2), bounds), "right side row whitespace should allow rubber-band selection");
+        require(view.nodeAtPoint(520.0f, rowY(2), bounds) == rows[2].nodeId, "right side whitespace should still resolve row target");
+    }
+
+    {
+        FileTree tree = FileTree::sample();
+        FinderListView view(&tree);
+        const std::vector<VisibleRow> rows = tree.flatten();
+
         view.selectNode(rows[2].nodeId);
         const D2D1_RECT_F nameRect = view.nameEditRectForNode(rows[2].nodeId, bounds);
 

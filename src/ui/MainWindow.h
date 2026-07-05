@@ -6,6 +6,7 @@
 #include "navigation/NavigationHistory.h"
 #include "navigation/SidebarModel.h"
 #include "ui/AddressEditor.h"
+#include "ui/ContextMenuPresenter.h"
 #include "ui/FileOperationState.h"
 #include "ui/DirectoryRefreshDebouncer.h"
 #include "ui/FinderChrome.h"
@@ -94,6 +95,7 @@ private:
     void showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint);
     void showToolbarContextMenu(POINT screenPoint);
     void showSidebarContextMenu(std::size_t sidebarIndex, POINT screenPoint);
+    void trackContextMenu(HMENU menu, ui::ContextMenuPresenter& presenter, POINT screenPoint);
     void handleCommand(WPARAM wParam);
     NodeId commandTargetNode() const;
     std::vector<NodeId> commandTargetNodes(bool includeSelection) const;
@@ -214,6 +216,7 @@ private:
     NodeId inlineRenameNode_ = kInvalidNodeId;
     std::wstring inlineRenameOriginalPath_;
     bool inlineRenameClosing_ = false;
+    ui::ContextMenuPresenter* activeContextMenuPresenter_ = nullptr;
 };
 
 }

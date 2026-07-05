@@ -496,6 +496,7 @@ AppSettings makeDefaultSettings(const std::wstring& homePath) {
 
 void clampSettings(AppSettings& settings) {
     settings.fontSize = (std::clamp)(settings.fontSize, kMinFontSize, kMaxFontSize);
+    settings.contextMenuFontSize = (std::clamp)(settings.contextMenuFontSize, kMinContextMenuFontSize, kMaxContextMenuFontSize);
     if (settings.fontFamily.empty()) {
         settings.fontFamily = kDefaultFontFamily;
     }
@@ -593,6 +594,9 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
     if (extractString(text, "fontFamily", stringValue) && !stringValue.empty()) {
         loaded.fontFamily = std::move(stringValue);
     }
+    if (extractNumber(text, "contextMenuFontSize", number)) {
+        loaded.contextMenuFontSize = number;
+    }
     if (extractNumber(text, "iconSize", number)) {
         loaded.iconSize = number;
     }
@@ -680,6 +684,7 @@ bool saveSettings(const AppSettings& settings, const std::filesystem::path& path
     stream << "{\n";
     stream << "  \"fontSize\": " << clamped.fontSize << ",\n";
     stream << "  \"fontFamily\": \"" << escapeJsonString(clamped.fontFamily) << "\",\n";
+    stream << "  \"contextMenuFontSize\": " << clamped.contextMenuFontSize << ",\n";
     stream << "  \"iconSize\": " << clamped.iconSize << ",\n";
     stream << "  \"modifiedColumnWidth\": " << clamped.modifiedColumnWidth << ",\n";
     stream << "  \"sizeColumnWidth\": " << clamped.sizeColumnWidth << ",\n";

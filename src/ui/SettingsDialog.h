@@ -13,6 +13,7 @@ struct SettingsDialogValues {
     std::wstring iconSizeText;
     std::wstring themeModeText;
     std::wstring fontFamilyText;
+    std::wstring contextMenuFontSizeText;
     bool showHiddenAndSystemItems = false;
     std::wstring windowWidthText;
     std::wstring windowHeightText;
@@ -22,5 +23,9 @@ struct SettingsDialogValues {
 
 bool promptForSettings(HWND owner, AppSettings& settings, const std::wstring& currentFolder = L"");
 void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& settings);
+float settingsDialogBodyFontSize();
+float settingsDialogTitleFontSize();
+DWORD settingsDialogWindowStyle();
+DWORD settingsDialogComboBoxStyle();
 
 } // namespace finderx::ui
