@@ -47,12 +47,26 @@ void testToolbarNewItemHitTargets() {
     FinderChrome chrome;
     const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
     ChromeState state;
-    state.toolbarCommands = {ToolbarCommand::NewFolder, ToolbarCommand::NewFile, ToolbarCommand::Sort, ToolbarCommand::Settings, ToolbarCommand::Search};
+    state.toolbarCommands = {ToolbarCommand::NewFolder, ToolbarCommand::NewFile, ToolbarCommand::Sort, ToolbarCommand::Settings, ToolbarCommand::PowerShell, ToolbarCommand::Search};
 
-    require(chrome.hitTest(648.0f, 63.0f, rects, state).kind == ChromeHitKind::NewFolder,
+    require(chrome.hitTest(620.0f, 63.0f, rects, state).kind == ChromeHitKind::NewFolder,
             "new folder toolbar button should be hittable");
-    require(chrome.hitTest(686.0f, 63.0f, rects, state).kind == ChromeHitKind::NewFile,
+    require(chrome.hitTest(658.0f, 63.0f, rects, state).kind == ChromeHitKind::NewFile,
             "new file toolbar button should be hittable");
+}
+
+void testToolbarPowerShellHitTargetSitsBeforeSearch() {
+    FinderChrome chrome;
+    const LayoutRects rects = chrome.layout(1000.0f, 700.0f);
+    ChromeState state;
+    state.toolbarCommands = {ToolbarCommand::Sort, ToolbarCommand::Settings, ToolbarCommand::PowerShell, ToolbarCommand::Search};
+
+    require(chrome.hitTest(736.0f, 63.0f, rects, state).kind == ChromeHitKind::Settings,
+            "settings toolbar button should remain hittable");
+    require(chrome.hitTest(774.0f, 63.0f, rects, state).kind == ChromeHitKind::OpenPowerShell,
+            "PowerShell toolbar button should hit before search");
+    require(chrome.hitTest(900.0f, 63.0f, rects, state).kind == ChromeHitKind::SearchField,
+            "search field should remain hittable after PowerShell");
 }
 
 void testToolbarHiddenCommandIsNotHittable() {
@@ -203,6 +217,7 @@ void testPathbarIgnoresStatusTextAndVirtualLocations() {
 int main() {
     testToolbarSortAndSettingsHitTargetsSitBeforeSearch();
     testToolbarNewItemHitTargets();
+    testToolbarPowerShellHitTargetSitsBeforeSearch();
     testToolbarHiddenCommandIsNotHittable();
     testHeaderColumnsHitUsingDrawnGeometry();
     testHeaderColumnSeparatorsHitResizeTargets();

@@ -31,6 +31,7 @@ enum class ChromeHitKind {
     NewFile,
     SortMenu,
     Settings,
+    OpenPowerShell,
     HeaderName,
     HeaderModified,
     HeaderSize,

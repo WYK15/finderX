@@ -24,15 +24,18 @@ int main() {
 
     require(toolbarCommandLabel(ToolbarCommand::NewFolder) == L"New Folder", "new folder should have a label");
     require(toolbarCommandLabel(ToolbarCommand::NewFile) == L"New File", "new file should have a label");
-    require(availableToolbarCommands().size() == 5, "customization should expose five toolbar commands");
+    require(toolbarCommandLabel(ToolbarCommand::PowerShell) == L"Open PowerShell Here", "PowerShell should have a toolbar label");
+    require(availableToolbarCommands().size() == 6, "customization should expose six toolbar commands");
 
     std::vector<ToolbarCommand> commands = {ToolbarCommand::Search};
+    require(addToolbarCommand(commands, ToolbarCommand::PowerShell), "adding PowerShell command should succeed");
+    require(commands[1] == ToolbarCommand::PowerShell, "PowerShell command should append");
     require(addToolbarCommand(commands, ToolbarCommand::NewFolder), "adding missing command should succeed");
-    require(commands[1] == ToolbarCommand::NewFolder, "new command should append");
+    require(commands[2] == ToolbarCommand::NewFolder, "new command should append");
     require(!addToolbarCommand(commands, ToolbarCommand::NewFolder), "adding duplicate command should fail");
 
     require(moveToolbarCommand(commands, 1, -1), "moving command up should succeed");
-    require(commands[0] == ToolbarCommand::NewFolder, "moved command should occupy previous slot");
+    require(commands[0] == ToolbarCommand::PowerShell, "moved command should occupy previous slot");
     require(removeToolbarCommand(commands, 0), "removing command should succeed");
     require(commands[0] == ToolbarCommand::Search, "remaining command should shift into first slot");
 

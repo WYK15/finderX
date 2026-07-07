@@ -93,7 +93,6 @@ private:
     void activateNode(NodeId nodeId);
     void openFile(const std::wstring& path);
     void showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint);
-    void showToolbarContextMenu(POINT screenPoint);
     void showSidebarContextMenu(std::size_t sidebarIndex, POINT screenPoint);
     void trackContextMenu(HMENU menu, ui::ContextMenuPresenter& presenter, POINT screenPoint);
     void handleCommand(WPARAM wParam);
@@ -122,6 +121,7 @@ private:
     void addCurrentDirectoryToFavorites();
     void removeContextFavorite();
     void openPowerShellForContext();
+    void openPowerShellForCurrentDirectory();
     std::wstring powerShellTargetDirectory() const;
     void revealContextNode();
     void copyContextNodePath();

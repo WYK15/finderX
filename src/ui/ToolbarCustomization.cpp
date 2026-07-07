@@ -14,6 +14,8 @@ std::wstring toolbarCommandLabel(ToolbarCommand command) {
         return L"Sort";
     case ToolbarCommand::Settings:
         return L"Settings";
+    case ToolbarCommand::PowerShell:
+        return L"Open PowerShell Here";
     case ToolbarCommand::Search:
     default:
         return L"Search";
@@ -26,6 +28,7 @@ std::vector<ToolbarCommand> availableToolbarCommands() {
         ToolbarCommand::NewFile,
         ToolbarCommand::Sort,
         ToolbarCommand::Settings,
+        ToolbarCommand::PowerShell,
         ToolbarCommand::Search,
     };
 }

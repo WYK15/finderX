@@ -1,6 +1,7 @@
 #include "ui/SettingsDialog.h"
 #include "ui/NativeTitleBar.h"
 #include "ui/ThemeTokens.h"
+#include "ui/ToolbarCustomization.h"
 
 #include <algorithm>
 #include <cmath>
@@ -34,6 +35,7 @@ struct SettingsDialogState {
     std::vector<HWND> startupControls;
     std::vector<HWND> filesControls;
     std::vector<HWND> shortcutsControls;
+    std::vector<HWND> toolbarControls;
     std::vector<HWND> contextMenuControls;
 };
 
@@ -70,6 +72,12 @@ constexpr int kContextToolUpId = 310;
 constexpr int kContextToolDownId = 311;
 constexpr int kContextToolBrowseId = 312;
 constexpr int kContextToolVsCodeId = 313;
+constexpr int kToolbarAvailableListId = 401;
+constexpr int kToolbarListId = 402;
+constexpr int kToolbarAddId = 403;
+constexpr int kToolbarRemoveId = 404;
+constexpr int kToolbarUpId = 405;
+constexpr int kToolbarDownId = 406;
 constexpr int kOkId = IDOK;
 constexpr int kCancelId = IDCANCEL;
 constexpr int kDialogWidth = 940;
@@ -150,6 +158,8 @@ bool isInputControl(HWND control) {
         || id == kContextToolExeEditId
         || id == kContextToolArgsEditId
         || id == kFavoritesListId
+        || id == kToolbarAvailableListId
+        || id == kToolbarListId
         || id == kThemeComboId
         || id == kFontFamilyComboId;
 }
@@ -167,6 +177,10 @@ bool isOwnerDrawButtonId(int id) {
     case kContextToolDownId:
     case kContextToolBrowseId:
     case kContextToolVsCodeId:
+    case kToolbarAddId:
+    case kToolbarRemoveId:
+    case kToolbarUpId:
+    case kToolbarDownId:
     case kOkId:
     case kCancelId:
         return true;
@@ -176,7 +190,11 @@ bool isOwnerDrawButtonId(int id) {
 }
 
 bool isThemedListId(int id) {
-    return id == kCategoryListId || id == kFavoritesListId || id == kContextToolListId;
+    return id == kCategoryListId
+        || id == kFavoritesListId
+        || id == kContextToolListId
+        || id == kToolbarAvailableListId
+        || id == kToolbarListId;
 }
 
 void showControls(const std::vector<HWND>& controls, bool visible) {
@@ -193,7 +211,8 @@ void showSettingsPage(SettingsDialogState& state, int page) {
     showControls(state.startupControls, page == 1);
     showControls(state.filesControls, page == 2);
     showControls(state.shortcutsControls, page == 3);
-    showControls(state.contextMenuControls, page == 4);
+    showControls(state.toolbarControls, page == 4);
+    showControls(state.contextMenuControls, page == 5);
     showControls(state.panelControls, false);
 }
 
@@ -521,13 +540,14 @@ void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
     moveControl(hwnd, kOkId, width - sc(196), actionTop + sc(18), sc(76), buttonH);
     moveControl(hwnd, kCancelId, width - sc(108), actionTop + sc(18), sc(84), buttonH);
 
-    if (state.panelControls.size() >= 6) {
+    if (state.panelControls.size() >= 7) {
         moveHandle(state.panelControls[0], panelX, panelY, panelW, panelH);
         moveHandle(state.panelControls[1], panelX, panelY, panelW, panelH);
         moveHandle(state.panelControls[2], panelX, panelY, panelW, sc(92));
         moveHandle(state.panelControls[3], panelX, panelY + sc(112), panelW, panelH - sc(112));
         moveHandle(state.panelControls[4], panelX, panelY, panelW, panelH);
         moveHandle(state.panelControls[5], panelX, panelY, panelW, panelH);
+        moveHandle(state.panelControls[6], panelX, panelY, panelW, panelH);
     }
 
     if (state.appearanceControls.size() >= 13) {
@@ -580,6 +600,24 @@ void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
 
     if (state.shortcutsControls.size() >= 2) {
         moveHandle(state.shortcutsControls[1], innerX, panelY + sc(38), panelW - sc(48), panelH - sc(72));
+    }
+
+    if (state.toolbarControls.size() >= 9) {
+        const int buttonW = sc(108);
+        const int buttonX = panelX + panelW / 2 - buttonW / 2;
+        const int listW = (std::max)(sc(190), (panelW - sc(48) - buttonW - sc(48)) / 2);
+        const int leftX = innerX;
+        const int rightX = panelX + panelW - sc(24) - listW;
+        const int listTop = panelY + sc(82);
+        const int listH = (std::max)(sc(180), panelH - sc(148));
+        moveHandle(state.toolbarControls[1], leftX, panelY + sc(44), listW, labelH);
+        moveControl(hwnd, kToolbarAvailableListId, leftX, listTop, listW, listH);
+        moveHandle(state.toolbarControls[3], rightX, panelY + sc(44), listW, labelH);
+        moveControl(hwnd, kToolbarListId, rightX, listTop, listW, listH);
+        moveControl(hwnd, kToolbarAddId, buttonX, listTop + sc(26), buttonW, buttonH);
+        moveControl(hwnd, kToolbarRemoveId, buttonX, listTop + sc(64), buttonW, buttonH);
+        moveControl(hwnd, kToolbarUpId, buttonX, listTop + sc(132), buttonW, buttonH);
+        moveControl(hwnd, kToolbarDownId, buttonX, listTop + sc(170), buttonW, buttonH);
     }
 
     if (state.contextMenuControls.size() >= 17) {
@@ -1003,6 +1041,57 @@ void syncSelectedContextTool(HWND hwnd, SettingsDialogState& state) {
     }
 }
 
+int selectedToolbarIndex(HWND hwnd) {
+    const LRESULT index = SendMessageW(GetDlgItem(hwnd, kToolbarListId), LB_GETCURSEL, 0, 0);
+    return index == LB_ERR ? -1 : static_cast<int>(index);
+}
+
+int selectedAvailableToolbarIndex(HWND hwnd) {
+    const LRESULT index = SendMessageW(GetDlgItem(hwnd, kToolbarAvailableListId), LB_GETCURSEL, 0, 0);
+    return index == LB_ERR ? -1 : static_cast<int>(index);
+}
+
+bool hasToolbarCommand(const std::vector<ToolbarCommand>& commands, ToolbarCommand command) {
+    return std::find(commands.begin(), commands.end(), command) != commands.end();
+}
+
+void populateToolbarCommandList(HWND list, const std::vector<ToolbarCommand>& commands, int selectedIndex) {
+    if (!list) {
+        return;
+    }
+
+    SendMessageW(list, LB_RESETCONTENT, 0, 0);
+    for (const ToolbarCommand command : commands) {
+        const std::wstring label = toolbarCommandLabel(command);
+        SendMessageW(list, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
+    }
+    if (selectedIndex >= 0 && selectedIndex < static_cast<int>(commands.size())) {
+        SendMessageW(list, LB_SETCURSEL, static_cast<WPARAM>(selectedIndex), 0);
+    }
+}
+
+void updateToolbarButtons(HWND hwnd, const SettingsDialogState& state) {
+    const std::vector<ToolbarCommand> available = availableToolbarCommands();
+    const int availableIndex = selectedAvailableToolbarIndex(hwnd);
+    const int toolbarIndex = selectedToolbarIndex(hwnd);
+    bool canAdd = false;
+    if (availableIndex >= 0 && availableIndex < static_cast<int>(available.size())) {
+        canAdd = !hasToolbarCommand(state.resultSettings.toolbarCommands, available[static_cast<std::size_t>(availableIndex)]);
+    }
+
+    EnableWindow(GetDlgItem(hwnd, kToolbarAddId), canAdd ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hwnd, kToolbarRemoveId), toolbarIndex >= 0 ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hwnd, kToolbarUpId), toolbarIndex > 0 ? TRUE : FALSE);
+    EnableWindow(GetDlgItem(hwnd, kToolbarDownId),
+                 toolbarIndex >= 0 && toolbarIndex + 1 < static_cast<int>(state.resultSettings.toolbarCommands.size()) ? TRUE : FALSE);
+}
+
+void refreshToolbarLists(HWND hwnd, SettingsDialogState& state, int selectedToolbar = -1) {
+    populateToolbarCommandList(GetDlgItem(hwnd, kToolbarAvailableListId), availableToolbarCommands(), selectedAvailableToolbarIndex(hwnd));
+    populateToolbarCommandList(GetDlgItem(hwnd, kToolbarListId), state.resultSettings.toolbarCommands, selectedToolbar);
+    updateToolbarButtons(hwnd, state);
+}
+
 void centerDialog(HWND hwnd, HWND owner) {
     RECT dialogRect{};
     GetWindowRect(hwnd, &dialogRect);
@@ -1085,6 +1174,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Startup"));
             SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Files"));
             SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Shortcuts"));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Toolbar"));
             SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Context Menu"));
             SendMessageW(categoryList, LB_SETCURSEL, 0, 0);
         }
@@ -1471,6 +1561,42 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              454,
                                              hwnd,
                                              0);
+        HWND toolbarGroup = createDialogControl(0,
+                                                L"BUTTON",
+                                                L"Toolbar",
+                                                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                                190,
+                                                78,
+                                                640,
+                                                534,
+                                                hwnd,
+                                                0);
+        HWND toolbarAvailableLabel = createDialogControl(0, L"STATIC", L"Available actions", WS_CHILD | WS_VISIBLE, 214, 122, 180, 20, hwnd, 0);
+        HWND toolbarAvailableList = createDialogControl(WS_EX_CLIENTEDGE,
+                                                        L"LISTBOX",
+                                                        L"",
+                                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT,
+                                                        214,
+                                                        160,
+                                                        200,
+                                                        300,
+                                                        hwnd,
+                                                        kToolbarAvailableListId);
+        HWND toolbarOrderLabel = createDialogControl(0, L"STATIC", L"Toolbar order", WS_CHILD | WS_VISIBLE, 586, 122, 180, 20, hwnd, 0);
+        HWND toolbarList = createDialogControl(WS_EX_CLIENTEDGE,
+                                               L"LISTBOX",
+                                               L"",
+                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT,
+                                               586,
+                                               160,
+                                               200,
+                                               300,
+                                               hwnd,
+                                               kToolbarListId);
+        HWND toolbarAdd = createDialogControl(0, L"BUTTON", L"Add", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 186, 104, 28, hwnd, kToolbarAddId);
+        HWND toolbarRemove = createDialogControl(0, L"BUTTON", L"Remove", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 224, 104, 28, hwnd, kToolbarRemoveId);
+        HWND toolbarUp = createDialogControl(0, L"BUTTON", L"Move up", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 292, 104, 28, hwnd, kToolbarUpId);
+        HWND toolbarDown = createDialogControl(0, L"BUTTON", L"Move down", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 330, 104, 28, hwnd, kToolbarDownId);
         HWND contextGroup = createDialogControl(0,
                                                 L"BUTTON",
                                                 L"Context Menu",
@@ -1533,6 +1659,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             || !favoritesGroup || !favoritesLabel || !favoritesList
             || !favoriteNameLabel || !favoriteLabelEdit || !favoritePathLabel || !favoritePathEdit
             || !favoriteUp || !favoriteDown || !favoriteRemove || !shortcutsGroup || !shortcuts
+            || !toolbarGroup || !toolbarAvailableLabel || !toolbarAvailableList || !toolbarOrderLabel || !toolbarList
+            || !toolbarAdd || !toolbarRemove || !toolbarUp || !toolbarDown
             || !contextGroup || !contextList || !contextLabelText || !contextLabelEdit || !contextExeText || !contextExeEdit || !contextBrowse
             || !contextArgsText || !contextArgsEdit || !contextFiles || !contextFolders || !contextVsCode || !contextAdd || !contextUpdate
             || !contextRemove || !contextUp || !contextDown || !ok || !cancel) {
@@ -1543,8 +1671,9 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         state->startupControls = {windowGroup, windowWidthLabel, windowWidthEdit, windowHeightLabel, windowHeightEdit, rememberWindowSize, startupFolderLabel, startupFolderEdit, useCurrentFolder};
         state->filesControls = {behaviorGroup, showHiddenAndSystem, favoritesGroup, favoritesLabel, favoritesList, favoriteNameLabel, favoriteLabelEdit, favoritePathLabel, favoritePathEdit, favoriteUp, favoriteDown, favoriteRemove};
         state->shortcutsControls = {shortcutsGroup, shortcuts};
+        state->toolbarControls = {toolbarGroup, toolbarAvailableLabel, toolbarAvailableList, toolbarOrderLabel, toolbarList, toolbarAdd, toolbarRemove, toolbarUp, toolbarDown};
         state->contextMenuControls = {contextGroup, contextList, contextLabelText, contextLabelEdit, contextExeText, contextExeEdit, contextBrowse, contextArgsText, contextArgsEdit, contextFiles, contextFolders, contextVsCode, contextAdd, contextUpdate, contextRemove, contextUp, contextDown};
-        state->panelControls = {appearanceGroup, windowGroup, behaviorGroup, favoritesGroup, shortcutsGroup, contextGroup};
+        state->panelControls = {appearanceGroup, windowGroup, behaviorGroup, favoritesGroup, shortcutsGroup, toolbarGroup, contextGroup};
         state->framedControls = {
             categoryList,
             fontFamilyCombo,
@@ -1560,6 +1689,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             favoriteLabelEdit,
             favoritePathEdit,
             shortcuts,
+            toolbarAvailableList,
+            toolbarList,
             contextList,
             contextLabelEdit,
             contextExeEdit,
@@ -1568,6 +1699,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
         populateFavoritesList(hwnd, state->resultSettings, state->resultSettings.favorites.empty() ? -1 : 0);
         selectFavorite(hwnd, *state, state->resultSettings.favorites.empty() ? -1 : 0);
+        refreshToolbarLists(hwnd, *state, state->resultSettings.toolbarCommands.empty() ? -1 : 0);
         populateContextToolList(hwnd, state->resultSettings, state->resultSettings.contextMenuTools.empty() ? -1 : 0);
         selectContextTool(hwnd, *state, state->resultSettings.contextMenuTools.empty() ? -1 : 0);
         showSettingsPage(*state, 0);
@@ -1709,6 +1841,12 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             return 0;
         }
 
+        if ((LOWORD(wParam) == kToolbarAvailableListId || LOWORD(wParam) == kToolbarListId)
+            && HIWORD(wParam) == LBN_SELCHANGE) {
+            updateToolbarButtons(hwnd, *state);
+            return 0;
+        }
+
         if (LOWORD(wParam) == kContextToolBrowseId) {
             std::wstring path;
             if (browseExecutable(hwnd, path)) {
@@ -1719,6 +1857,35 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
         if (LOWORD(wParam) == kContextToolVsCodeId) {
             setContextToolTemplate(hwnd, L"Open in VS Code", L"Code.exe");
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kToolbarAddId) {
+            const std::vector<ToolbarCommand> available = availableToolbarCommands();
+            const int index = selectedAvailableToolbarIndex(hwnd);
+            if (index >= 0 && index < static_cast<int>(available.size())
+                && addToolbarCommand(state->resultSettings.toolbarCommands, available[static_cast<std::size_t>(index)])) {
+                refreshToolbarLists(hwnd, *state, static_cast<int>(state->resultSettings.toolbarCommands.size()) - 1);
+            } else {
+                updateToolbarButtons(hwnd, *state);
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kToolbarRemoveId) {
+            const int index = selectedToolbarIndex(hwnd);
+            if (index >= 0 && removeToolbarCommand(state->resultSettings.toolbarCommands, static_cast<std::size_t>(index))) {
+                refreshToolbarLists(hwnd, *state, index);
+            }
+            return 0;
+        }
+
+        if (LOWORD(wParam) == kToolbarUpId || LOWORD(wParam) == kToolbarDownId) {
+            const int index = selectedToolbarIndex(hwnd);
+            const int direction = LOWORD(wParam) == kToolbarUpId ? -1 : 1;
+            if (index >= 0 && moveToolbarCommand(state->resultSettings.toolbarCommands, static_cast<std::size_t>(index), direction)) {
+                refreshToolbarLists(hwnd, *state, index + direction);
+            }
             return 0;
         }
 
@@ -1837,6 +2004,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         if (LOWORD(wParam) == kOkId) {
             syncSelectedFavoriteLabel(hwnd, *state);
             syncSelectedContextTool(hwnd, *state);
+            state->resultSettings.toolbarCommands = normalizeToolbarCommands(std::move(state->resultSettings.toolbarCommands));
             state->values.fontSizeText = getEditText(GetDlgItem(hwnd, kFontEditId));
             state->values.iconSizeText = getEditText(GetDlgItem(hwnd, kIconEditId));
             state->values.itemPaddingText = getEditText(GetDlgItem(hwnd, kItemPaddingEditId));
@@ -1848,6 +2016,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             state->values.windowHeightText = getEditText(GetDlgItem(hwnd, kWindowHeightEditId));
             state->values.rememberWindowSize = SendMessageW(GetDlgItem(hwnd, kRememberWindowSizeId), BM_GETCHECK, 0, 0) == BST_CHECKED;
             state->values.startupFolderText = getEditText(GetDlgItem(hwnd, kStartupFolderEditId));
+            state->values.toolbarCommands = state->resultSettings.toolbarCommands;
             applySettingsDialogValues(state->values, state->resultSettings);
             state->accepted = true;
             DestroyWindow(hwnd);
@@ -1928,6 +2097,9 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
         settings.themeMode = ThemeMode::Light;
     } else if (values.themeModeText == L"dark") {
         settings.themeMode = ThemeMode::Dark;
+    }
+    if (!values.toolbarCommands.empty()) {
+        settings.toolbarCommands = normalizeToolbarCommands(values.toolbarCommands);
     }
 
     clampSettings(settings);

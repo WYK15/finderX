@@ -61,6 +61,7 @@ enum class ToolbarCommand {
     NewFile,
     Sort,
     Settings,
+    PowerShell,
     Search
 };
 
@@ -100,6 +101,7 @@ struct AppSettings {
         ToolbarCommand::NewFile,
         ToolbarCommand::Sort,
         ToolbarCommand::Settings,
+        ToolbarCommand::PowerShell,
         ToolbarCommand::Search,
     };
     std::vector<FavoriteLocation> favorites;

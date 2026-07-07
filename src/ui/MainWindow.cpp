@@ -14,7 +14,6 @@
 #include "ui/RenameDialog.h"
 #include "ui/SettingsDialog.h"
 #include "ui/TabManager.h"
-#include "ui/ToolbarCustomizationDialog.h"
 
 #include "resource.h"
 
@@ -58,7 +57,6 @@ constexpr UINT kCommandCompressZip = 1021;
 constexpr UINT kCommandExtractZip = 1022;
 constexpr UINT kCommandOpenInNewTab = 1023;
 constexpr UINT kCommandCreateShortcut = 1024;
-constexpr UINT kCommandCustomizeToolbar = 1025;
 constexpr UINT kInlineRenameEditId = 1101;
 constexpr UINT kCommandContextToolBase = 5000;
 constexpr UINT kCommandContextToolMax = 5099;
@@ -463,6 +461,9 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         case ChromeHitKind::Settings:
             openSettingsDialog();
             return 0;
+        case ChromeHitKind::OpenPowerShell:
+            openPowerShellForCurrentDirectory();
+            return 0;
         case ChromeHitKind::HeaderName:
             changeSort(SortColumn::Name);
             return 0;
@@ -676,7 +677,6 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
 
         const ChromeHitResult chromeHit = chrome_.hitTest(dipPoint.x, dipPoint.y, currentLayout(), chromeState_);
         if (containsPoint(currentLayout().toolbar, dipPoint)) {
-            showToolbarContextMenu(screenPoint);
             return 0;
         }
         if (chromeHit.kind == ChromeHitKind::SidebarItem) {
@@ -1249,17 +1249,6 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
     DestroyMenu(menu);
 }
 
-void MainWindow::showToolbarContextMenu(POINT screenPoint) {
-    HMENU menu = CreatePopupMenu();
-    if (!menu) {
-        return;
-    }
-    ui::ContextMenuPresenter presenter(settings_.themeMode, settings_.contextMenuFontSize, settings_.fontFamily);
-    presenter.appendItem(menu, kCommandCustomizeToolbar, L"Customize Toolbar...");
-    trackContextMenu(menu, presenter, screenPoint);
-    DestroyMenu(menu);
-}
-
 void MainWindow::showSidebarContextMenu(std::size_t sidebarIndex, POINT screenPoint) {
     contextNode_ = kInvalidNodeId;
     contextNodePath_.clear();
@@ -1353,14 +1342,6 @@ void MainWindow::handleCommand(WPARAM wParam) {
         break;
     case kCommandCreateShortcut:
         createShortcutForContextNode();
-        break;
-    case kCommandCustomizeToolbar:
-        if (ui::promptForToolbarCustomization(hwnd_, settings_)) {
-            clampSettings(settings_);
-            saveSettingsOrStatus();
-            refreshChromeState();
-            InvalidateRect(hwnd_, nullptr, FALSE);
-        }
         break;
     case kCommandReveal:
         revealContextNode();
@@ -1907,6 +1888,18 @@ void MainWindow::openPowerShellForContext() {
     }
 }
 
+void MainWindow::openPowerShellForCurrentDirectory() {
+    if (!isActiveDirectoryLocation()) {
+        setStatusText(L"Cannot open PowerShell");
+        return;
+    }
+
+    const std::wstring directory = activeTab().history.currentPath();
+    if (directory.empty() || !shell::openPowerShellAt(hwnd_, directory)) {
+        setStatusText(L"Cannot open PowerShell");
+    }
+}
+
 void MainWindow::revealContextNode() {
     const NodeId target = commandTargetNode();
     const TabState& tab = activeTab();
@@ -2429,6 +2422,8 @@ std::wstring toolbarTooltipTextForHit(ChromeHitKind kind) {
         return L"Sort";
     case ChromeHitKind::Settings:
         return L"Settings";
+    case ChromeHitKind::OpenPowerShell:
+        return L"Open PowerShell Here";
     default:
         return {};
     }
@@ -2447,6 +2442,9 @@ bool toolbarCommandForHit(ChromeHitKind kind, ToolbarCommand& command) {
         return true;
     case ChromeHitKind::Settings:
         command = ToolbarCommand::Settings;
+        return true;
+    case ChromeHitKind::OpenPowerShell:
+        command = ToolbarCommand::PowerShell;
         return true;
     default:
         return false;

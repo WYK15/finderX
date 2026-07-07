@@ -159,6 +159,8 @@ ChromeHitKind hitKindForToolbarCommand(ToolbarCommand command) {
         return ChromeHitKind::SortMenu;
     case ToolbarCommand::Settings:
         return ChromeHitKind::Settings;
+    case ToolbarCommand::PowerShell:
+        return ChromeHitKind::OpenPowerShell;
     case ToolbarCommand::Search:
     default:
         return ChromeHitKind::SearchField;
@@ -643,6 +645,14 @@ void drawToolbarCommandGlyph(RenderContext& render, ToolbarCommand command, cons
     case ToolbarCommand::Settings:
         drawSettingsGlyph(render, rect, color);
         break;
+    case ToolbarCommand::PowerShell: {
+        const D2D1_RECT_F shell = D2D1::RectF(rect.left + 7.0f, rect.top + 8.0f, rect.right - 7.0f, rect.bottom - 8.0f);
+        render.drawRoundedRect(D2D1::RoundedRect(shell, 3.0f, 3.0f), color, 1.35f);
+        render.drawLine(D2D1::Point2F(shell.left + 4.0f, shell.top + 5.0f), D2D1::Point2F(shell.left + 8.0f, shell.top + 9.0f), color, 1.35f);
+        render.drawLine(D2D1::Point2F(shell.left + 8.0f, shell.top + 9.0f), D2D1::Point2F(shell.left + 4.0f, shell.top + 13.0f), color, 1.35f);
+        render.drawLine(D2D1::Point2F(shell.left + 11.0f, shell.top + 13.0f), D2D1::Point2F(shell.right - 4.0f, shell.top + 13.0f), color, 1.35f);
+        break;
+    }
     case ToolbarCommand::Search:
         break;
     }

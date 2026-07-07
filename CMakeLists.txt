@@ -151,6 +151,7 @@ add_test(NAME finderx_rename_dialog_tests COMMAND finderx_rename_dialog_tests)
 add_executable(finderx_settings_dialog_tests
     src/ui/SettingsDialogTests.cpp
     src/ui/SettingsDialog.cpp
+    src/ui/ToolbarCustomization.cpp
     src/ui/NativeTitleBar.cpp
     src/ui/ThemeTokens.cpp
 )
@@ -341,7 +342,6 @@ set(FINDERX_APP_SOURCES
     src/ui/RenameDialog.cpp
     src/ui/SettingsDialog.cpp
     src/ui/ToolbarCustomization.cpp
-    src/ui/ToolbarCustomizationDialog.cpp
     src/ui/ThemeTokens.cpp
     src/ui/RenderContext.cpp
     resources/FinderX.rc

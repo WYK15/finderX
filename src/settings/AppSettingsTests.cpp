@@ -43,9 +43,10 @@ void testDefaults() {
     require(!settings.showHiddenAndSystemItems, "default should hide hidden and system items");
     require(settings.sortColumn == SortColumn::Name, "default sort column should be name");
     require(settings.sortDirection == SortDirection::Ascending, "default sort direction should be ascending");
-    require(settings.toolbarCommands.size() == 5, "default toolbar should include five commands");
+    require(settings.toolbarCommands.size() == 6, "default toolbar should include six commands");
     require(settings.toolbarCommands[0] == ToolbarCommand::NewFolder, "default toolbar should start with new folder");
     require(settings.toolbarCommands[1] == ToolbarCommand::NewFile, "default toolbar should include new file");
+    require(settings.toolbarCommands[4] == ToolbarCommand::PowerShell, "default toolbar should include PowerShell before search");
     require(settings.favorites.size() == 4, "default settings should include four favorites");
     require(settings.favorites[0].label == L"Home", "first default favorite should be Home");
     require(settings.favorites[0].path == L"C:\\Users\\Example", "home favorite should use home path");
@@ -169,7 +170,7 @@ void testSaveLoadRoundTrip() {
     settings.showHiddenAndSystemItems = true;
     settings.sortColumn = SortColumn::Modified;
     settings.sortDirection = SortDirection::Descending;
-    settings.toolbarCommands = {ToolbarCommand::Search, ToolbarCommand::NewFile, ToolbarCommand::NewFolder};
+    settings.toolbarCommands = {ToolbarCommand::Search, ToolbarCommand::PowerShell, ToolbarCommand::NewFile, ToolbarCommand::NewFolder};
     settings.contextMenuTools.push_back({L"Open in VS Code", L"C:\\Tools\\Code.exe", L"\"{path}\"", true, true});
     require(addFavorite(settings, L"Projects", L"D:\\Projects"), "custom favorite should be added before save");
 
@@ -193,10 +194,11 @@ void testSaveLoadRoundTrip() {
     require(loaded.settings.showHiddenAndSystemItems, "hidden/system visibility should round trip");
     require(loaded.settings.sortColumn == SortColumn::Modified, "sort column should round trip");
     require(loaded.settings.sortDirection == SortDirection::Descending, "sort direction should round trip");
-    require(loaded.settings.toolbarCommands.size() == 3, "toolbar commands should round trip");
+    require(loaded.settings.toolbarCommands.size() == 4, "toolbar commands should round trip");
     require(loaded.settings.toolbarCommands[0] == ToolbarCommand::Search, "toolbar command order should round trip");
-    require(loaded.settings.toolbarCommands[1] == ToolbarCommand::NewFile, "toolbar new file command should round trip");
-    require(loaded.settings.toolbarCommands[2] == ToolbarCommand::NewFolder, "toolbar new folder command should round trip");
+    require(loaded.settings.toolbarCommands[1] == ToolbarCommand::PowerShell, "toolbar PowerShell command should round trip");
+    require(loaded.settings.toolbarCommands[2] == ToolbarCommand::NewFile, "toolbar new file command should round trip");
+    require(loaded.settings.toolbarCommands[3] == ToolbarCommand::NewFolder, "toolbar new folder command should round trip");
     require(loaded.settings.contextMenuTools.size() == 1, "context menu tools should round trip");
     require(loaded.settings.contextMenuTools[0].label == L"Open in VS Code", "context menu tool label should round trip");
     require(loaded.settings.contextMenuTools[0].executablePath == L"C:\\Tools\\Code.exe", "context menu tool executable should round trip");
@@ -214,14 +216,16 @@ void testNormalizeToolbarCommands() {
     std::vector<ToolbarCommand> normalized = normalizeToolbarCommands({
         ToolbarCommand::NewFolder,
         ToolbarCommand::NewFolder,
+        ToolbarCommand::PowerShell,
         ToolbarCommand::Search,
         ToolbarCommand::Settings,
     });
 
-    require(normalized.size() == 3, "duplicate toolbar commands should be removed");
+    require(normalized.size() == 4, "duplicate toolbar commands should be removed");
     require(normalized[0] == ToolbarCommand::NewFolder, "normalization should keep first command");
-    require(normalized[1] == ToolbarCommand::Search, "normalization should preserve remaining order");
-    require(normalized[2] == ToolbarCommand::Settings, "normalization should keep later unique commands");
+    require(normalized[1] == ToolbarCommand::PowerShell, "normalization should preserve PowerShell command order");
+    require(normalized[2] == ToolbarCommand::Search, "normalization should preserve remaining order");
+    require(normalized[3] == ToolbarCommand::Settings, "normalization should keep later unique commands");
 
     normalized = normalizeToolbarCommands({});
     require(normalized == defaultToolbarCommands(), "empty toolbar should fall back to defaults");

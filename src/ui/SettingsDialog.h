@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include <string>
+#include <vector>
 
 namespace finderx::ui {
 
@@ -20,6 +21,7 @@ struct SettingsDialogValues {
     std::wstring windowHeightText;
     bool rememberWindowSize = false;
     std::wstring startupFolderText;
+    std::vector<ToolbarCommand> toolbarCommands;
 };
 
 bool promptForSettings(HWND owner, AppSettings& settings, const std::wstring& currentFolder = L"");

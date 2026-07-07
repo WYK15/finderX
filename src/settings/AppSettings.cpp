@@ -298,6 +298,9 @@ ToolbarCommand parseToolbarCommand(const std::wstring& value, ToolbarCommand fal
     if (value == L"settings") {
         return ToolbarCommand::Settings;
     }
+    if (value == L"powershell") {
+        return ToolbarCommand::PowerShell;
+    }
     if (value == L"search") {
         return ToolbarCommand::Search;
     }
@@ -784,6 +787,8 @@ std::wstring toolbarCommandName(ToolbarCommand command) {
         return L"sort";
     case ToolbarCommand::Settings:
         return L"settings";
+    case ToolbarCommand::PowerShell:
+        return L"powershell";
     case ToolbarCommand::Search:
     default:
         return L"search";
@@ -796,6 +801,7 @@ std::vector<ToolbarCommand> defaultToolbarCommands() {
         ToolbarCommand::NewFile,
         ToolbarCommand::Sort,
         ToolbarCommand::Settings,
+        ToolbarCommand::PowerShell,
         ToolbarCommand::Search,
     };
 }

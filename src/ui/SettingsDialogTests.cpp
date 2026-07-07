@@ -24,6 +24,7 @@ bool nearlyEqual(float left, float right) {
 int main() {
     using finderx::AppSettings;
     using finderx::ThemeMode;
+    using finderx::ToolbarCommand;
     using finderx::addFavorite;
     using finderx::kMaxIconSize;
     using finderx::ui::SettingsDialogValues;
@@ -127,6 +128,18 @@ int main() {
         applySettingsDialogValues(SettingsDialogValues{L"16", L"20"}, settings);
         require(settings.favorites.size() == 1, "applying size values should preserve favorites");
         require(settings.favorites[0].label == L"Projects", "applying size values should preserve favorite label");
+    }
+
+    {
+        AppSettings settings;
+        settings.toolbarCommands = {ToolbarCommand::Search};
+        SettingsDialogValues values;
+        values.toolbarCommands = {ToolbarCommand::Settings, ToolbarCommand::PowerShell, ToolbarCommand::Search};
+        applySettingsDialogValues(values, settings);
+        require(settings.toolbarCommands.size() == 3, "settings values should apply toolbar command count");
+        require(settings.toolbarCommands[0] == ToolbarCommand::Settings, "settings values should apply toolbar order");
+        require(settings.toolbarCommands[1] == ToolbarCommand::PowerShell, "settings values should apply PowerShell toolbar command");
+        require(settings.toolbarCommands[2] == ToolbarCommand::Search, "settings values should preserve search command");
     }
 
     std::cout << "SettingsDialogTests passed\n";
