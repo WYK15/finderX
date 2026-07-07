@@ -38,6 +38,7 @@ struct SettingsDialogState {
     std::vector<HWND> shortcutsControls;
     std::vector<HWND> toolbarControls;
     std::vector<HWND> contextMenuControls;
+    std::vector<HWND> aboutControls;
 };
 
 constexpr wchar_t kDialogClassName[] = L"FinderXSettingsDialog";
@@ -216,6 +217,7 @@ void showSettingsPage(SettingsDialogState& state, int page) {
     showControls(state.shortcutsControls, page == 3);
     showControls(state.toolbarControls, page == 4);
     showControls(state.contextMenuControls, page == 5);
+    showControls(state.aboutControls, page == 6);
     showControls(state.panelControls, false);
 }
 
@@ -487,7 +489,9 @@ void paintSettingsDialog(HWND hwnd, SettingsDialogState& state, HDC dc) {
             || (index == 1 && state.selectedPage == 1)
             || ((index == 2 || index == 3) && state.selectedPage == 2)
             || (index == 4 && state.selectedPage == 3)
-            || (index == 5 && state.selectedPage == 4);
+            || (index == 5 && state.selectedPage == 4)
+            || (index == 6 && state.selectedPage == 5)
+            || (index == 7 && state.selectedPage == 6);
         if (visible) {
             drawPanelFrame(dc, hwnd, state.panelControls[index], tokens);
         }
@@ -555,7 +559,7 @@ void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
     moveControl(hwnd, kOkId, width - sc(196), actionTop + sc(18), sc(76), buttonH);
     moveControl(hwnd, kCancelId, width - sc(108), actionTop + sc(18), sc(84), buttonH);
 
-    if (state.panelControls.size() >= 7) {
+    if (state.panelControls.size() >= 8) {
         moveHandle(state.panelControls[0], panelX, panelY, panelW, panelH);
         moveHandle(state.panelControls[1], panelX, panelY, panelW, panelH);
         moveHandle(state.panelControls[2], panelX, panelY, panelW, sc(92));
@@ -563,6 +567,7 @@ void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
         moveHandle(state.panelControls[4], panelX, panelY, panelW, panelH);
         moveHandle(state.panelControls[5], panelX, panelY, panelW, panelH);
         moveHandle(state.panelControls[6], panelX, panelY, panelW, panelH);
+        moveHandle(state.panelControls[7], panelX, panelY, panelW, panelH);
     }
 
     if (state.appearanceControls.size() >= 15) {
@@ -659,6 +664,13 @@ void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
         moveControl(hwnd, kContextToolRemoveId, innerX + sc(182), buttonY, sc(100), buttonH);
         moveControl(hwnd, kContextToolUpId, innerX + sc(294), buttonY, sc(66), buttonH);
         moveControl(hwnd, kContextToolDownId, innerX + sc(372), buttonY, sc(82), buttonH);
+    }
+
+    if (state.aboutControls.size() >= 4) {
+        const int y0 = panelY + sc(54);
+        moveHandle(state.aboutControls[1], innerX, y0, panelW - sc(48), sc(32));
+        moveHandle(state.aboutControls[2], innerX, y0 + sc(52), panelW - sc(48), sc(28));
+        moveHandle(state.aboutControls[3], innerX, y0 + sc(94), panelW - sc(48), sc(60));
     }
 
     InvalidateRect(hwnd, nullptr, TRUE);
@@ -1194,6 +1206,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::Shortcuts, state->initialSettings.languageMode).data()));
             SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::Toolbar, state->initialSettings.languageMode).data()));
             SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::ContextMenu, state->initialSettings.languageMode).data()));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::About, state->initialSettings.languageMode).data()));
             SendMessageW(categoryList, LB_SETCURSEL, 0, 0);
         }
         HWND appearanceGroup = createDialogControl(0,
@@ -1675,6 +1688,52 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         HWND contextRemove = createDialogControl(0, L"BUTTON", tr(StringId::Remove, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 364, 404, 76, 28, hwnd, kContextToolRemoveId);
         HWND contextUp = createDialogControl(0, L"BUTTON", tr(StringId::Up, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 404, 56, 28, hwnd, kContextToolUpId);
         HWND contextDown = createDialogControl(0, L"BUTTON", tr(StringId::Down, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 512, 404, 68, 28, hwnd, kContextToolDownId);
+        HWND aboutGroup = createDialogControl(0,
+                                              L"BUTTON",
+                                              tr(StringId::About, state->initialSettings.languageMode).data(),
+                                              WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
+                                              190,
+                                              78,
+                                              640,
+                                              534,
+                                              hwnd,
+                                              0);
+        HWND aboutName = createDialogControl(0,
+                                             L"STATIC",
+                                             L"FinderX",
+                                             WS_CHILD | WS_VISIBLE,
+                                             214,
+                                             132,
+                                             320,
+                                             24,
+                                             hwnd,
+                                             0);
+        if (aboutName && state->titleFont) {
+            SendMessageW(aboutName, WM_SETFONT, reinterpret_cast<WPARAM>(state->titleFont), TRUE);
+        }
+        const std::wstring aboutVersion = std::wstring(tr(StringId::Version, state->initialSettings.languageMode))
+            + L": "
+            + kFinderXVersion;
+        HWND aboutVersionText = createDialogControl(0,
+                                                    L"STATIC",
+                                                    aboutVersion.c_str(),
+                                                    WS_CHILD | WS_VISIBLE,
+                                                    214,
+                                                    184,
+                                                    320,
+                                                    22,
+                                                    hwnd,
+                                                    0);
+        HWND aboutDescription = createDialogControl(0,
+                                                    L"STATIC",
+                                                    tr(StringId::AppDescription, state->initialSettings.languageMode).data(),
+                                                    WS_CHILD | WS_VISIBLE,
+                                                    214,
+                                                    226,
+                                                    520,
+                                                    54,
+                                                    hwnd,
+                                                    0);
         HWND ok = createDialogControl(0,
                                       L"BUTTON",
                                       tr(StringId::Ok, state->initialSettings.languageMode).data(),
@@ -1706,7 +1765,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             || !toolbarAdd || !toolbarRemove || !toolbarUp || !toolbarDown
             || !contextGroup || !contextList || !contextLabelText || !contextLabelEdit || !contextExeText || !contextExeEdit || !contextBrowse
             || !contextArgsText || !contextArgsEdit || !contextFiles || !contextFolders || !contextVsCode || !contextAdd || !contextUpdate
-            || !contextRemove || !contextUp || !contextDown || !ok || !cancel) {
+            || !contextRemove || !contextUp || !contextDown || !aboutGroup || !aboutName || !aboutVersionText || !aboutDescription || !ok || !cancel) {
             return -1;
         }
 
@@ -1716,7 +1775,8 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         state->shortcutsControls = {shortcutsGroup, shortcuts};
         state->toolbarControls = {toolbarGroup, toolbarAvailableLabel, toolbarAvailableList, toolbarOrderLabel, toolbarList, toolbarAdd, toolbarRemove, toolbarUp, toolbarDown};
         state->contextMenuControls = {contextGroup, contextList, contextLabelText, contextLabelEdit, contextExeText, contextExeEdit, contextBrowse, contextArgsText, contextArgsEdit, contextFiles, contextFolders, contextVsCode, contextAdd, contextUpdate, contextRemove, contextUp, contextDown};
-        state->panelControls = {appearanceGroup, windowGroup, behaviorGroup, favoritesGroup, shortcutsGroup, toolbarGroup, contextGroup};
+        state->aboutControls = {aboutGroup, aboutName, aboutVersionText, aboutDescription};
+        state->panelControls = {appearanceGroup, windowGroup, behaviorGroup, favoritesGroup, shortcutsGroup, toolbarGroup, contextGroup, aboutGroup};
         state->framedControls = {
             categoryList,
             fontFamilyCombo,

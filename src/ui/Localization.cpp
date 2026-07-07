@@ -20,6 +20,9 @@ std::wstring_view trZh(StringId id) {
     case StringId::Shortcuts: return L"快捷键";
     case StringId::Toolbar: return L"工具栏";
     case StringId::ContextMenu: return L"右键菜单";
+    case StringId::About: return L"关于";
+    case StringId::Version: return L"版本";
+    case StringId::AppDescription: return L"FinderX 是一款紧凑、快速的 Windows 文件管理器。";
     case StringId::FontFamily: return L"字体";
     case StringId::FontSize: return L"字体大小";
     case StringId::ContextMenuFont: return L"右键菜单字体";
@@ -113,6 +116,9 @@ std::wstring_view trEn(StringId id) {
     case StringId::Shortcuts: return L"Shortcuts";
     case StringId::Toolbar: return L"Toolbar";
     case StringId::ContextMenu: return L"Context Menu";
+    case StringId::About: return L"About";
+    case StringId::Version: return L"Version";
+    case StringId::AppDescription: return L"FinderX is a compact, fast Windows file manager.";
     case StringId::FontFamily: return L"Font family";
     case StringId::FontSize: return L"Font size";
     case StringId::ContextMenuFont: return L"Context menu font";

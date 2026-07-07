@@ -28,6 +28,7 @@ void testDefaults() {
     const AppSettings settings = makeDefaultSettings(L"C:\\Users\\Example");
     require(settings.fontSize == 13.0f, "default font size should be 13");
     require(settings.fontFamily == L"Segoe UI", "default font family should be Segoe UI");
+    require(std::wstring(kFinderXVersion) == L"0.2.0", "FinderX version should be 0.2.0");
     require(settings.languageMode == LanguageMode::Chinese, "default language should be Chinese");
     require(settings.contextMenuFontSize == 12.0f, "default context menu font size should be 12");
     require(settings.iconSize == 14.0f, "default icon size should be 14");

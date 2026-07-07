@@ -13,6 +13,7 @@ inline constexpr float kDefaultIconSize = 14.0f;
 inline constexpr float kDefaultItemPadding = 8.0f;
 inline constexpr wchar_t kDefaultFontFamily[] = L"Segoe UI";
 inline constexpr wchar_t kDefaultLanguage[] = L"zh-CN";
+inline constexpr wchar_t kFinderXVersion[] = L"0.2.0";
 inline constexpr float kMinFontSize = 11.0f;
 inline constexpr float kMaxFontSize = 18.0f;
 inline constexpr float kMinContextMenuFontSize = 10.0f;
