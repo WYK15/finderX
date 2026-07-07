@@ -22,10 +22,12 @@ struct SettingsDialogValues {
     bool rememberWindowSize = false;
     std::wstring startupFolderText;
     std::vector<ToolbarCommand> toolbarCommands;
+    std::wstring languageModeText;
 };
 
 bool promptForSettings(HWND owner, AppSettings& settings, const std::wstring& currentFolder = L"");
 void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& settings);
+bool settingsDialogSettingsEqual(const AppSettings& left, const AppSettings& right);
 float settingsDialogBodyFontSize();
 float settingsDialogTitleFontSize();
 DWORD settingsDialogWindowStyle();

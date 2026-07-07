@@ -28,6 +28,7 @@ void testDefaults() {
     const AppSettings settings = makeDefaultSettings(L"C:\\Users\\Example");
     require(settings.fontSize == 13.0f, "default font size should be 13");
     require(settings.fontFamily == L"Segoe UI", "default font family should be Segoe UI");
+    require(settings.languageMode == LanguageMode::Chinese, "default language should be Chinese");
     require(settings.contextMenuFontSize == 12.0f, "default context menu font size should be 12");
     require(settings.iconSize == 14.0f, "default icon size should be 14");
     require(settings.itemPadding == kDefaultItemPadding, "default item padding should be compact");
@@ -155,6 +156,7 @@ void testSaveLoadRoundTrip() {
     AppSettings settings = makeDefaultSettings(L"C:\\Users\\Example");
     settings.fontSize = 16.0f;
     settings.fontFamily = L"Microsoft YaHei UI";
+    settings.languageMode = LanguageMode::English;
     settings.contextMenuFontSize = 11.5f;
     settings.iconSize = 20.0f;
     settings.itemPadding = 14.0f;
@@ -179,6 +181,7 @@ void testSaveLoadRoundTrip() {
     require(loaded.loadedFromDisk, "load result should report disk load");
     require(loaded.settings.fontSize == 16.0f, "font size should round trip");
     require(loaded.settings.fontFamily == L"Microsoft YaHei UI", "font family should round trip");
+    require(loaded.settings.languageMode == LanguageMode::English, "language should round trip");
     require(loaded.settings.contextMenuFontSize == 11.5f, "context menu font size should round trip");
     require(loaded.settings.iconSize == 20.0f, "icon size should round trip");
     require(loaded.settings.itemPadding == 14.0f, "item padding should round trip");

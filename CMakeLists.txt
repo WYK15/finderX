@@ -76,6 +76,14 @@ target_link_libraries(finderx_navigation PUBLIC finderx_fs)
 finderx_enable_utf8(finderx_navigation)
 finderx_enable_windows_unicode(finderx_navigation)
 
+add_library(finderx_ui_localization
+    src/ui/Localization.cpp
+)
+
+target_include_directories(finderx_ui_localization PUBLIC src)
+finderx_enable_utf8(finderx_ui_localization)
+finderx_enable_windows_unicode(finderx_ui_localization)
+
 add_executable(finderx_model_tests
     src/model/FileTreeTests.cpp
 )
@@ -138,6 +146,15 @@ finderx_enable_utf8(finderx_settings_tests)
 finderx_enable_windows_unicode(finderx_settings_tests)
 add_test(NAME finderx_settings_tests COMMAND finderx_settings_tests)
 
+add_executable(finderx_localization_tests
+    src/ui/LocalizationTests.cpp
+)
+
+target_link_libraries(finderx_localization_tests PRIVATE finderx_ui_localization)
+finderx_enable_utf8(finderx_localization_tests)
+finderx_enable_windows_unicode(finderx_localization_tests)
+add_test(NAME finderx_localization_tests COMMAND finderx_localization_tests)
+
 add_executable(finderx_rename_dialog_tests
     src/ui/RenameDialogTests.cpp
     src/ui/RenameDialog.cpp
@@ -157,7 +174,7 @@ add_executable(finderx_settings_dialog_tests
 )
 
 target_include_directories(finderx_settings_dialog_tests PRIVATE src)
-target_link_libraries(finderx_settings_dialog_tests PRIVATE finderx_settings dwmapi comdlg32)
+target_link_libraries(finderx_settings_dialog_tests PRIVATE finderx_settings finderx_ui_localization dwmapi comdlg32)
 finderx_enable_utf8(finderx_settings_dialog_tests)
 finderx_enable_windows_unicode(finderx_settings_dialog_tests)
 add_test(NAME finderx_settings_dialog_tests COMMAND finderx_settings_dialog_tests)
@@ -251,7 +268,7 @@ add_executable(finderx_toolbar_customization_tests
 )
 
 target_include_directories(finderx_toolbar_customization_tests PRIVATE src)
-target_link_libraries(finderx_toolbar_customization_tests PRIVATE finderx_settings)
+target_link_libraries(finderx_toolbar_customization_tests PRIVATE finderx_settings finderx_ui_localization)
 finderx_enable_utf8(finderx_toolbar_customization_tests)
 finderx_enable_windows_unicode(finderx_toolbar_customization_tests)
 add_test(NAME finderx_toolbar_customization_tests COMMAND finderx_toolbar_customization_tests)
@@ -320,7 +337,7 @@ add_executable(finderx_chrome_tests
 )
 
 target_include_directories(finderx_chrome_tests PRIVATE src)
-target_link_libraries(finderx_chrome_tests PRIVATE finderx_navigation d2d1 dwrite windowscodecs)
+target_link_libraries(finderx_chrome_tests PRIVATE finderx_navigation finderx_ui_localization d2d1 dwrite windowscodecs)
 finderx_enable_utf8(finderx_chrome_tests)
 finderx_enable_windows_unicode(finderx_chrome_tests)
 add_test(NAME finderx_chrome_tests COMMAND finderx_chrome_tests)
@@ -365,6 +382,7 @@ if(FINDERX_APP_SOURCES_EXIST)
         finderx_fs
         finderx_navigation
         finderx_settings
+        finderx_ui_localization
         d2d1
         dwrite
         windowscodecs

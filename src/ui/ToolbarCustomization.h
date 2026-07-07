@@ -7,7 +7,7 @@
 
 namespace finderx::ui {
 
-std::wstring toolbarCommandLabel(ToolbarCommand command);
+std::wstring toolbarCommandLabel(ToolbarCommand command, LanguageMode languageMode = LanguageMode::Chinese);
 std::vector<ToolbarCommand> availableToolbarCommands();
 bool addToolbarCommand(std::vector<ToolbarCommand>& commands, ToolbarCommand command);
 bool removeToolbarCommand(std::vector<ToolbarCommand>& commands, std::size_t index);

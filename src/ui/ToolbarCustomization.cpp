@@ -1,24 +1,25 @@
 #include "ui/ToolbarCustomization.h"
+#include "ui/Localization.h"
 
 #include <algorithm>
 
 namespace finderx::ui {
 
-std::wstring toolbarCommandLabel(ToolbarCommand command) {
+std::wstring toolbarCommandLabel(ToolbarCommand command, LanguageMode languageMode) {
     switch (command) {
     case ToolbarCommand::NewFolder:
-        return L"New Folder";
+        return std::wstring(tr(StringId::NewFolder, languageMode));
     case ToolbarCommand::NewFile:
-        return L"New File";
+        return std::wstring(tr(StringId::NewFile, languageMode));
     case ToolbarCommand::Sort:
-        return L"Sort";
+        return std::wstring(tr(StringId::Sort, languageMode));
     case ToolbarCommand::Settings:
-        return L"Settings";
+        return std::wstring(tr(StringId::Settings, languageMode));
     case ToolbarCommand::PowerShell:
-        return L"Open PowerShell Here";
+        return std::wstring(tr(StringId::OpenPowerShellHere, languageMode));
     case ToolbarCommand::Search:
     default:
-        return L"Search";
+        return std::wstring(tr(StringId::Search, languageMode));
     }
 }
 

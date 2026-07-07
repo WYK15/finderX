@@ -42,7 +42,6 @@ public:
     void drawEllipse(const D2D1_ELLIPSE& ellipse, D2D1_COLOR_F color, float width = 1.0f);
     void fillRect(const D2D1_RECT_F& rect, D2D1_COLOR_F color);
     void fillPolygon(std::span<const D2D1_POINT_2F> points, D2D1_COLOR_F color);
-    bool fillSvgPath(std::string_view pathData, float viewBoxWidth, float viewBoxHeight, const D2D1_RECT_F& rect, D2D1_COLOR_F color);
     void drawLine(D2D1_POINT_2F start, D2D1_POINT_2F end, D2D1_COLOR_F color, float width = 1.0f);
 
 private:

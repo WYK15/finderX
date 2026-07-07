@@ -1,4 +1,5 @@
 #include "ui/SettingsDialog.h"
+#include "ui/Localization.h"
 #include "ui/NativeTitleBar.h"
 #include "ui/ThemeTokens.h"
 #include "ui/ToolbarCustomization.h"
@@ -78,6 +79,7 @@ constexpr int kToolbarAddId = 403;
 constexpr int kToolbarRemoveId = 404;
 constexpr int kToolbarUpId = 405;
 constexpr int kToolbarDownId = 406;
+constexpr int kLanguageComboId = 407;
 constexpr int kOkId = IDOK;
 constexpr int kCancelId = IDCANCEL;
 constexpr int kDialogWidth = 940;
@@ -161,6 +163,7 @@ bool isInputControl(HWND control) {
         || id == kToolbarAvailableListId
         || id == kToolbarListId
         || id == kThemeComboId
+        || id == kLanguageComboId
         || id == kFontFamilyComboId;
 }
 
@@ -257,17 +260,29 @@ void deleteThemeBrushes(SettingsDialogState& state) {
     }
 }
 
-std::wstring shortcutHelpText() {
-    return L"Keyboard shortcuts:\r\n"
-           L"Ctrl+T  New tab\r\n"
-           L"Ctrl+W  Close tab\r\n"
-           L"Ctrl+F  Search\r\n"
-           L"F5 / Ctrl+R  Refresh\r\n"
-           L"F2  Rename\r\n"
-           L"Delete  Move to Trash\r\n"
-           L"Ctrl+C  Copy\r\n"
-           L"Ctrl+X  Cut\r\n"
-           L"Ctrl+V  Paste";
+std::wstring shortcutHelpText(LanguageMode languageMode) {
+    if (languageMode == LanguageMode::English) {
+        return L"Keyboard shortcuts:\r\n"
+               L"Ctrl+T  New tab\r\n"
+               L"Ctrl+W  Close tab\r\n"
+               L"Ctrl+F  Search\r\n"
+               L"F5 / Ctrl+R  Refresh\r\n"
+               L"F2  Rename\r\n"
+               L"Delete  Move to Trash\r\n"
+               L"Ctrl+C  Copy\r\n"
+               L"Ctrl+X  Cut\r\n"
+               L"Ctrl+V  Paste";
+    }
+    return L"键盘快捷键:\r\n"
+           L"Ctrl+T  新建标签页\r\n"
+           L"Ctrl+W  关闭标签页\r\n"
+           L"Ctrl+F  搜索\r\n"
+           L"F5 / Ctrl+R  刷新\r\n"
+           L"F2  重命名\r\n"
+           L"Delete  移到回收站\r\n"
+           L"Ctrl+C  复制\r\n"
+           L"Ctrl+X  剪切\r\n"
+           L"Ctrl+V  粘贴";
 }
 
 void setControlFont(HWND control, HWND parent) {
@@ -550,7 +565,7 @@ void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
         moveHandle(state.panelControls[6], panelX, panelY, panelW, panelH);
     }
 
-    if (state.appearanceControls.size() >= 13) {
+    if (state.appearanceControls.size() >= 15) {
         const int y0 = panelY + sc(38);
         moveHandle(state.appearanceControls[1], innerX, y0 + sc(3), labelW, labelH);
         moveComboControl(hwnd, kFontFamilyComboId, inputX, y0, (std::min)(inputW, sc(320)), rowH + sc(4), 16);
@@ -564,6 +579,8 @@ void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
         moveControl(hwnd, kItemPaddingEditId, inputX, y0 + rowGap * 4, sc(130), rowH);
         moveHandle(state.appearanceControls[11], innerX, y0 + rowGap * 5 + sc(3), labelW, labelH);
         moveComboControl(hwnd, kThemeComboId, inputX, y0 + rowGap * 5, sc(160), rowH + sc(4), 4);
+        moveHandle(state.appearanceControls[13], innerX, y0 + rowGap * 6 + sc(3), labelW, labelH);
+        moveComboControl(hwnd, kLanguageComboId, inputX, y0 + rowGap * 6, sc(160), rowH + sc(4), 4);
     }
 
     if (state.startupControls.size() >= 9) {
@@ -791,15 +808,16 @@ bool tryParseFloat(const std::wstring& text, float& value) {
     return true;
 }
 
-bool settingsEqual(const AppSettings& left, const AppSettings& right) {
+bool settingsEqualInternal(const AppSettings& left, const AppSettings& right) {
     if (left.fontSize != right.fontSize || left.fontFamily != right.fontFamily
         || left.contextMenuFontSize != right.contextMenuFontSize || left.iconSize != right.iconSize
         || left.itemPadding != right.itemPadding
         || left.windowWidth != right.windowWidth || left.windowHeight != right.windowHeight
         || left.rememberWindowSize != right.rememberWindowSize
         || left.startupFolder != right.startupFolder
-        || left.themeMode != right.themeMode || left.showHiddenAndSystemItems != right.showHiddenAndSystemItems
+        || left.themeMode != right.themeMode || left.languageMode != right.languageMode || left.showHiddenAndSystemItems != right.showHiddenAndSystemItems
         || left.sortColumn != right.sortColumn || left.sortDirection != right.sortDirection
+        || left.toolbarCommands != right.toolbarCommands
         || left.favorites.size() != right.favorites.size()
         || left.contextMenuTools.size() != right.contextMenuTools.size()) {
         return false;
@@ -999,7 +1017,7 @@ ContextMenuTool contextToolFromFields(HWND hwnd) {
     return tool;
 }
 
-bool browseExecutable(HWND hwnd, std::wstring& path) {
+bool browseExecutable(HWND hwnd, std::wstring& path, LanguageMode languageMode) {
     wchar_t buffer[MAX_PATH]{};
     const std::wstring current = getEditText(GetDlgItem(hwnd, kContextToolExeEditId));
     if (!current.empty() && current.size() < std::size(buffer)) {
@@ -1013,7 +1031,7 @@ bool browseExecutable(HWND hwnd, std::wstring& path) {
     openFile.lpstrFile = buffer;
     openFile.nMaxFile = static_cast<DWORD>(std::size(buffer));
     openFile.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
-    openFile.lpstrTitle = L"Choose Program";
+    openFile.lpstrTitle = tr(StringId::ChooseProgram, languageMode).data();
     if (!GetOpenFileNameW(&openFile)) {
         return false;
     }
@@ -1055,14 +1073,14 @@ bool hasToolbarCommand(const std::vector<ToolbarCommand>& commands, ToolbarComma
     return std::find(commands.begin(), commands.end(), command) != commands.end();
 }
 
-void populateToolbarCommandList(HWND list, const std::vector<ToolbarCommand>& commands, int selectedIndex) {
+void populateToolbarCommandList(HWND list, const std::vector<ToolbarCommand>& commands, int selectedIndex, LanguageMode languageMode) {
     if (!list) {
         return;
     }
 
     SendMessageW(list, LB_RESETCONTENT, 0, 0);
     for (const ToolbarCommand command : commands) {
-        const std::wstring label = toolbarCommandLabel(command);
+        const std::wstring label = toolbarCommandLabel(command, languageMode);
         SendMessageW(list, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
     }
     if (selectedIndex >= 0 && selectedIndex < static_cast<int>(commands.size())) {
@@ -1087,8 +1105,8 @@ void updateToolbarButtons(HWND hwnd, const SettingsDialogState& state) {
 }
 
 void refreshToolbarLists(HWND hwnd, SettingsDialogState& state, int selectedToolbar = -1) {
-    populateToolbarCommandList(GetDlgItem(hwnd, kToolbarAvailableListId), availableToolbarCommands(), selectedAvailableToolbarIndex(hwnd));
-    populateToolbarCommandList(GetDlgItem(hwnd, kToolbarListId), state.resultSettings.toolbarCommands, selectedToolbar);
+    populateToolbarCommandList(GetDlgItem(hwnd, kToolbarAvailableListId), availableToolbarCommands(), selectedAvailableToolbarIndex(hwnd), state.resultSettings.languageMode);
+    populateToolbarCommandList(GetDlgItem(hwnd, kToolbarListId), state.resultSettings.toolbarCommands, selectedToolbar, state.resultSettings.languageMode);
     updateToolbarButtons(hwnd, state);
 }
 
@@ -1136,7 +1154,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
         HWND title = createDialogControl(0,
                                          L"STATIC",
-                                         L"FinderX Settings",
+                                         tr(StringId::FinderXSettings, state->initialSettings.languageMode).data(),
                                          WS_CHILD | WS_VISIBLE,
                                          24,
                                          18,
@@ -1150,7 +1168,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         state->titleControl = title;
         HWND subtitle = createDialogControl(0,
                                             L"STATIC",
-                                            L"Configure appearance, browsing behavior, window startup, favorites, and shortcuts.",
+                                            tr(StringId::SettingsSubtitle, state->initialSettings.languageMode).data(),
                                             WS_CHILD | WS_VISIBLE,
                                             24,
                                             44,
@@ -1170,17 +1188,17 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                 hwnd,
                                                 kCategoryListId);
         if (categoryList) {
-            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Appearance"));
-            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Startup"));
-            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Files"));
-            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Shortcuts"));
-            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Toolbar"));
-            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Context Menu"));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::Appearance, state->initialSettings.languageMode).data()));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::Startup, state->initialSettings.languageMode).data()));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::Files, state->initialSettings.languageMode).data()));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::Shortcuts, state->initialSettings.languageMode).data()));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::Toolbar, state->initialSettings.languageMode).data()));
+            SendMessageW(categoryList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::ContextMenu, state->initialSettings.languageMode).data()));
             SendMessageW(categoryList, LB_SETCURSEL, 0, 0);
         }
         HWND appearanceGroup = createDialogControl(0,
                                                    L"BUTTON",
-                                                   L"Appearance",
+                                                   tr(StringId::Appearance, state->initialSettings.languageMode).data(),
                                                    WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                    190,
                                                    78,
@@ -1190,7 +1208,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                    0);
         HWND fontFamilyLabel = createDialogControl(0,
                                                    L"STATIC",
-                                                   L"Font family",
+                                                   tr(StringId::FontFamily, state->initialSettings.languageMode).data(),
                                                    WS_CHILD | WS_VISIBLE,
                                                    214,
                                                    110,
@@ -1213,7 +1231,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         }
         HWND fontLabel = createDialogControl(0,
                                              L"STATIC",
-                                             L"Text size",
+                                             tr(StringId::TextSize, state->initialSettings.languageMode).data(),
                                              WS_CHILD | WS_VISIBLE,
                                              214,
                                              146,
@@ -1233,7 +1251,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             kFontEditId);
         HWND contextMenuFontLabel = createDialogControl(0,
                                                         L"STATIC",
-                                                        L"Menu text size",
+                                                        tr(StringId::MenuTextSize, state->initialSettings.languageMode).data(),
                                                         WS_CHILD | WS_VISIBLE,
                                                         214,
                                                         182,
@@ -1253,7 +1271,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                        kContextMenuFontEditId);
         HWND iconLabel = createDialogControl(0,
                                              L"STATIC",
-                                             L"Icon size",
+                                             tr(StringId::IconSize, state->initialSettings.languageMode).data(),
                                              WS_CHILD | WS_VISIBLE,
                                              214,
                                              218,
@@ -1273,7 +1291,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             kIconEditId);
         HWND itemPaddingLabel = createDialogControl(0,
                                                     L"STATIC",
-                                                    L"Item padding",
+                                                    tr(StringId::ItemPadding, state->initialSettings.languageMode).data(),
                                                     WS_CHILD | WS_VISIBLE,
                                                     214,
                                                     250,
@@ -1293,7 +1311,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                    kItemPaddingEditId);
         HWND themeLabel = createDialogControl(0,
                                               L"STATIC",
-                                              L"Theme",
+                                              tr(StringId::Theme, state->initialSettings.languageMode).data(),
                                               WS_CHILD | WS_VISIBLE,
                                               214,
                                               286,
@@ -1312,13 +1330,38 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               hwnd,
                                               kThemeComboId);
         if (themeCombo) {
-            SendMessageW(themeCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"light"));
-            SendMessageW(themeCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"dark"));
+            SendMessageW(themeCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::Light, state->initialSettings.languageMode).data()));
+            SendMessageW(themeCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::Dark, state->initialSettings.languageMode).data()));
             SendMessageW(themeCombo, CB_SETCURSEL, state->initialSettings.themeMode == ThemeMode::Light ? 0 : 1, 0);
+        }
+        HWND languageLabel = createDialogControl(0,
+                                                 L"STATIC",
+                                                 tr(StringId::Language, state->initialSettings.languageMode).data(),
+                                                 WS_CHILD | WS_VISIBLE,
+                                                 214,
+                                                 322,
+                                                 164,
+                                                 22,
+                                                 hwnd,
+                                                 0);
+        HWND languageCombo = createDialogControl(0,
+                                                 L"COMBOBOX",
+                                                 L"",
+                                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
+                                                 392,
+                                                 318,
+                                                 164,
+                                                 120,
+                                                 hwnd,
+                                                 kLanguageComboId);
+        if (languageCombo) {
+            SendMessageW(languageCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::Chinese, state->initialSettings.languageMode).data()));
+            SendMessageW(languageCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(tr(StringId::English, state->initialSettings.languageMode).data()));
+            SendMessageW(languageCombo, CB_SETCURSEL, state->initialSettings.languageMode == LanguageMode::Chinese ? 0 : 1, 0);
         }
         HWND behaviorGroup = createDialogControl(0,
                                                  L"BUTTON",
-                                                 L"File Browsing",
+                                                 tr(StringId::FileBrowsing, state->initialSettings.languageMode).data(),
                                                  WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                  190,
                                                  78,
@@ -1328,7 +1371,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                  0);
         HWND showHiddenAndSystem = createDialogControl(0,
                                                        L"BUTTON",
-                                                       L"Show hidden and system items",
+                                                       tr(StringId::ShowHiddenAndSystem, state->initialSettings.languageMode).data(),
                                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                                        214,
                                                        112,
@@ -1344,7 +1387,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         }
         HWND windowGroup = createDialogControl(0,
                                                L"BUTTON",
-                                               L"Startup",
+                                               tr(StringId::Startup, state->initialSettings.languageMode).data(),
                                                WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                190,
                                                78,
@@ -1354,7 +1397,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                0);
         HWND windowWidthLabel = createDialogControl(0,
                                                     L"STATIC",
-                                                    L"Width",
+                                                    tr(StringId::Width, state->initialSettings.languageMode).data(),
                                                     WS_CHILD | WS_VISIBLE,
                                                     214,
                                                     112,
@@ -1374,7 +1417,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                    kWindowWidthEditId);
         HWND windowHeightLabel = createDialogControl(0,
                                                      L"STATIC",
-                                                     L"Height",
+                                                     tr(StringId::Height, state->initialSettings.languageMode).data(),
                                                      WS_CHILD | WS_VISIBLE,
                                                      372,
                                                      112,
@@ -1394,7 +1437,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     kWindowHeightEditId);
         HWND rememberWindowSize = createDialogControl(0,
                                                       L"BUTTON",
-                                                      L"Remember last window size",
+                                                      tr(StringId::RememberWindowSize, state->initialSettings.languageMode).data(),
                                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                                       214,
                                                       146,
@@ -1410,7 +1453,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         }
         HWND startupFolderLabel = createDialogControl(0,
                                                       L"STATIC",
-                                                      L"Startup folder",
+                                                      tr(StringId::StartupFolder, state->initialSettings.languageMode).data(),
                                                       WS_CHILD | WS_VISIBLE,
                                                       214,
                                                       198,
@@ -1430,7 +1473,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      kStartupFolderEditId);
         HWND useCurrentFolder = createDialogControl(0,
                                                     L"BUTTON",
-                                                    L"Use current",
+                                                    tr(StringId::UseCurrent, state->initialSettings.languageMode).data(),
                                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                     664,
                                                     192,
@@ -1443,7 +1486,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         }
         HWND favoritesGroup = createDialogControl(0,
                                                   L"BUTTON",
-                                                  L"Favorites",
+                                                  tr(StringId::Favorites, state->initialSettings.languageMode).data(),
                                                   WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                   190,
                                                   176,
@@ -1453,7 +1496,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   0);
         HWND favoritesLabel = createDialogControl(0,
                                                   L"STATIC",
-                                                  L"Order and rename sidebar favorites.",
+                                                  tr(StringId::FavoritesDescription, state->initialSettings.languageMode).data(),
                                                   WS_CHILD | WS_VISIBLE,
                                                   214,
                                                   206,
@@ -1473,7 +1516,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                  kFavoritesListId);
         HWND favoriteNameLabel = createDialogControl(0,
                                                      L"STATIC",
-                                                     L"Display name",
+                                                     tr(StringId::DisplayName, state->initialSettings.languageMode).data(),
                                                      WS_CHILD | WS_VISIBLE,
                                                      442,
                                                      232,
@@ -1493,7 +1536,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                      kFavoriteLabelEditId);
         HWND favoritePathLabel = createDialogControl(0,
                                                      L"STATIC",
-                                                     L"Target path",
+                                                     tr(StringId::TargetPath, state->initialSettings.languageMode).data(),
                                                      WS_CHILD | WS_VISIBLE,
                                                      442,
                                                      292,
@@ -1513,7 +1556,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     kFavoritePathEditId);
         HWND favoriteUp = createDialogControl(0,
                                               L"BUTTON",
-                                              L"Up",
+                                              tr(StringId::Up, state->initialSettings.languageMode).data(),
                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                               442,
                                               360,
@@ -1523,7 +1566,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               kFavoriteUpId);
         HWND favoriteDown = createDialogControl(0,
                                                 L"BUTTON",
-                                                L"Down",
+                                                tr(StringId::Down, state->initialSettings.languageMode).data(),
                                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                 508,
                                                 360,
@@ -1533,7 +1576,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                 kFavoriteDownId);
         HWND favoriteRemove = createDialogControl(0,
                                                   L"BUTTON",
-                                                  L"Remove",
+                                                  tr(StringId::Remove, state->initialSettings.languageMode).data(),
                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                                   578,
                                                   360,
@@ -1543,7 +1586,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   kFavoriteRemoveId);
         HWND shortcutsGroup = createDialogControl(0,
                                                   L"BUTTON",
-                                                  L"Keyboard",
+                                                  tr(StringId::Keyboard, state->initialSettings.languageMode).data(),
                                                   WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                   190,
                                                   78,
@@ -1553,7 +1596,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                   0);
         HWND shortcuts = createDialogControl(WS_EX_CLIENTEDGE,
                                              L"EDIT",
-                                             shortcutHelpText().c_str(),
+                                             shortcutHelpText(state->initialSettings.languageMode).c_str(),
                                              WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL,
                                              214,
                                              112,
@@ -1563,7 +1606,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              0);
         HWND toolbarGroup = createDialogControl(0,
                                                 L"BUTTON",
-                                                L"Toolbar",
+                                                tr(StringId::Toolbar, state->initialSettings.languageMode).data(),
                                                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                 190,
                                                 78,
@@ -1571,7 +1614,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                 534,
                                                 hwnd,
                                                 0);
-        HWND toolbarAvailableLabel = createDialogControl(0, L"STATIC", L"Available actions", WS_CHILD | WS_VISIBLE, 214, 122, 180, 20, hwnd, 0);
+        HWND toolbarAvailableLabel = createDialogControl(0, L"STATIC", tr(StringId::AvailableActions, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE, 214, 122, 180, 20, hwnd, 0);
         HWND toolbarAvailableList = createDialogControl(WS_EX_CLIENTEDGE,
                                                         L"LISTBOX",
                                                         L"",
@@ -1582,7 +1625,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                         300,
                                                         hwnd,
                                                         kToolbarAvailableListId);
-        HWND toolbarOrderLabel = createDialogControl(0, L"STATIC", L"Toolbar order", WS_CHILD | WS_VISIBLE, 586, 122, 180, 20, hwnd, 0);
+        HWND toolbarOrderLabel = createDialogControl(0, L"STATIC", tr(StringId::ToolbarOrder, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE, 586, 122, 180, 20, hwnd, 0);
         HWND toolbarList = createDialogControl(WS_EX_CLIENTEDGE,
                                                L"LISTBOX",
                                                L"",
@@ -1593,13 +1636,13 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                300,
                                                hwnd,
                                                kToolbarListId);
-        HWND toolbarAdd = createDialogControl(0, L"BUTTON", L"Add", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 186, 104, 28, hwnd, kToolbarAddId);
-        HWND toolbarRemove = createDialogControl(0, L"BUTTON", L"Remove", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 224, 104, 28, hwnd, kToolbarRemoveId);
-        HWND toolbarUp = createDialogControl(0, L"BUTTON", L"Move up", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 292, 104, 28, hwnd, kToolbarUpId);
-        HWND toolbarDown = createDialogControl(0, L"BUTTON", L"Move down", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 330, 104, 28, hwnd, kToolbarDownId);
+        HWND toolbarAdd = createDialogControl(0, L"BUTTON", tr(StringId::Add, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 186, 104, 28, hwnd, kToolbarAddId);
+        HWND toolbarRemove = createDialogControl(0, L"BUTTON", tr(StringId::Remove, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 224, 104, 28, hwnd, kToolbarRemoveId);
+        HWND toolbarUp = createDialogControl(0, L"BUTTON", tr(StringId::MoveUp, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 292, 104, 28, hwnd, kToolbarUpId);
+        HWND toolbarDown = createDialogControl(0, L"BUTTON", tr(StringId::MoveDown, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 330, 104, 28, hwnd, kToolbarDownId);
         HWND contextGroup = createDialogControl(0,
                                                 L"BUTTON",
-                                                L"Context Menu",
+                                                tr(StringId::ContextMenu, state->initialSettings.languageMode).data(),
                                                 WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
                                                 190,
                                                 78,
@@ -1617,24 +1660,24 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                270,
                                                hwnd,
                                                kContextToolListId);
-        HWND contextLabelText = createDialogControl(0, L"STATIC", L"Menu label", WS_CHILD | WS_VISIBLE, 438, 114, 120, 20, hwnd, 0);
+        HWND contextLabelText = createDialogControl(0, L"STATIC", tr(StringId::MenuLabel, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE, 438, 114, 120, 20, hwnd, 0);
         HWND contextLabelEdit = createDialogControl(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 438, 136, 350, 24, hwnd, kContextToolLabelEditId);
-        HWND contextExeText = createDialogControl(0, L"STATIC", L"Program path", WS_CHILD | WS_VISIBLE, 438, 174, 120, 20, hwnd, 0);
+        HWND contextExeText = createDialogControl(0, L"STATIC", tr(StringId::ProgramPath, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE, 438, 174, 120, 20, hwnd, 0);
         HWND contextExeEdit = createDialogControl(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 438, 196, 266, 24, hwnd, kContextToolExeEditId);
-        HWND contextBrowse = createDialogControl(0, L"BUTTON", L"Browse...", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 714, 194, 74, 28, hwnd, kContextToolBrowseId);
-        HWND contextArgsText = createDialogControl(0, L"STATIC", L"Arguments", WS_CHILD | WS_VISIBLE, 438, 234, 120, 20, hwnd, 0);
+        HWND contextBrowse = createDialogControl(0, L"BUTTON", tr(StringId::Browse, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 714, 194, 74, 28, hwnd, kContextToolBrowseId);
+        HWND contextArgsText = createDialogControl(0, L"STATIC", tr(StringId::Arguments, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE, 438, 234, 120, 20, hwnd, 0);
         HWND contextArgsEdit = createDialogControl(WS_EX_CLIENTEDGE, L"EDIT", L"\"{path}\"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 438, 256, 350, 24, hwnd, kContextToolArgsEditId);
-        HWND contextFiles = createDialogControl(0, L"BUTTON", L"Show for files", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 438, 296, 150, 22, hwnd, kContextToolFilesId);
-        HWND contextFolders = createDialogControl(0, L"BUTTON", L"Show for folders", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 600, 296, 170, 22, hwnd, kContextToolFoldersId);
+        HWND contextFiles = createDialogControl(0, L"BUTTON", tr(StringId::ShowForFiles, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 438, 296, 150, 22, hwnd, kContextToolFilesId);
+        HWND contextFolders = createDialogControl(0, L"BUTTON", tr(StringId::ShowForFolders, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 600, 296, 170, 22, hwnd, kContextToolFoldersId);
         HWND contextVsCode = createDialogControl(0, L"BUTTON", L"VS Code", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 438, 334, 78, 28, hwnd, kContextToolVsCodeId);
-        HWND contextAdd = createDialogControl(0, L"BUTTON", L"Add", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 214, 404, 62, 28, hwnd, kContextToolAddId);
-        HWND contextUpdate = createDialogControl(0, L"BUTTON", L"Update", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 284, 404, 72, 28, hwnd, kContextToolUpdateId);
-        HWND contextRemove = createDialogControl(0, L"BUTTON", L"Remove", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 364, 404, 76, 28, hwnd, kContextToolRemoveId);
-        HWND contextUp = createDialogControl(0, L"BUTTON", L"Up", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 404, 56, 28, hwnd, kContextToolUpId);
-        HWND contextDown = createDialogControl(0, L"BUTTON", L"Down", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 512, 404, 68, 28, hwnd, kContextToolDownId);
+        HWND contextAdd = createDialogControl(0, L"BUTTON", tr(StringId::Add, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 214, 404, 62, 28, hwnd, kContextToolAddId);
+        HWND contextUpdate = createDialogControl(0, L"BUTTON", tr(StringId::Update, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 284, 404, 72, 28, hwnd, kContextToolUpdateId);
+        HWND contextRemove = createDialogControl(0, L"BUTTON", tr(StringId::Remove, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 364, 404, 76, 28, hwnd, kContextToolRemoveId);
+        HWND contextUp = createDialogControl(0, L"BUTTON", tr(StringId::Up, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 448, 404, 56, 28, hwnd, kContextToolUpId);
+        HWND contextDown = createDialogControl(0, L"BUTTON", tr(StringId::Down, state->initialSettings.languageMode).data(), WS_CHILD | WS_VISIBLE | WS_TABSTOP, 512, 404, 68, 28, hwnd, kContextToolDownId);
         HWND ok = createDialogControl(0,
                                       L"BUTTON",
-                                      L"OK",
+                                      tr(StringId::Ok, state->initialSettings.languageMode).data(),
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                       706,
                                       640,
@@ -1644,7 +1687,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                       kOkId);
         HWND cancel = createDialogControl(0,
                                           L"BUTTON",
-                                          L"Cancel",
+                                          tr(StringId::Cancel, state->initialSettings.languageMode).data(),
                                           WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                                           794,
                                           640,
@@ -1652,7 +1695,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                           28,
                                           hwnd,
                                           kCancelId);
-        if (!title || !subtitle || !categoryList || !appearanceGroup || !fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !contextMenuFontLabel || !contextMenuFontEdit || !iconLabel || !iconEdit || !itemPaddingLabel || !itemPaddingEdit || !themeLabel || !themeCombo
+        if (!title || !subtitle || !categoryList || !appearanceGroup || !fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !contextMenuFontLabel || !contextMenuFontEdit || !iconLabel || !iconEdit || !itemPaddingLabel || !itemPaddingEdit || !themeLabel || !themeCombo || !languageLabel || !languageCombo
             || !behaviorGroup || !showHiddenAndSystem || !windowGroup
             || !windowWidthLabel || !windowWidthEdit || !windowHeightLabel || !windowHeightEdit || !rememberWindowSize
             || !startupFolderLabel || !startupFolderEdit || !useCurrentFolder
@@ -1667,7 +1710,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             return -1;
         }
 
-        state->appearanceControls = {appearanceGroup, fontFamilyLabel, fontFamilyCombo, fontLabel, fontEdit, contextMenuFontLabel, contextMenuFontEdit, iconLabel, iconEdit, itemPaddingLabel, itemPaddingEdit, themeLabel, themeCombo};
+        state->appearanceControls = {appearanceGroup, fontFamilyLabel, fontFamilyCombo, fontLabel, fontEdit, contextMenuFontLabel, contextMenuFontEdit, iconLabel, iconEdit, itemPaddingLabel, itemPaddingEdit, themeLabel, themeCombo, languageLabel, languageCombo};
         state->startupControls = {windowGroup, windowWidthLabel, windowWidthEdit, windowHeightLabel, windowHeightEdit, rememberWindowSize, startupFolderLabel, startupFolderEdit, useCurrentFolder};
         state->filesControls = {behaviorGroup, showHiddenAndSystem, favoritesGroup, favoritesLabel, favoritesList, favoriteNameLabel, favoriteLabelEdit, favoritePathLabel, favoritePathEdit, favoriteUp, favoriteDown, favoriteRemove};
         state->shortcutsControls = {shortcutsGroup, shortcuts};
@@ -1682,6 +1725,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             iconEdit,
             itemPaddingEdit,
             themeCombo,
+            languageCombo,
             windowWidthEdit,
             windowHeightEdit,
             startupFolderEdit,
@@ -1849,14 +1893,15 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
         if (LOWORD(wParam) == kContextToolBrowseId) {
             std::wstring path;
-            if (browseExecutable(hwnd, path)) {
+            if (browseExecutable(hwnd, path, state->resultSettings.languageMode)) {
                 SetWindowTextW(GetDlgItem(hwnd, kContextToolExeEditId), path.c_str());
             }
             return 0;
         }
 
         if (LOWORD(wParam) == kContextToolVsCodeId) {
-            setContextToolTemplate(hwnd, L"Open in VS Code", L"Code.exe");
+            const std::wstring label(tr(StringId::OpenInVsCode, state->initialSettings.languageMode));
+            setContextToolTemplate(hwnd, label.c_str(), L"Code.exe");
             return 0;
         }
 
@@ -2009,6 +2054,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             state->values.iconSizeText = getEditText(GetDlgItem(hwnd, kIconEditId));
             state->values.itemPaddingText = getEditText(GetDlgItem(hwnd, kItemPaddingEditId));
             state->values.themeModeText = comboSelectedText(GetDlgItem(hwnd, kThemeComboId));
+            state->values.languageModeText = comboSelectedText(GetDlgItem(hwnd, kLanguageComboId));
             state->values.fontFamilyText = comboSelectedText(GetDlgItem(hwnd, kFontFamilyComboId));
             state->values.contextMenuFontSizeText = getEditText(GetDlgItem(hwnd, kContextMenuFontEditId));
             state->values.showHiddenAndSystemItems = SendMessageW(GetDlgItem(hwnd, kShowHiddenAndSystemId), BM_GETCHECK, 0, 0) == BST_CHECKED;
@@ -2067,6 +2113,10 @@ bool registerSettingsDialogClass(HINSTANCE instance) {
 
 } // namespace
 
+bool settingsDialogSettingsEqual(const AppSettings& left, const AppSettings& right) {
+    return settingsEqualInternal(left, right);
+}
+
 void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& settings) {
     float parsed = 0.0f;
     if (tryParseFloat(values.fontSizeText, parsed)) {
@@ -2093,10 +2143,23 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
     }
     settings.rememberWindowSize = values.rememberWindowSize;
     settings.startupFolder = values.startupFolderText;
-    if (values.themeModeText == L"light") {
+    if (values.themeModeText == L"light"
+        || values.themeModeText == tr(StringId::Light, LanguageMode::Chinese)
+        || values.themeModeText == tr(StringId::Light, LanguageMode::English)) {
         settings.themeMode = ThemeMode::Light;
-    } else if (values.themeModeText == L"dark") {
+    } else if (values.themeModeText == L"dark"
+        || values.themeModeText == tr(StringId::Dark, LanguageMode::Chinese)
+        || values.themeModeText == tr(StringId::Dark, LanguageMode::English)) {
         settings.themeMode = ThemeMode::Dark;
+    }
+    if (values.languageModeText == L"zh-CN"
+        || values.languageModeText == tr(StringId::Chinese, LanguageMode::Chinese)
+        || values.languageModeText == tr(StringId::Chinese, LanguageMode::English)) {
+        settings.languageMode = LanguageMode::Chinese;
+    } else if (values.languageModeText == L"en-US"
+        || values.languageModeText == tr(StringId::English, LanguageMode::Chinese)
+        || values.languageModeText == tr(StringId::English, LanguageMode::English)) {
+        settings.languageMode = LanguageMode::English;
     }
     if (!values.toolbarCommands.empty()) {
         settings.toolbarCommands = normalizeToolbarCommands(values.toolbarCommands);
@@ -2147,7 +2210,7 @@ bool promptForSettings(HWND owner, AppSettings& settings, const std::wstring& cu
     const UINT dpi = owner ? dpiForWindow(owner) : dpiForWindow(nullptr);
     HWND dialog = CreateWindowExW(exStyle,
                                   kDialogClassName,
-                                  L"Settings",
+                                  tr(StringId::Settings, settings.languageMode).data(),
                                   style,
                                   CW_USEDEFAULT,
                                   CW_USEDEFAULT,
@@ -2214,7 +2277,7 @@ bool promptForSettings(HWND owner, AppSettings& settings, const std::wstring& cu
         return false;
     }
 
-    if (messageLoopError || !state.accepted || settingsEqual(state.initialSettings, state.resultSettings)) {
+    if (messageLoopError || !state.accepted || settingsDialogSettingsEqual(state.initialSettings, state.resultSettings)) {
         return false;
     }
 

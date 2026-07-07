@@ -12,6 +12,7 @@ inline constexpr float kDefaultContextMenuFontSize = 12.0f;
 inline constexpr float kDefaultIconSize = 14.0f;
 inline constexpr float kDefaultItemPadding = 8.0f;
 inline constexpr wchar_t kDefaultFontFamily[] = L"Segoe UI";
+inline constexpr wchar_t kDefaultLanguage[] = L"zh-CN";
 inline constexpr float kMinFontSize = 11.0f;
 inline constexpr float kMaxFontSize = 18.0f;
 inline constexpr float kMinContextMenuFontSize = 10.0f;
@@ -56,6 +57,11 @@ enum class ThemeMode {
     Dark
 };
 
+enum class LanguageMode {
+    Chinese,
+    English
+};
+
 enum class ToolbarCommand {
     NewFolder,
     NewFile,
@@ -81,6 +87,7 @@ struct ContextMenuTool {
 struct AppSettings {
     float fontSize = kDefaultFontSize;
     std::wstring fontFamily = kDefaultFontFamily;
+    LanguageMode languageMode = LanguageMode::Chinese;
     float contextMenuFontSize = kDefaultContextMenuFontSize;
     float iconSize = kDefaultIconSize;
     float itemPadding = kDefaultItemPadding;
@@ -126,6 +133,7 @@ bool saveSettings(const AppSettings& settings, const std::filesystem::path& path
 std::wstring sortColumnName(SortColumn column);
 std::wstring sortDirectionName(SortDirection direction);
 std::wstring themeModeName(ThemeMode mode);
+std::wstring languageModeName(LanguageMode mode);
 std::wstring toolbarCommandName(ToolbarCommand command);
 std::vector<ToolbarCommand> defaultToolbarCommands();
 std::vector<ToolbarCommand> normalizeToolbarCommands(std::vector<ToolbarCommand> commands);

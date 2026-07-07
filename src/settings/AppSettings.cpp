@@ -285,6 +285,16 @@ ThemeMode parseThemeMode(const std::wstring& value, ThemeMode fallback) {
     return fallback;
 }
 
+LanguageMode parseLanguageMode(const std::wstring& value, LanguageMode fallback) {
+    if (value == L"en-US" || value == L"en" || value == L"English") {
+        return LanguageMode::English;
+    }
+    if (value == L"zh-CN" || value == L"zh" || value == L"中文") {
+        return LanguageMode::Chinese;
+    }
+    return fallback;
+}
+
 ToolbarCommand parseToolbarCommand(const std::wstring& value, ToolbarCommand fallback) {
     if (value == L"newFolder") {
         return ToolbarCommand::NewFolder;
@@ -638,6 +648,9 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
     if (extractString(text, "themeMode", stringValue)) {
         loaded.themeMode = parseThemeMode(stringValue, loaded.themeMode);
     }
+    if (extractString(text, "languageMode", stringValue)) {
+        loaded.languageMode = parseLanguageMode(stringValue, loaded.languageMode);
+    }
     bool boolValue = false;
     if (extractBool(text, "showHiddenAndSystemItems", boolValue)) {
         loaded.showHiddenAndSystemItems = boolValue;
@@ -703,6 +716,7 @@ bool saveSettings(const AppSettings& settings, const std::filesystem::path& path
     stream << "  \"rememberWindowSize\": " << (clamped.rememberWindowSize ? "true" : "false") << ",\n";
     stream << "  \"startupFolder\": \"" << escapeJsonString(clamped.startupFolder) << "\",\n";
     stream << "  \"themeMode\": \"" << escapeJsonString(themeModeName(clamped.themeMode)) << "\",\n";
+    stream << "  \"languageMode\": \"" << escapeJsonString(languageModeName(clamped.languageMode)) << "\",\n";
     stream << "  \"showHiddenAndSystemItems\": " << (clamped.showHiddenAndSystemItems ? "true" : "false") << ",\n";
     stream << "  \"sortColumn\": \"" << escapeJsonString(sortColumnName(clamped.sortColumn)) << "\",\n";
     stream << "  \"sortDirection\": \"" << escapeJsonString(sortDirectionName(clamped.sortDirection)) << "\",\n";
@@ -774,6 +788,16 @@ std::wstring themeModeName(ThemeMode mode) {
     case ThemeMode::Dark:
     default:
         return L"dark";
+    }
+}
+
+std::wstring languageModeName(LanguageMode mode) {
+    switch (mode) {
+    case LanguageMode::English:
+        return L"en-US";
+    case LanguageMode::Chinese:
+    default:
+        return L"zh-CN";
     }
 }
 

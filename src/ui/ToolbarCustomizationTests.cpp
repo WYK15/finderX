@@ -22,9 +22,9 @@ int main() {
     using finderx::ui::removeToolbarCommand;
     using finderx::ui::toolbarCommandLabel;
 
-    require(toolbarCommandLabel(ToolbarCommand::NewFolder) == L"New Folder", "new folder should have a label");
-    require(toolbarCommandLabel(ToolbarCommand::NewFile) == L"New File", "new file should have a label");
-    require(toolbarCommandLabel(ToolbarCommand::PowerShell) == L"Open PowerShell Here", "PowerShell should have a toolbar label");
+    require(toolbarCommandLabel(ToolbarCommand::NewFolder) == L"新建文件夹", "new folder should have a localized label");
+    require(toolbarCommandLabel(ToolbarCommand::NewFile) == L"新建文件", "new file should have a localized label");
+    require(toolbarCommandLabel(ToolbarCommand::PowerShell) == L"在此处打开 PowerShell", "PowerShell should have a localized toolbar label");
     require(availableToolbarCommands().size() == 6, "customization should expose six toolbar commands");
 
     std::vector<ToolbarCommand> commands = {ToolbarCommand::Search};

@@ -10,6 +10,7 @@
 #include "shell/ShellFileOperations.h"
 #include "ui/DirectoryWatcherConfig.h"
 #include "ui/DragFeedback.h"
+#include "ui/Localization.h"
 #include "ui/NativeTitleBar.h"
 #include "ui/RenameDialog.h"
 #include "ui/SettingsDialog.h"
@@ -909,7 +910,7 @@ void MainWindow::initializeFileTree() {
             return;
         }
         createTabAtPath(homePath_);
-        setStatusText(L"Cannot open startup folder");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotOpenFolder, settings_.languageMode)));
         return;
     }
     createTabAtPath(homePath_);
@@ -922,7 +923,7 @@ bool MainWindow::createTabAtPath(const std::wstring& path) {
     const std::wstring target = path.empty() ? homePath_ : path;
     DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(target, settings_.showHiddenAndSystemItems);
     if (!result.ok()) {
-        setStatusText(L"Cannot open folder");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotOpenFolder, settings_.languageMode)));
         return false;
     }
     applySort(result.children);
@@ -1059,14 +1060,14 @@ bool MainWindow::navigateToLocation(std::wstring path, HistoryMode mode) {
 
 bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     if (path.empty()) {
-        setStatusText(L"Cannot open folder");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotOpenFolder, settings_.languageMode)));
         return false;
     }
 
     const std::wstring watchedPath = path;
     DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(path, settings_.showHiddenAndSystemItems);
     if (!result.ok()) {
-        setStatusText(L"Cannot open folder");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotOpenFolder, settings_.languageMode)));
         return false;
     }
     applySort(result.children);
@@ -1134,7 +1135,7 @@ void MainWindow::activateNode(NodeId nodeId) {
 
 void MainWindow::openFile(const std::wstring& path) {
     if (!shell::openPath(hwnd_, path)) {
-        setStatusText(L"Cannot open file");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotOpenFile, settings_.languageMode)));
     }
 }
 
@@ -1175,52 +1176,52 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
             return;
         }
         if (!containsFavorite(settings_, tab.history.currentPath())) {
-            presenter.appendItem(menu, kCommandAddFavorite, L"Add to Favorites");
+            presenter.appendItem(menu, kCommandAddFavorite, std::wstring(ui::tr(ui::StringId::AddToFavorites, settings_.languageMode)));
             presenter.appendSeparator(menu);
         }
-        presenter.appendItem(menu, kCommandNewFolder, L"New Folder");
-        presenter.appendItem(menu, kCommandNewFile, L"New File");
-        presenter.appendItem(menu, kCommandOpenPowerShell, L"Open in PowerShell");
+        presenter.appendItem(menu, kCommandNewFolder, std::wstring(ui::tr(ui::StringId::NewFolder, settings_.languageMode)));
+        presenter.appendItem(menu, kCommandNewFile, std::wstring(ui::tr(ui::StringId::NewFile, settings_.languageMode)));
+        presenter.appendItem(menu, kCommandOpenPowerShell, std::wstring(ui::tr(ui::StringId::OpenPowerShellHere, settings_.languageMode)));
         presenter.appendSeparator(menu);
         if (fileOperationState_.hasPendingOperation()) {
-            presenter.appendItem(menu, kCommandPaste, L"Paste");
+            presenter.appendItem(menu, kCommandPaste, std::wstring(ui::tr(ui::StringId::Paste, settings_.languageMode)));
             presenter.appendSeparator(menu);
         }
     };
     if (hasTarget) {
-        presenter.appendItem(menu, kCommandOpen, L"Open");
+        presenter.appendItem(menu, kCommandOpen, std::wstring(ui::tr(ui::StringId::Open, settings_.languageMode)));
         if (directoryLocation) {
             if (singleTarget && targets.front() < tab.tree.nodes().size()
                 && tab.tree.node(targets.front()).kind == FileKind::Folder) {
-                presenter.appendItem(menu, kCommandOpenInNewTab, L"Open in New Tab");
+                presenter.appendItem(menu, kCommandOpenInNewTab, std::wstring(ui::tr(ui::StringId::OpenInNewTab, settings_.languageMode)));
             }
             if (singleTarget) {
-                presenter.appendItem(menu, kCommandRename, L"Rename");
+                presenter.appendItem(menu, kCommandRename, std::wstring(ui::tr(ui::StringId::Rename, settings_.languageMode)));
             }
-            presenter.appendItem(menu, kCommandCopy, L"Copy");
-            presenter.appendItem(menu, kCommandCut, L"Cut");
-            presenter.appendItem(menu, kCommandCompressZip, L"Compress to ZIP");
+            presenter.appendItem(menu, kCommandCopy, std::wstring(ui::tr(ui::StringId::Copy, settings_.languageMode)));
+            presenter.appendItem(menu, kCommandCut, std::wstring(ui::tr(ui::StringId::Cut, settings_.languageMode)));
+            presenter.appendItem(menu, kCommandCompressZip, std::wstring(ui::tr(ui::StringId::CompressZip, settings_.languageMode)));
             if (allZipPaths(targetPaths)) {
-                presenter.appendItem(menu, kCommandExtractZip, L"Extract Here");
+                presenter.appendItem(menu, kCommandExtractZip, std::wstring(ui::tr(ui::StringId::ExtractHere, settings_.languageMode)));
             }
             if (fileOperationState_.hasPendingOperation()) {
-                presenter.appendItem(menu, kCommandPaste, L"Paste");
+                presenter.appendItem(menu, kCommandPaste, std::wstring(ui::tr(ui::StringId::Paste, settings_.languageMode)));
             }
             if (singleTarget && targets.front() < tab.tree.nodes().size()
                 && tab.tree.node(targets.front()).kind == FileKind::Folder) {
-                presenter.appendItem(menu, kCommandOpenPowerShell, L"Open in PowerShell");
+                presenter.appendItem(menu, kCommandOpenPowerShell, std::wstring(ui::tr(ui::StringId::OpenPowerShellHere, settings_.languageMode)));
             }
             if (singleTarget) {
-                presenter.appendItem(menu, kCommandCreateShortcut, L"Create Shortcut");
+                presenter.appendItem(menu, kCommandCreateShortcut, std::wstring(ui::tr(ui::StringId::CreateShortcut, settings_.languageMode)));
             }
         }
         if (singleTarget && targets.front() < tab.tree.nodes().size()
             && !containsFavorite(settings_, tab.tree.node(targets.front()).path)) {
-            presenter.appendItem(menu, kCommandAddFavorite, L"Add to Favorites");
+            presenter.appendItem(menu, kCommandAddFavorite, std::wstring(ui::tr(ui::StringId::AddToFavorites, settings_.languageMode)));
         }
         presenter.appendSeparator(menu);
-        presenter.appendItem(menu, kCommandReveal, L"Show in Explorer");
-        presenter.appendItem(menu, kCommandCopyPath, L"Copy Path");
+        presenter.appendItem(menu, kCommandReveal, std::wstring(ui::tr(ui::StringId::RevealInExplorer, settings_.languageMode)));
+        presenter.appendItem(menu, kCommandCopyPath, std::wstring(ui::tr(ui::StringId::CopyPath, settings_.languageMode)));
         if (singleTarget && targets.front() < tab.tree.nodes().size() && !settings_.contextMenuTools.empty()) {
             const FileNode& node = tab.tree.node(targets.front());
             bool addedTool = false;
@@ -1237,13 +1238,13 @@ void MainWindow::showContextMenu(D2D1_POINT_2F clientPoint, POINT screenPoint) {
             }
         }
         if (directoryLocation) {
-            presenter.appendItem(menu, kCommandMoveToTrash, L"Move to Trash");
+            presenter.appendItem(menu, kCommandMoveToTrash, std::wstring(ui::tr(ui::StringId::MoveToTrash, settings_.languageMode)));
         }
         presenter.appendSeparator(menu);
     } else if (directoryLocation) {
         appendCurrentDirectoryActions();
     }
-    presenter.appendItem(menu, kCommandRefresh, L"Refresh");
+    presenter.appendItem(menu, kCommandRefresh, std::wstring(ui::tr(ui::StringId::Refresh, settings_.languageMode)));
 
     trackContextMenu(menu, presenter, screenPoint);
     DestroyMenu(menu);
@@ -1269,7 +1270,7 @@ void MainWindow::showSidebarContextMenu(std::size_t sidebarIndex, POINT screenPo
 
     contextFavoritePath_ = item.path;
     ui::ContextMenuPresenter presenter(settings_.themeMode, settings_.contextMenuFontSize, settings_.fontFamily);
-    presenter.appendItem(menu, kCommandRemoveFavorite, L"Remove from Favorites");
+    presenter.appendItem(menu, kCommandRemoveFavorite, std::wstring(ui::tr(ui::StringId::RemoveFromFavorites, settings_.languageMode)));
     trackContextMenu(menu, presenter, screenPoint);
     DestroyMenu(menu);
 }
@@ -1861,7 +1862,7 @@ void MainWindow::openContextMenuTool(std::size_t index) {
                                            nullptr,
                                            SW_SHOWNORMAL);
     if (reinterpret_cast<INT_PTR>(result) <= 32) {
-        setStatusText(L"Cannot open external tool");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotOpenExternalTool, settings_.languageMode)));
     }
 }
 
@@ -1884,19 +1885,19 @@ std::wstring MainWindow::powerShellTargetDirectory() const {
 void MainWindow::openPowerShellForContext() {
     const std::wstring directory = powerShellTargetDirectory();
     if (directory.empty() || !shell::openPowerShellAt(hwnd_, directory)) {
-        setStatusText(L"Cannot open PowerShell");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotOpenPowerShell, settings_.languageMode)));
     }
 }
 
 void MainWindow::openPowerShellForCurrentDirectory() {
     if (!isActiveDirectoryLocation()) {
-        setStatusText(L"Cannot open PowerShell");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotOpenPowerShell, settings_.languageMode)));
         return;
     }
 
     const std::wstring directory = activeTab().history.currentPath();
     if (directory.empty() || !shell::openPowerShellAt(hwnd_, directory)) {
-        setStatusText(L"Cannot open PowerShell");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotOpenPowerShell, settings_.languageMode)));
     }
 }
 
@@ -1908,7 +1909,7 @@ void MainWindow::revealContextNode() {
     }
 
     if (!shell::revealInExplorer(hwnd_, tab.tree.node(target).path)) {
-        setStatusText(L"Cannot show in Explorer");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotShowInExplorer, settings_.languageMode)));
     }
 }
 
@@ -1920,7 +1921,7 @@ void MainWindow::copyContextNodePath() {
     }
 
     if (!shell::copyPathToClipboard(hwnd_, tab.tree.node(target).path)) {
-        setStatusText(L"Cannot copy path");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotCopyPath, settings_.languageMode)));
     }
 }
 
@@ -2234,7 +2235,7 @@ bool MainWindow::saveSettingsOrStatus() {
 
 bool MainWindow::refreshCurrentDirectory() {
     if (!hasActiveTab()) {
-        setStatusText(L"Cannot refresh folder");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotRefreshFolder, settings_.languageMode)));
         return false;
     }
 
@@ -2252,7 +2253,7 @@ bool MainWindow::refreshCurrentDirectorySelecting(const std::wstring& selectedPa
 
 bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> selectedPaths) {
     if (!hasActiveTab()) {
-        setStatusText(L"Cannot refresh folder");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotRefreshFolder, settings_.languageMode)));
         return false;
     }
 
@@ -2261,21 +2262,21 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
     }
 
     if (!isActiveDirectoryLocation()) {
-        setStatusText(L"Cannot refresh folder");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotRefreshFolder, settings_.languageMode)));
         return false;
     }
 
     TabState& tab = activeTab();
     const std::wstring currentPath = tab.history.currentPath();
     if (currentPath.empty()) {
-        setStatusText(L"Cannot refresh folder");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotRefreshFolder, settings_.languageMode)));
         return false;
     }
     std::vector<std::wstring> expandedPaths = tab.tree.expandedFolderPaths();
 
     DirectoryLoadResult result = directoryLoader_.loadChildrenWithStatus(currentPath, settings_.showHiddenAndSystemItems);
     if (!result.ok()) {
-        setStatusText(L"Cannot refresh folder");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotRefreshFolder, settings_.languageMode)));
         return false;
     }
     applySort(result.children);
@@ -2412,18 +2413,18 @@ void MainWindow::refreshChromeState() {
     chromeState_.hoveredCloseTabIndex = hoveredCloseTabIndex;
 }
 
-std::wstring toolbarTooltipTextForHit(ChromeHitKind kind) {
+std::wstring toolbarTooltipTextForHit(ChromeHitKind kind, LanguageMode languageMode) {
     switch (kind) {
     case ChromeHitKind::NewFolder:
-        return L"New Folder";
+        return std::wstring(ui::tr(ui::StringId::NewFolder, languageMode));
     case ChromeHitKind::NewFile:
-        return L"New File";
+        return std::wstring(ui::tr(ui::StringId::NewFile, languageMode));
     case ChromeHitKind::SortMenu:
-        return L"Sort";
+        return std::wstring(ui::tr(ui::StringId::Sort, languageMode));
     case ChromeHitKind::Settings:
-        return L"Settings";
+        return std::wstring(ui::tr(ui::StringId::Settings, languageMode));
     case ChromeHitKind::OpenPowerShell:
-        return L"Open PowerShell Here";
+        return std::wstring(ui::tr(ui::StringId::OpenPowerShellHere, languageMode));
     default:
         return {};
     }
@@ -2503,7 +2504,7 @@ void MainWindow::updateToolbarHover(D2D1_POINT_2F point, POINT screenPoint) {
     chromeState_.hasHoveredCloseTab = hasCloseHover;
     chromeState_.hoveredCloseTabIndex = hit.tabIndex;
 
-    const std::wstring text = toolbarTooltipTextForHit(hit.kind);
+    const std::wstring text = toolbarTooltipTextForHit(hit.kind, settings_.languageMode);
     if (text.empty()) {
         if (toolbarTooltip_ && toolbarTooltipVisible_) {
             TOOLINFOW tool{};
@@ -2662,7 +2663,7 @@ void MainWindow::commitAddress() {
     std::wstring target = activeTab().addressEditor.text();
     blurAddress();
     if (!navigateToLocation(std::move(target), HistoryMode::Push)) {
-        setStatusText(L"Cannot open folder");
+        setStatusText(std::wstring(ui::tr(ui::StringId::CannotOpenFolder, settings_.languageMode)));
     }
 }
 

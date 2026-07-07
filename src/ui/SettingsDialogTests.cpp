@@ -1,10 +1,12 @@
 #include "ui/SettingsDialog.h"
 
 #include "settings/AppSettings.h"
+#include "ui/Localization.h"
 
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
 namespace {
 
@@ -28,13 +30,16 @@ int main() {
     using finderx::addFavorite;
     using finderx::kMaxIconSize;
     using finderx::ui::SettingsDialogValues;
+    using finderx::ui::StringId;
     using finderx::ui::applySettingsDialogValues;
     using finderx::ui::settingsDialogBodyFontSize;
     using finderx::ui::settingsDialogComboBoxStyle;
     using finderx::ui::settingsDialogComboDroppedHeight;
     using finderx::ui::settingsDialogListBoxStyle;
+    using finderx::ui::settingsDialogSettingsEqual;
     using finderx::ui::settingsDialogTitleFontSize;
     using finderx::ui::settingsDialogWindowStyle;
+    using finderx::ui::tr;
 
     {
         require(nearlyEqual(settingsDialogBodyFontSize(), 10.5f), "settings body font should stay compact and independent");
@@ -68,6 +73,21 @@ int main() {
         require(settings.themeMode == ThemeMode::Light, "theme text light should apply light theme");
         applySettingsDialogValues(SettingsDialogValues{L"", L"", L"", L"dark"}, settings);
         require(settings.themeMode == ThemeMode::Dark, "theme text dark should apply dark theme");
+        applySettingsDialogValues(SettingsDialogValues{L"", L"", L"", std::wstring(tr(StringId::Light))}, settings);
+        require(settings.themeMode == ThemeMode::Light, "localized light theme text should apply light theme");
+        applySettingsDialogValues(SettingsDialogValues{L"", L"", L"", std::wstring(tr(StringId::Dark))}, settings);
+        require(settings.themeMode == ThemeMode::Dark, "localized dark theme text should apply dark theme");
+    }
+
+    {
+        AppSettings settings;
+        SettingsDialogValues values;
+        values.languageModeText = L"English";
+        applySettingsDialogValues(values, settings);
+        require(settings.languageMode == finderx::LanguageMode::English, "English language text should apply English language");
+        values.languageModeText = L"中文";
+        applySettingsDialogValues(values, settings);
+        require(settings.languageMode == finderx::LanguageMode::Chinese, "Chinese language text should apply Chinese language");
     }
 
     {
@@ -140,6 +160,13 @@ int main() {
         require(settings.toolbarCommands[0] == ToolbarCommand::Settings, "settings values should apply toolbar order");
         require(settings.toolbarCommands[1] == ToolbarCommand::PowerShell, "settings values should apply PowerShell toolbar command");
         require(settings.toolbarCommands[2] == ToolbarCommand::Search, "settings values should preserve search command");
+    }
+
+    {
+        AppSettings left;
+        AppSettings right = left;
+        right.toolbarCommands = {ToolbarCommand::NewFolder, ToolbarCommand::NewFile, ToolbarCommand::Settings, ToolbarCommand::PowerShell, ToolbarCommand::Search};
+        require(!settingsDialogSettingsEqual(left, right), "settings equality should detect toolbar command changes");
     }
 
     std::cout << "SettingsDialogTests passed\n";
