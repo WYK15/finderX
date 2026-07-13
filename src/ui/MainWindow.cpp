@@ -492,14 +492,17 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         blurSearch();
         blurAddress();
         const NodeId mouseDownNode = activeTab().listView.nodeAtPoint(x, y, rects.list);
+        const bool fileDragHotspot = mouseDownNode != kInvalidNodeId
+            && activeTab().listView.isFileDragHotspot(x, y, rects.list);
         if ((mouseDownNode == kInvalidNodeId
-                || (mouseDownNode != kInvalidNodeId && !activeTab().listView.isFileDragHotspot(x, y, rects.list)))
+                || (mouseDownNode != kInvalidNodeId && !fileDragHotspot))
             && containsPoint(rects.list, dipPoint)) {
             pointerMode_ = PointerMode::RubberBand;
             pointerStart_ = dipPoint;
             pointerCurrent_ = dipPoint;
             rubberBandAdditive_ = controlDown;
             draggedNodes_.clear();
+            deferredListClick_ = false;
             dragTargetNode_ = kInvalidNodeId;
             dragTargetPath_.clear();
             dragFeedbackText_.clear();
@@ -511,6 +514,29 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
+        const std::vector<NodeId> selectedNodes = activeTab().listView.selectedNodes();
+        const bool selectedDragCandidate = fileDragHotspot
+            && activeTab().listView.isSelected(mouseDownNode)
+            && !shiftDown
+            && (controlDown || selectedNodes.size() > 1);
+        if (selectedDragCandidate) {
+            pointerMode_ = PointerMode::PendingMove;
+            pointerStart_ = dipPoint;
+            pointerCurrent_ = dipPoint;
+            rubberBandAdditive_ = false;
+            draggedNodes_ = selectedNodes;
+            deferredListClick_ = true;
+            deferredListClickPoint_ = dipPoint;
+            deferredListClickControlDown_ = controlDown;
+            deferredListClickShiftDown_ = shiftDown;
+            dragTargetNode_ = kInvalidNodeId;
+            dragTargetPath_.clear();
+            dragFeedbackText_.clear();
+            SetCapture(hwnd_);
+            return 0;
+        }
+
+        deferredListClick_ = false;
         const ListInteractionResult result = activeTab().listView.onMouseDown(x, y, rects.list, controlDown, shiftDown);
         loadChildrenIfNeeded(result.expandedFolder);
         activateNode(result.activatedNode);
@@ -523,6 +549,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             pointerCurrent_ = dipPoint;
             rubberBandAdditive_ = false;
             draggedNodes_ = activeTab().listView.selectedNodes();
+            deferredListClick_ = false;
             dragTargetNode_ = kInvalidNodeId;
             dragTargetPath_.clear();
             SetCapture(hwnd_);
@@ -547,6 +574,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
                 } else {
                     pointerMode_ = PointerMode::None;
                     draggedNodes_.clear();
+                    deferredListClick_ = false;
                     dragTargetNode_ = kInvalidNodeId;
                     dragTargetPath_.clear();
                     dragFeedbackText_.clear();
@@ -1937,6 +1965,25 @@ std::wstring MainWindow::currentDragFeedbackText() const {
     return dragFeedbackText_;
 }
 
+void MainWindow::applyDeferredListClick() {
+    if (!deferredListClick_ || !hasActiveTab()) {
+        return;
+    }
+
+    const LayoutRects rects = currentLayout();
+    const ListInteractionResult result = activeTab().listView.onMouseDown(
+        deferredListClickPoint_.x,
+        deferredListClickPoint_.y,
+        rects.list,
+        deferredListClickControlDown_,
+        deferredListClickShiftDown_);
+    loadChildrenIfNeeded(result.expandedFolder);
+    activateNode(result.activatedNode);
+    if (result.changed) {
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+}
+
 void MainWindow::drawDragFeedback() {
     if (pointerMode_ != PointerMode::MovingItems || dragFeedbackText_.empty()) {
         return;
@@ -2109,9 +2156,12 @@ void MainWindow::finishPointerInteraction(D2D1_POINT_2F point) {
 
     if (mode == PointerMode::MovingItems) {
         moveDraggedItemsToPath(dragTargetPath_);
+    } else if (mode == PointerMode::PendingMove) {
+        applyDeferredListClick();
     }
 
     draggedNodes_.clear();
+    deferredListClick_ = false;
     dragTargetNode_ = kInvalidNodeId;
     dragTargetPath_.clear();
     dragFeedbackText_.clear();

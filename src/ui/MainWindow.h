@@ -125,6 +125,7 @@ private:
     std::wstring powerShellTargetDirectory() const;
     void revealContextNode();
     void copyContextNodePath();
+    void applyDeferredListClick();
     void finishPointerInteraction(D2D1_POINT_2F point);
     void moveDraggedItemsToPath(const std::wstring& destinationPath);
     bool canMoveDraggedItemsTo(NodeId destinationNode) const;
@@ -202,6 +203,10 @@ private:
     D2D1_POINT_2F pointerCurrent_{};
     bool rubberBandAdditive_ = false;
     std::vector<NodeId> draggedNodes_;
+    bool deferredListClick_ = false;
+    D2D1_POINT_2F deferredListClickPoint_{};
+    bool deferredListClickControlDown_ = false;
+    bool deferredListClickShiftDown_ = false;
     NodeId dragTargetNode_ = kInvalidNodeId;
     std::wstring dragTargetPath_;
     std::wstring dragFeedbackText_;
