@@ -8,13 +8,16 @@
 #include "ui/AddressEditor.h"
 #include "ui/ContextMenuPresenter.h"
 #include "ui/FileOperationState.h"
+#include "ui/FileUndoManager.h"
 #include "ui/DirectoryRefreshDebouncer.h"
 #include "ui/FinderChrome.h"
 #include "ui/FinderListView.h"
+#include "ui/QuickPreview.h"
 #include "ui/RenderContext.h"
 #include "ui/SettingsDialog.h"
 
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -75,6 +78,7 @@ private:
 
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
     static LRESULT CALLBACK InlineRenameEditProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+    static LRESULT CALLBACK QuickPreviewTextEditProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
     LRESULT handleMessage(UINT message, WPARAM wParam, LPARAM lParam);
     LayoutRects currentLayout() const;
     TabState& activeTab();
@@ -109,6 +113,7 @@ private:
     void copyContextNode();
     void cutContextNode();
     void pasteIntoCurrentDirectory();
+    void undoLastFileOperation();
     void compressContextNodesToZip();
     void extractContextZipHere();
     void openContextNodeInNewTab();
@@ -126,7 +131,18 @@ private:
     void revealContextNode();
     void copyContextNodePath();
     void applyDeferredListClick();
+    void toggleQuickPreview();
+    void reloadQuickPreviewForSelection();
+    bool moveQuickPreviewSelection(WPARAM key);
+    void handleQuickPreviewMouseMessage(UINT message, LPARAM lParam);
+    void closeQuickPreview();
+    void syncQuickPreviewTextControl();
+    void layoutQuickPreviewTextControl();
+    void destroyQuickPreviewTextControl();
+    void cancelPointerInteractionForQuickPreview();
     void finishPointerInteraction(D2D1_POINT_2F point);
+    bool isPointOutsideClient(D2D1_POINT_2F point) const;
+    void beginExternalFileDrag();
     void moveDraggedItemsToPath(const std::wstring& destinationPath);
     bool canMoveDraggedItemsTo(NodeId destinationNode) const;
     bool canMoveDraggedItemsToPath(const std::wstring& destinationPath) const;
@@ -148,6 +164,7 @@ private:
     bool refreshCurrentDirectory();
     bool refreshCurrentDirectorySelecting(const std::wstring& selectedPath);
     bool refreshCurrentDirectorySelecting(std::span<const std::wstring> selectedPaths);
+    bool refreshCurrentDirectorySelecting(std::span<const std::wstring> selectedPaths, std::optional<float> restoredScrollOffset);
     std::wstring selectedNodePath() const;
     bool selectNodeByPath(const std::wstring& path);
     void refreshChromeState();
@@ -187,6 +204,7 @@ private:
     ChromeState chromeState_;
     AppSettings settings_;
     ui::FileOperationState fileOperationState_;
+    ui::FileUndoManager fileUndoManager_;
     std::wstring homePath_;
     std::vector<std::unique_ptr<TabState>> tabs_;
     std::size_t activeTabIndex_ = 0;
@@ -221,6 +239,17 @@ private:
     NodeId inlineRenameNode_ = kInvalidNodeId;
     std::wstring inlineRenameOriginalPath_;
     bool inlineRenameClosing_ = false;
+    bool quickPreviewVisible_ = false;
+    ui::QuickPreviewContent quickPreviewContent_;
+    HWND quickPreviewTextEdit_ = nullptr;
+    WNDPROC quickPreviewTextOriginalProc_ = nullptr;
+    HFONT quickPreviewTextFont_ = nullptr;
+    HBRUSH quickPreviewTextBackgroundBrush_ = nullptr;
+    COLORREF quickPreviewTextColor_ = RGB(0, 0, 0);
+    D2D1_POINT_2F quickPreviewOffset_{};
+    bool quickPreviewDragging_ = false;
+    D2D1_POINT_2F quickPreviewDragStart_{};
+    D2D1_POINT_2F quickPreviewOffsetStart_{};
     ui::ContextMenuPresenter* activeContextMenuPresenter_ = nullptr;
 };
 

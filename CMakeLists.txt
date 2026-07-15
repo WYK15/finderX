@@ -189,6 +189,29 @@ finderx_enable_utf8(finderx_file_operation_state_tests)
 finderx_enable_windows_unicode(finderx_file_operation_state_tests)
 add_test(NAME finderx_file_operation_state_tests COMMAND finderx_file_operation_state_tests)
 
+add_executable(finderx_file_undo_manager_tests
+    src/ui/FileUndoManagerTests.cpp
+    src/ui/FileUndoManager.cpp
+)
+
+target_include_directories(finderx_file_undo_manager_tests PRIVATE src)
+finderx_enable_utf8(finderx_file_undo_manager_tests)
+finderx_enable_windows_unicode(finderx_file_undo_manager_tests)
+add_test(NAME finderx_file_undo_manager_tests COMMAND finderx_file_undo_manager_tests)
+
+add_executable(finderx_quick_preview_tests
+    src/ui/QuickPreviewTests.cpp
+    src/ui/QuickPreview.cpp
+    src/ui/ThemeTokens.cpp
+    src/ui/RenderContext.cpp
+)
+
+target_include_directories(finderx_quick_preview_tests PRIVATE src)
+target_link_libraries(finderx_quick_preview_tests PRIVATE d2d1 dwrite windowscodecs ole32)
+finderx_enable_utf8(finderx_quick_preview_tests)
+finderx_enable_windows_unicode(finderx_quick_preview_tests)
+add_test(NAME finderx_quick_preview_tests COMMAND finderx_quick_preview_tests)
+
 add_executable(finderx_tab_manager_tests
     src/ui/TabManagerTests.cpp
 )
@@ -350,12 +373,14 @@ set(FINDERX_APP_SOURCES
     src/ui/AddressEditor.cpp
     src/ui/ContextMenuPresenter.cpp
     src/ui/FileOperationState.cpp
+    src/ui/FileUndoManager.cpp
     src/ui/DragFeedback.cpp
     src/ui/FileIconResolver.cpp
     src/ui/FinderChrome.cpp
     src/ui/FinderListView.cpp
     src/ui/MainWindow.cpp
     src/ui/NativeTitleBar.cpp
+    src/ui/QuickPreview.cpp
     src/ui/RenameDialog.cpp
     src/ui/SettingsDialog.cpp
     src/ui/ToolbarCustomization.cpp

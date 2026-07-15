@@ -190,8 +190,24 @@ int main() {
         const std::vector<VisibleRow> rows = tree.flatten();
 
         require(view.isFileDragHotspot(96.0f, rowY(2), bounds), "icon/name area should be a file drag hotspot");
-        require(!view.isFileDragHotspot(520.0f, rowY(2), bounds), "right side row whitespace should allow rubber-band selection");
+        require(!view.isFileDragHotspot(520.0f, rowY(2), bounds), "right side row whitespace is not a drag hotspot and remains part of full-row selection");
         require(view.nodeAtPoint(520.0f, rowY(2), bounds) == rows[2].nodeId, "right side whitespace should still resolve row target");
+
+        require(!shouldStartListRubberBand(rows[2].nodeId),
+                "an occupied row must not start rubber-band selection");
+        require(shouldStartListRubberBand(kInvalidNodeId),
+                "empty list space should start rubber-band selection");
+        require(canStartFileDrag(rows[2].nodeId, true),
+                "a row drag hotspot should allow drag initiation");
+        require(!canStartFileDrag(rows[2].nodeId, false),
+                "trailing row space should not initiate a drag");
+
+        const ListInteractionResult trailingClick =
+            view.onMouseDown(520.0f, rowY(2), bounds, false, false);
+        require(trailingClick.changed,
+                "clicking the trailing part of an occupied row should change selection");
+        require(view.selectedNode() == rows[2].nodeId,
+                "trailing row click should select that row");
     }
 
     {
@@ -312,6 +328,33 @@ int main() {
         require(!view.hasFilter(), "clearing filter should make filter inactive");
         view.selectAllVisible();
         requireSelectedNodes(view, expectedAll, "clearing filter should restore all visible rows");
+    }
+
+    {
+        FileTree tree = FileTree::sample();
+        FinderListView view(&tree);
+
+        view.setScrollOffset(42.0f);
+        require(std::fabs(view.scrollOffset() - 42.0f) < 0.01f,
+                "setScrollOffset should preserve a valid scroll position");
+        view.setScrollOffset(-10.0f);
+        require(view.scrollOffset() == 0.0f,
+                "setScrollOffset should clamp negative scroll positions");
+    }
+
+    {
+        FileTree tree = FileTree::sample();
+        FinderListView view(&tree);
+
+        ListViewStyle style;
+        style.wheelScrollPixels = 1.0f;
+        view.setStyle(style);
+        require(std::fabs(view.style().wheelScrollPixels - kMinWheelScrollPixels) < 0.01f,
+                "wheel scroll speed should clamp to the minimum");
+        style.wheelScrollPixels = 999.0f;
+        view.setStyle(style);
+        require(std::fabs(view.style().wheelScrollPixels - kMaxWheelScrollPixels) < 0.01f,
+                "wheel scroll speed should clamp to the maximum");
     }
 
     std::cout << "FinderListViewTests passed\n";

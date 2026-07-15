@@ -23,6 +23,9 @@ struct SettingsDialogValues {
     std::wstring startupFolderText;
     std::vector<ToolbarCommand> toolbarCommands;
     std::wstring languageModeText;
+    std::wstring previewFontFamilyText;
+    std::wstring previewFontSizeText;
+    std::wstring wheelScrollPixelsText;
 };
 
 bool promptForSettings(HWND owner, AppSettings& settings, const std::wstring& currentFolder = L"");

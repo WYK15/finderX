@@ -510,11 +510,16 @@ AppSettings makeDefaultSettings(const std::wstring& homePath) {
 void clampSettings(AppSettings& settings) {
     settings.fontSize = (std::clamp)(settings.fontSize, kMinFontSize, kMaxFontSize);
     settings.contextMenuFontSize = (std::clamp)(settings.contextMenuFontSize, kMinContextMenuFontSize, kMaxContextMenuFontSize);
+    settings.previewFontSize = (std::clamp)(settings.previewFontSize, kMinPreviewFontSize, kMaxPreviewFontSize);
     if (settings.fontFamily.empty()) {
         settings.fontFamily = kDefaultFontFamily;
     }
+    if (settings.previewFontFamily.empty()) {
+        settings.previewFontFamily = settings.fontFamily.empty() ? kDefaultFontFamily : settings.fontFamily;
+    }
     settings.iconSize = (std::clamp)(settings.iconSize, kMinIconSize, kMaxIconSize);
     settings.itemPadding = (std::clamp)(settings.itemPadding, kMinItemPadding, kMaxItemPadding);
+    settings.wheelScrollPixels = (std::clamp)(settings.wheelScrollPixels, kMinWheelScrollPixels, kMaxWheelScrollPixels);
     settings.modifiedColumnWidth = (std::clamp)(settings.modifiedColumnWidth, kMinModifiedColumnWidth, kMaxModifiedColumnWidth);
     settings.sizeColumnWidth = (std::clamp)(settings.sizeColumnWidth, kMinSizeColumnWidth, kMaxSizeColumnWidth);
     settings.kindColumnWidth = (std::clamp)(settings.kindColumnWidth, kMinKindColumnWidth, kMaxKindColumnWidth);
@@ -608,6 +613,12 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
     if (extractString(text, "fontFamily", stringValue) && !stringValue.empty()) {
         loaded.fontFamily = std::move(stringValue);
     }
+    if (extractString(text, "previewFontFamily", stringValue) && !stringValue.empty()) {
+        loaded.previewFontFamily = std::move(stringValue);
+    }
+    if (extractNumber(text, "previewFontSize", number)) {
+        loaded.previewFontSize = number;
+    }
     if (extractNumber(text, "contextMenuFontSize", number)) {
         loaded.contextMenuFontSize = number;
     }
@@ -616,6 +627,9 @@ SettingsLoadResult loadSettings(const std::wstring& homePath, const std::filesys
     }
     if (extractNumber(text, "itemPadding", number)) {
         loaded.itemPadding = number;
+    }
+    if (extractNumber(text, "wheelScrollPixels", number)) {
+        loaded.wheelScrollPixels = number;
     }
     if (extractNumber(text, "modifiedColumnWidth", number)) {
         loaded.modifiedColumnWidth = number;
@@ -704,9 +718,12 @@ bool saveSettings(const AppSettings& settings, const std::filesystem::path& path
     stream << "{\n";
     stream << "  \"fontSize\": " << clamped.fontSize << ",\n";
     stream << "  \"fontFamily\": \"" << escapeJsonString(clamped.fontFamily) << "\",\n";
+    stream << "  \"previewFontFamily\": \"" << escapeJsonString(clamped.previewFontFamily) << "\",\n";
+    stream << "  \"previewFontSize\": " << clamped.previewFontSize << ",\n";
     stream << "  \"contextMenuFontSize\": " << clamped.contextMenuFontSize << ",\n";
     stream << "  \"iconSize\": " << clamped.iconSize << ",\n";
     stream << "  \"itemPadding\": " << clamped.itemPadding << ",\n";
+    stream << "  \"wheelScrollPixels\": " << clamped.wheelScrollPixels << ",\n";
     stream << "  \"modifiedColumnWidth\": " << clamped.modifiedColumnWidth << ",\n";
     stream << "  \"sizeColumnWidth\": " << clamped.sizeColumnWidth << ",\n";
     stream << "  \"kindColumnWidth\": " << clamped.kindColumnWidth << ",\n";

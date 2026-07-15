@@ -22,6 +22,7 @@ struct ListViewStyle {
     float fontSize = 13.0f;
     float iconSize = 14.0f;
     float itemPadding = kDefaultItemPadding;
+    float wheelScrollPixels = kDefaultWheelScrollPixels;
     ThemeMode themeMode = ThemeMode::Dark;
     float modifiedColumnWidth = kDefaultModifiedColumnWidth;
     float sizeColumnWidth = kDefaultSizeColumnWidth;
@@ -29,6 +30,8 @@ struct ListViewStyle {
 };
 
 D2D1_RECT_F listRowTextRect(float left, float rowTop, float right, float rowHeight, float fontSize);
+bool shouldStartListRubberBand(NodeId nodeAtPoint);
+bool canStartFileDrag(NodeId nodeAtPoint, bool fileDragHotspot);
 
 class FinderListView {
 public:
@@ -55,6 +58,8 @@ public:
     void setFilterText(std::wstring text);
     const std::wstring& filterText() const;
     bool hasFilter() const;
+    float scrollOffset() const;
+    void setScrollOffset(float offset);
 
 private:
     void rebuildRows();

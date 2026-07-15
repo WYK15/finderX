@@ -193,6 +193,24 @@ HFONT createInlineRenameFont(const AppSettings& settings, DpiScale dpi) {
                        settings.fontFamily.empty() ? L"Segoe UI" : settings.fontFamily.c_str());
 }
 
+HFONT createQuickPreviewTextFont(const AppSettings& settings, DpiScale dpi) {
+    const int height = -(std::max)(10, dipsToPixels(settings.previewFontSize, dpi.y));
+    return CreateFontW(height,
+                       0,
+                       0,
+                       0,
+                       FW_NORMAL,
+                       FALSE,
+                       FALSE,
+                       FALSE,
+                       DEFAULT_CHARSET,
+                       OUT_DEFAULT_PRECIS,
+                       CLIP_DEFAULT_PRECIS,
+                       CLEARTYPE_QUALITY,
+                       DEFAULT_PITCH | FF_DONTCARE,
+                       settings.previewFontFamily.empty() ? settings.fontFamily.c_str() : settings.previewFontFamily.c_str());
+}
+
 std::size_t addressIndexAtX(const RenderContext& render, std::wstring_view text, float x, const LayoutRects& rects) {
     const float textLeft = rects.pathbar.left + 22.0f;
     if (x <= textLeft) {
@@ -362,7 +380,39 @@ LRESULT CALLBACK MainWindow::InlineRenameEditProc(HWND hwnd, UINT message, WPARA
     return DefWindowProcW(hwnd, message, wParam, lParam);
 }
 
+LRESULT CALLBACK MainWindow::QuickPreviewTextEditProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    auto* window = reinterpret_cast<MainWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (window && ui::isQuickPreviewSystemKeyboardMessage(message)) {
+        return 0;
+    }
+    if (window && message == WM_KEYDOWN && window->moveQuickPreviewSelection(wParam)) {
+        return 0;
+    }
+    if (window && message == WM_KEYDOWN && ui::isQuickPreviewCloseKey(wParam)) {
+        window->closeQuickPreview();
+        return 0;
+    }
+    if (window && window->quickPreviewTextOriginalProc_) {
+        return CallWindowProcW(window->quickPreviewTextOriginalProc_, hwnd, message, wParam, lParam);
+    }
+    return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
 LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
+    if (quickPreviewVisible_ && ui::isQuickPreviewModalMouseMessage(message)) {
+        handleQuickPreviewMouseMessage(message, lParam);
+        return 0;
+    }
+    if (quickPreviewVisible_ && ui::isQuickPreviewModalKeyboardMessage(message)) {
+        if (message == WM_KEYDOWN && moveQuickPreviewSelection(wParam)) {
+            return 0;
+        }
+        if (message == WM_KEYDOWN && ui::isQuickPreviewCloseKey(wParam)) {
+            closeQuickPreview();
+        }
+        return 0;
+    }
+
     switch (message) {
     case WM_CREATE:
         SetFocus(hwnd_);
@@ -372,11 +422,17 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         return 0;
     case WM_ERASEBKGND:
         return 1;
+    case WM_CAPTURECHANGED:
+        quickPreviewDragging_ = false;
+        return 0;
     case WM_SIZE:
         if (inlineRenameEdit_) {
             cancelInlineRename();
         }
         render_.resize(LOWORD(lParam), HIWORD(lParam));
+        if (quickPreviewVisible_) {
+            layoutQuickPreviewTextControl();
+        }
         InvalidateRect(hwnd_, nullptr, FALSE);
         return 0;
     case WM_LBUTTONDOWN: {
@@ -494,9 +550,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         const NodeId mouseDownNode = activeTab().listView.nodeAtPoint(x, y, rects.list);
         const bool fileDragHotspot = mouseDownNode != kInvalidNodeId
             && activeTab().listView.isFileDragHotspot(x, y, rects.list);
-        if ((mouseDownNode == kInvalidNodeId
-                || (mouseDownNode != kInvalidNodeId && !fileDragHotspot))
-            && containsPoint(rects.list, dipPoint)) {
+        if (shouldStartListRubberBand(mouseDownNode) && containsPoint(rects.list, dipPoint)) {
             pointerMode_ = PointerMode::RubberBand;
             pointerStart_ = dipPoint;
             pointerCurrent_ = dipPoint;
@@ -515,7 +569,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         }
 
         const std::vector<NodeId> selectedNodes = activeTab().listView.selectedNodes();
-        const bool selectedDragCandidate = fileDragHotspot
+        const bool selectedDragCandidate = canStartFileDrag(mouseDownNode, fileDragHotspot)
             && activeTab().listView.isSelected(mouseDownNode)
             && !shiftDown
             && (controlDown || selectedNodes.size() > 1);
@@ -540,7 +594,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         const ListInteractionResult result = activeTab().listView.onMouseDown(x, y, rects.list, controlDown, shiftDown);
         loadChildrenIfNeeded(result.expandedFolder);
         activateNode(result.activatedNode);
-        if (mouseDownNode != kInvalidNodeId
+        if (canStartFileDrag(mouseDownNode, fileDragHotspot)
             && result.activatedNode == kInvalidNodeId
             && result.expandedFolder == kInvalidNodeId
             && !shiftDown) {
@@ -555,6 +609,7 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             SetCapture(hwnd_);
         }
         if (result.changed) {
+            reloadQuickPreviewForSelection();
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
         return 0;
@@ -569,6 +624,10 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             if (pointerMode_ == PointerMode::PendingMove
                 && distanceSquared(pointerStart_, pointerCurrent_) >= kDragStartThreshold * kDragStartThreshold) {
                 if (isActiveDirectoryLocation() && !draggedNodes_.empty()) {
+                    if (isPointOutsideClient(pointerCurrent_)) {
+                        beginExternalFileDrag();
+                        return 0;
+                    }
                     pointerMode_ = PointerMode::MovingItems;
                     updateDragTargetAtPoint(pointerCurrent_, rects);
                 } else {
@@ -594,6 +653,10 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             }
 
             if (pointerMode_ == PointerMode::MovingItems && hasActiveTab()) {
+                if (isPointOutsideClient(pointerCurrent_)) {
+                    beginExternalFileDrag();
+                    return 0;
+                }
                 updateDragTargetAtPoint(pointerCurrent_, rects);
                 InvalidateRect(hwnd_, nullptr, FALSE);
                 return 0;
@@ -753,7 +816,23 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return TRUE;
         }
         break;
+    case WM_CTLCOLORSTATIC:
+        if (reinterpret_cast<HWND>(lParam) == quickPreviewTextEdit_
+            && quickPreviewTextBackgroundBrush_) {
+            const ThemeTokens tokens = themeTokens(settings_.themeMode);
+            SetTextColor(reinterpret_cast<HDC>(wParam), quickPreviewTextColor_);
+            SetBkColor(reinterpret_cast<HDC>(wParam), colorRef(tokens.app));
+            return reinterpret_cast<LRESULT>(quickPreviewTextBackgroundBrush_);
+        }
+        break;
     case WM_CTLCOLOREDIT:
+        if (reinterpret_cast<HWND>(lParam) == quickPreviewTextEdit_
+            && quickPreviewTextBackgroundBrush_) {
+            const ThemeTokens tokens = themeTokens(settings_.themeMode);
+            SetTextColor(reinterpret_cast<HDC>(wParam), quickPreviewTextColor_);
+            SetBkColor(reinterpret_cast<HDC>(wParam), colorRef(tokens.app));
+            return reinterpret_cast<LRESULT>(quickPreviewTextBackgroundBrush_);
+        }
         if (reinterpret_cast<HWND>(lParam) == inlineRenameEdit_ && inlineRenameBackgroundBrush_) {
             SetTextColor(reinterpret_cast<HDC>(wParam), inlineRenameTextColor_);
             SetBkColor(reinterpret_cast<HDC>(wParam), colorRef(themeTokens(settings_.themeMode).appInput));
@@ -795,11 +874,23 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
         return DefWindowProcW(hwnd_, message, wParam, lParam);
+    case WM_SYSKEYDOWN: {
+        contextNode_ = kInvalidNodeId;
+        contextNodePath_.clear();
+        const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        const bool altDown = (GetKeyState(VK_MENU) & 0x8000) != 0;
+        if (wParam == L'C' && controlDown && altDown && isActiveDirectoryLocation()) {
+            copyContextNodePath();
+            return 0;
+        }
+        return DefWindowProcW(hwnd_, message, wParam, lParam);
+    }
     case WM_KEYDOWN: {
         contextNode_ = kInvalidNodeId;
         contextNodePath_.clear();
         const bool controlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         const bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        const bool altDown = (GetKeyState(VK_MENU) & 0x8000) != 0;
 
         if (controlDown && wParam == L'T') {
             createTabAtPath(hasActiveTab() && activeTab().locationKind != TabState::LocationKind::ThisPc
@@ -832,6 +923,11 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
+        if (wParam == VK_SPACE && !controlDown && !shiftDown) {
+            toggleQuickPreview();
+            return 0;
+        }
+
         if (wParam == VK_F5 || (wParam == L'R' && controlDown)) {
             refreshCurrentDirectory();
             return 0;
@@ -847,7 +943,12 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
-        if (wParam == L'C' && controlDown && isActiveDirectoryLocation()) {
+        if (wParam == L'C' && controlDown && altDown && isActiveDirectoryLocation()) {
+            copyContextNodePath();
+            return 0;
+        }
+
+        if (wParam == L'C' && controlDown && !altDown && isActiveDirectoryLocation()) {
             copyContextNode();
             return 0;
         }
@@ -862,6 +963,11 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
+        if (wParam == L'Z' && controlDown) {
+            undoLastFileOperation();
+            return 0;
+        }
+
         if (wParam == VK_BACK) {
             goBack();
             return 0;
@@ -871,11 +977,13 @@ LRESULT MainWindow::handleMessage(UINT message, WPARAM wParam, LPARAM lParam) {
         loadChildrenIfNeeded(result.expandedFolder);
         activateNode(result.activatedNode);
         if (result.changed) {
+            reloadQuickPreviewForSelection();
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
         return 0;
     }
     case WM_DESTROY:
+        destroyQuickPreviewTextControl();
         cancelInlineRename();
         if (settings_.rememberWindowSize) {
             WINDOWPLACEMENT placement{};
@@ -1039,6 +1147,7 @@ void MainWindow::ensureActiveTabAfterClose(std::size_t closedIndex, std::size_t 
 }
 
 bool MainWindow::navigateToThisPc(HistoryMode mode) {
+    closeQuickPreview();
     const std::wstring path = thisPcPath();
     if (!hasActiveTab()) {
         tabs_.push_back(std::make_unique<TabState>(path, L"This PC"));
@@ -1047,6 +1156,8 @@ bool MainWindow::navigateToThisPc(HistoryMode mode) {
     }
 
     TabState& tab = activeTab();
+    const std::vector<std::wstring> currentExpandedPaths =
+        tab.locationKind == TabState::LocationKind::Directory ? tab.tree.expandedFolderPaths() : std::vector<std::wstring>{};
     tab.locationKind = TabState::LocationKind::ThisPc;
     tab.tree = FileTree(path, L"This PC");
     tab.tree.replaceChildren(tab.tree.rootId(), enumerateDriveNodes());
@@ -1064,7 +1175,7 @@ bool MainWindow::navigateToThisPc(HistoryMode mode) {
         tab.history.setInitialPath(path);
         break;
     case HistoryMode::Push:
-        tab.history.navigateTo(path);
+        tab.history.navigateTo(path, currentExpandedPaths);
         break;
     case HistoryMode::BackForward:
         break;
@@ -1087,6 +1198,7 @@ bool MainWindow::navigateToLocation(std::wstring path, HistoryMode mode) {
 }
 
 bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
+    closeQuickPreview();
     if (path.empty()) {
         setStatusText(std::wstring(ui::tr(ui::StringId::CannotOpenFolder, settings_.languageMode)));
         return false;
@@ -1112,6 +1224,8 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
     }
 
     TabState& tab = activeTab();
+    const std::vector<std::wstring> currentExpandedPaths =
+        tab.locationKind == TabState::LocationKind::Directory ? tab.tree.expandedFolderPaths() : std::vector<std::wstring>{};
     contextNode_ = kInvalidNodeId;
     contextNodePath_.clear();
     tab.locationKind = TabState::LocationKind::Directory;
@@ -1130,7 +1244,7 @@ bool MainWindow::navigateToDirectory(std::wstring path, HistoryMode mode) {
         tab.history.setInitialPath(std::move(path));
         break;
     case HistoryMode::Push:
-        tab.history.navigateTo(std::move(path));
+        tab.history.navigateTo(std::move(path), currentExpandedPaths);
         break;
     case HistoryMode::BackForward:
         break;
@@ -1575,6 +1689,7 @@ bool MainWindow::commitInlineRename() {
     }
 
     destroyInlineRenameEdit();
+    fileUndoManager_.recordRename(oldPath, result.resultingPath);
     refreshCurrentDirectorySelecting(result.resultingPath);
     return true;
 }
@@ -1611,6 +1726,7 @@ void MainWindow::destroyInlineRenameEdit() {
 }
 
 void MainWindow::moveContextNodeToTrash() {
+    closeQuickPreview();
     if (!isActiveDirectoryLocation()) {
         return;
     }
@@ -1659,6 +1775,7 @@ void MainWindow::cutContextNode() {
 }
 
 void MainWindow::pasteIntoCurrentDirectory() {
+    closeQuickPreview();
     if (!isActiveDirectoryLocation()) {
         setStatusText(L"Cannot paste here");
         return;
@@ -1698,8 +1815,80 @@ void MainWindow::pasteIntoCurrentDirectory() {
         return;
     }
 
+    if (fileOperationState_.kind() == ui::PendingFileOperationKind::Copy) {
+        fileUndoManager_.recordCreatedPaths(result.resultingPaths);
+    } else {
+        fileUndoManager_.recordMove(sourcePaths, result.resultingPaths);
+    }
     fileOperationState_.markPasteSucceeded();
     refreshCurrentDirectory();
+}
+
+void MainWindow::undoLastFileOperation() {
+    if (!fileUndoManager_.hasUndo()) {
+        setStatusText(L"Nothing to undo");
+        return;
+    }
+
+    const ui::UndoFileOperation operation = fileUndoManager_.lastOperation();
+    shell::FileOperationResult result;
+    std::vector<std::wstring> selectedPaths;
+
+    switch (operation.kind) {
+    case ui::UndoFileOperationKind::CreatedPaths:
+        result = shell::moveToTrash(hwnd_, operation.destinationPaths);
+        break;
+    case ui::UndoFileOperationKind::RenamedPath:
+        if (operation.sourcePaths.size() != 1 || operation.destinationPaths.size() != 1) {
+            setStatusText(L"Cannot undo");
+            return;
+        }
+        result = shell::renamePath(
+            hwnd_,
+            operation.destinationPaths.front(),
+            std::filesystem::path(operation.sourcePaths.front()).filename().wstring());
+        selectedPaths = operation.sourcePaths;
+        break;
+    case ui::UndoFileOperationKind::MovedPaths:
+        if (operation.sourcePaths.empty() || operation.sourcePaths.size() != operation.destinationPaths.size()) {
+            setStatusText(L"Cannot undo");
+            return;
+        }
+        result.success = true;
+        for (std::size_t i = 0; i < operation.sourcePaths.size(); ++i) {
+            const std::filesystem::path sourcePath(operation.sourcePaths[i]);
+            const std::filesystem::path parent = sourcePath.parent_path();
+            if (parent.empty()) {
+                result.success = false;
+                result.message = L"Cannot undo move";
+                break;
+            }
+            const shell::FileOperationResult moveResult =
+                shell::moveToDirectory(hwnd_, operation.destinationPaths[i], parent.wstring());
+            if (!moveResult.success) {
+                result = moveResult;
+                break;
+            }
+        }
+        selectedPaths = operation.sourcePaths;
+        break;
+    case ui::UndoFileOperationKind::None:
+        setStatusText(L"Nothing to undo");
+        return;
+    }
+
+    if (!result.success) {
+        setStatusText(result.message.empty() ? L"Cannot undo" : result.message);
+        return;
+    }
+
+    fileUndoManager_.clear();
+    if (!selectedPaths.empty()) {
+        refreshCurrentDirectorySelecting(selectedPaths);
+    } else {
+        refreshCurrentDirectory();
+    }
+    setStatusText(L"Undone");
 }
 
 void MainWindow::compressContextNodesToZip() {
@@ -1784,6 +1973,7 @@ void MainWindow::createShortcutForContextNode() {
         return;
     }
 
+    fileUndoManager_.recordCreatedPath(shortcutPath);
     refreshCurrentDirectorySelecting(shortcutPath);
 }
 
@@ -1799,6 +1989,7 @@ void MainWindow::createFolderInCurrentDirectory() {
         return;
     }
 
+    fileUndoManager_.recordCreatedPath(result.path);
     refreshCurrentDirectorySelecting(result.path);
 }
 
@@ -1814,6 +2005,7 @@ void MainWindow::createFileInCurrentDirectory() {
         return;
     }
 
+    fileUndoManager_.recordCreatedPath(result.path);
     refreshCurrentDirectorySelecting(result.path);
 }
 
@@ -1984,6 +2176,286 @@ void MainWindow::applyDeferredListClick() {
     }
 }
 
+void MainWindow::toggleQuickPreview() {
+    if (quickPreviewVisible_) {
+        closeQuickPreview();
+        return;
+    }
+
+    if (!hasActiveTab() || !isActiveDirectoryLocation()) {
+        return;
+    }
+
+    const std::wstring path = selectedNodePath();
+    if (path.empty()) {
+        setStatusText(L"No file selected");
+        return;
+    }
+
+    quickPreviewContent_ = ui::loadQuickPreviewContent(path);
+    cancelPointerInteractionForQuickPreview();
+    quickPreviewVisible_ = true;
+    syncQuickPreviewTextControl();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::cancelPointerInteractionForQuickPreview() {
+    pointerMode_ = PointerMode::None;
+    rubberBandAdditive_ = false;
+    draggedNodes_.clear();
+    deferredListClick_ = false;
+    dragTargetNode_ = kInvalidNodeId;
+    dragTargetPath_.clear();
+    dragFeedbackText_.clear();
+    columnResizeTarget_ = ColumnResizeTarget::None;
+    hideToolbarTooltip();
+    if (GetCapture() == hwnd_) {
+        ReleaseCapture();
+    }
+}
+
+void MainWindow::handleQuickPreviewMouseMessage(UINT message, LPARAM lParam) {
+    const POINT clientPoint{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+    const D2D1_POINT_2F point = render_.clientPointToDips(clientPoint);
+
+    if (message == WM_LBUTTONDOWN) {
+        const ui::QuickPreviewLayout layout = ui::quickPreviewLayout(render_.sizeDips(), quickPreviewOffset_);
+        if (layout.visible && containsPoint(layout.header, point)) {
+            quickPreviewDragging_ = true;
+            quickPreviewDragStart_ = point;
+            quickPreviewOffsetStart_ = quickPreviewOffset_;
+            SetCapture(hwnd_);
+        }
+        return;
+    }
+
+    if (message == WM_MOUSEMOVE && quickPreviewDragging_) {
+        quickPreviewOffset_ = D2D1::Point2F(
+            quickPreviewOffsetStart_.x + point.x - quickPreviewDragStart_.x,
+            quickPreviewOffsetStart_.y + point.y - quickPreviewDragStart_.y);
+        layoutQuickPreviewTextControl();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+
+    if (message == WM_LBUTTONUP && quickPreviewDragging_) {
+        quickPreviewDragging_ = false;
+        if (GetCapture() == hwnd_) {
+            ReleaseCapture();
+        }
+        return;
+    }
+
+    if ((message == WM_RBUTTONDOWN || message == WM_MBUTTONDOWN || message == WM_XBUTTONDOWN)
+        && quickPreviewDragging_) {
+        quickPreviewDragging_ = false;
+        if (GetCapture() == hwnd_) {
+            ReleaseCapture();
+        }
+    }
+}
+
+void MainWindow::reloadQuickPreviewForSelection() {
+    if (!quickPreviewVisible_) {
+        return;
+    }
+
+    if (!hasActiveTab() || !isActiveDirectoryLocation()) {
+        closeQuickPreview();
+        return;
+    }
+
+    const std::wstring path = selectedNodePath();
+    if (path.empty()) {
+        quickPreviewContent_ = {};
+        quickPreviewContent_.kind = ui::QuickPreviewKind::Error;
+        quickPreviewContent_.message = L"No file selected";
+        syncQuickPreviewTextControl();
+        return;
+    }
+
+    quickPreviewContent_ = ui::loadQuickPreviewContent(path);
+    syncQuickPreviewTextControl();
+}
+
+bool MainWindow::moveQuickPreviewSelection(WPARAM key) {
+    if (!quickPreviewVisible_ || (key != VK_UP && key != VK_DOWN)) {
+        return false;
+    }
+    if (!hasActiveTab() || !isActiveDirectoryLocation()) {
+        return true;
+    }
+
+    const ListInteractionResult result = activeTab().listView.onKeyDown(key, false, false);
+    loadChildrenIfNeeded(result.expandedFolder);
+    activateNode(result.activatedNode);
+    if (result.changed) {
+        reloadQuickPreviewForSelection();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
+    return true;
+}
+
+void MainWindow::closeQuickPreview() {
+    destroyQuickPreviewTextControl();
+    quickPreviewDragging_ = false;
+    if (GetCapture() == hwnd_) {
+        ReleaseCapture();
+    }
+    if (!quickPreviewVisible_) {
+        return;
+    }
+
+    quickPreviewVisible_ = false;
+    quickPreviewContent_ = {};
+    SetFocus(hwnd_);
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void MainWindow::syncQuickPreviewTextControl() {
+    if (!quickPreviewVisible_ || quickPreviewContent_.kind != ui::QuickPreviewKind::Text) {
+        destroyQuickPreviewTextControl();
+        return;
+    }
+
+    if (!quickPreviewTextEdit_) {
+        quickPreviewTextEdit_ = CreateWindowExW(
+            WS_EX_CLIENTEDGE,
+            L"EDIT",
+            L"",
+            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,
+            0,
+            0,
+            0,
+            0,
+            hwnd_,
+            nullptr,
+            GetModuleHandleW(nullptr),
+            nullptr);
+        if (!quickPreviewTextEdit_) {
+            quickPreviewContent_ = {};
+            quickPreviewContent_.kind = ui::QuickPreviewKind::Error;
+            quickPreviewContent_.message = L"Cannot create text preview";
+            InvalidateRect(hwnd_, nullptr, FALSE);
+            return;
+        }
+
+        const auto failTextControlCreation = [this]() {
+            destroyQuickPreviewTextControl();
+            quickPreviewContent_ = {};
+            quickPreviewContent_.kind = ui::QuickPreviewKind::Error;
+            quickPreviewContent_.message = L"Cannot create text preview";
+            InvalidateRect(hwnd_, nullptr, FALSE);
+        };
+
+        SetLastError(0);
+        const LONG_PTR previousUserData = SetWindowLongPtrW(
+            quickPreviewTextEdit_,
+            GWLP_USERDATA,
+            reinterpret_cast<LONG_PTR>(this));
+        if (previousUserData == 0 && GetLastError() != 0) {
+            failTextControlCreation();
+            return;
+        }
+
+        SetLastError(0);
+        const LONG_PTR previousWndProc = SetWindowLongPtrW(
+            quickPreviewTextEdit_,
+            GWLP_WNDPROC,
+            reinterpret_cast<LONG_PTR>(&MainWindow::QuickPreviewTextEditProc));
+        if (previousWndProc == 0 && GetLastError() != 0) {
+            failTextControlCreation();
+            return;
+        }
+        quickPreviewTextOriginalProc_ = reinterpret_cast<WNDPROC>(previousWndProc);
+        SendMessageW(quickPreviewTextEdit_, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(8, 8));
+    }
+
+    SetWindowTextW(
+        quickPreviewTextEdit_,
+        quickPreviewContent_.text.empty() ? L"(Empty file)" : quickPreviewContent_.text.c_str());
+
+    HFONT nextFont = createQuickPreviewTextFont(settings_, render_.dpiScale());
+    SendMessageW(
+        quickPreviewTextEdit_,
+        WM_SETFONT,
+        reinterpret_cast<WPARAM>(nextFont ? nextFont : GetStockObject(DEFAULT_GUI_FONT)),
+        TRUE);
+    if (quickPreviewTextFont_) {
+        DeleteObject(quickPreviewTextFont_);
+    }
+    quickPreviewTextFont_ = nextFont;
+
+    if (quickPreviewTextBackgroundBrush_) {
+        DeleteObject(quickPreviewTextBackgroundBrush_);
+    }
+    const ThemeTokens tokens = themeTokens(settings_.themeMode);
+    quickPreviewTextColor_ = colorRef(tokens.ink);
+    quickPreviewTextBackgroundBrush_ = CreateSolidBrush(colorRef(tokens.app));
+
+    layoutQuickPreviewTextControl();
+    if (IsWindowVisible(quickPreviewTextEdit_)) {
+        SetFocus(quickPreviewTextEdit_);
+    }
+}
+
+void MainWindow::layoutQuickPreviewTextControl() {
+    if (!quickPreviewTextEdit_) {
+        return;
+    }
+
+    const ui::QuickPreviewLayout layout = ui::quickPreviewLayout(render_.sizeDips(), quickPreviewOffset_);
+    D2D1_RECT_F viewport = layout.textViewport;
+    if (!quickPreviewContent_.message.empty()) {
+        viewport.bottom -= 28.0f;
+    }
+    if (!layout.visible || viewport.right <= viewport.left || viewport.bottom <= viewport.top) {
+        ShowWindow(quickPreviewTextEdit_, SW_HIDE);
+        return;
+    }
+
+    const RECT rect = dipsToPixels(viewport, render_.dpiScale());
+    const int width = rect.right - rect.left;
+    const int height = rect.bottom - rect.top;
+    if (width <= 0 || height <= 0) {
+        ShowWindow(quickPreviewTextEdit_, SW_HIDE);
+        return;
+    }
+
+    SetWindowPos(
+        quickPreviewTextEdit_,
+        nullptr,
+        rect.left,
+        rect.top,
+        width,
+        height,
+        SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(quickPreviewTextEdit_, SW_SHOW);
+}
+
+void MainWindow::destroyQuickPreviewTextControl() {
+    if (quickPreviewTextEdit_ && IsWindow(quickPreviewTextEdit_)) {
+        if (quickPreviewTextOriginalProc_) {
+            SetWindowLongPtrW(
+                quickPreviewTextEdit_,
+                GWLP_WNDPROC,
+                reinterpret_cast<LONG_PTR>(quickPreviewTextOriginalProc_));
+        }
+        DestroyWindow(quickPreviewTextEdit_);
+    }
+    quickPreviewTextEdit_ = nullptr;
+    quickPreviewTextOriginalProc_ = nullptr;
+
+    if (quickPreviewTextFont_) {
+        DeleteObject(quickPreviewTextFont_);
+        quickPreviewTextFont_ = nullptr;
+    }
+    if (quickPreviewTextBackgroundBrush_) {
+        DeleteObject(quickPreviewTextBackgroundBrush_);
+        quickPreviewTextBackgroundBrush_ = nullptr;
+    }
+}
+
 void MainWindow::drawDragFeedback() {
     if (pointerMode_ != PointerMode::MovingItems || dragFeedbackText_.empty()) {
         return;
@@ -2073,6 +2545,7 @@ bool MainWindow::canMoveDraggedItemsToPath(const std::wstring& destination) cons
 }
 
 void MainWindow::moveDraggedItemsToPath(const std::wstring& destinationPath) {
+    closeQuickPreview();
     if (!canMoveDraggedItemsToPath(destinationPath)) {
         setStatusText(L"Cannot move items here");
         return;
@@ -2085,6 +2558,7 @@ void MainWindow::moveDraggedItemsToPath(const std::wstring& destinationPath) {
         return;
     }
 
+    fileUndoManager_.recordMove(sourcePaths, result.resultingPaths);
     refreshCurrentDirectorySelecting(std::span<const std::wstring>{});
 }
 
@@ -2168,6 +2642,36 @@ void MainWindow::finishPointerInteraction(D2D1_POINT_2F point) {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+bool MainWindow::isPointOutsideClient(D2D1_POINT_2F point) const {
+    const D2D1_SIZE_F size = render_.sizeDips();
+    return point.x < 0.0f || point.y < 0.0f || point.x > size.width || point.y > size.height;
+}
+
+void MainWindow::beginExternalFileDrag() {
+    const std::vector<std::wstring> sourcePaths = pathsForNodes(draggedNodes_);
+
+    pointerMode_ = PointerMode::None;
+    rubberBandAdditive_ = false;
+    draggedNodes_.clear();
+    deferredListClick_ = false;
+    dragTargetNode_ = kInvalidNodeId;
+    dragTargetPath_.clear();
+    dragFeedbackText_.clear();
+    if (GetCapture() == hwnd_) {
+        ReleaseCapture();
+    }
+    InvalidateRect(hwnd_, nullptr, FALSE);
+
+    if (sourcePaths.empty()) {
+        return;
+    }
+
+    const shell::FileDragResult result = shell::beginFileDragDrop(sourcePaths);
+    if (result == shell::FileDragResult::Moved) {
+        refreshCurrentDirectory();
+    }
+}
+
 void MainWindow::applySort(std::vector<FileNode>& nodes) const {
     sortFileNodes(nodes, settings_.sortColumn, settings_.sortDirection);
 }
@@ -2177,6 +2681,7 @@ ListViewStyle MainWindow::currentListViewStyle() const {
         settings_.fontSize,
         settings_.iconSize,
         settings_.itemPadding,
+        settings_.wheelScrollPixels,
         settings_.themeMode,
         settings_.modifiedColumnWidth,
         settings_.sizeColumnWidth,
@@ -2196,6 +2701,9 @@ void MainWindow::applyVisualSettings() {
         if (tab) {
             applyListStyle(*tab);
         }
+    }
+    if (quickPreviewVisible_) {
+        syncQuickPreviewTextControl();
     }
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -2289,9 +2797,10 @@ bool MainWindow::refreshCurrentDirectory() {
         return false;
     }
 
+    const float scrollOffset = activeTab().listView.scrollOffset();
     const std::vector<NodeId> selectedNodes = activeTab().listView.selectedNodes();
     const std::vector<std::wstring> selectedPaths = pathsForNodes(selectedNodes);
-    return refreshCurrentDirectorySelecting(selectedPaths);
+    return refreshCurrentDirectorySelecting(selectedPaths, scrollOffset);
 }
 
 bool MainWindow::refreshCurrentDirectorySelecting(const std::wstring& selectedPath) {
@@ -2302,6 +2811,10 @@ bool MainWindow::refreshCurrentDirectorySelecting(const std::wstring& selectedPa
 }
 
 bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> selectedPaths) {
+    return refreshCurrentDirectorySelecting(selectedPaths, std::nullopt);
+}
+
+bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> selectedPaths, std::optional<float> restoredScrollOffset) {
     if (!hasActiveTab()) {
         setStatusText(std::wstring(ui::tr(ui::StringId::CannotRefreshFolder, settings_.languageMode)));
         return false;
@@ -2339,6 +2852,7 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
     tab.tree = FileTree(currentPath, std::move(rootName));
     tab.tree.replaceChildren(tab.tree.rootId(), std::move(result.children));
     restoreExpandedFolders(tab, std::move(expandedPaths));
+    tab.history.updateCurrentExpandedPaths(tab.tree.expandedFolderPaths());
     tab.listView = FinderListView(&tab.tree);
     applyListStyle(tab);
     tab.listView.setFilterText(tab.searchText);
@@ -2356,6 +2870,9 @@ bool MainWindow::refreshCurrentDirectorySelecting(std::span<const std::wstring> 
         }
     }
     tab.listView.selectNodes(restored);
+    if (restoredScrollOffset.has_value()) {
+        tab.listView.setScrollOffset(*restoredScrollOffset);
+    }
     contextNode_ = kInvalidNodeId;
     contextNodePath_.clear();
     tab.statusText.clear();
@@ -2916,11 +3433,17 @@ void MainWindow::goBack() {
     }
 
     const std::wstring target = tab.history.backTarget();
+    const std::vector<std::wstring> currentExpandedPaths =
+        tab.locationKind == TabState::LocationKind::Directory ? tab.tree.expandedFolderPaths() : std::vector<std::wstring>{};
     if (!navigateToLocation(target, HistoryMode::BackForward)) {
         return;
     }
 
-    activeTab().history.goBack();
+    const NavigationHistoryEntry restoredEntry = activeTab().history.goBack(currentExpandedPaths);
+    if (activeTab().locationKind == TabState::LocationKind::Directory) {
+        restoreExpandedFolders(activeTab(), restoredEntry.expandedPaths);
+        activeTab().history.updateCurrentExpandedPaths(activeTab().tree.expandedFolderPaths());
+    }
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -2936,11 +3459,17 @@ void MainWindow::goForward() {
     }
 
     const std::wstring target = tab.history.forwardTarget();
+    const std::vector<std::wstring> currentExpandedPaths =
+        tab.locationKind == TabState::LocationKind::Directory ? tab.tree.expandedFolderPaths() : std::vector<std::wstring>{};
     if (!navigateToLocation(target, HistoryMode::BackForward)) {
         return;
     }
 
-    activeTab().history.goForward();
+    const NavigationHistoryEntry restoredEntry = activeTab().history.goForward(currentExpandedPaths);
+    if (activeTab().locationKind == TabState::LocationKind::Directory) {
+        restoreExpandedFolders(activeTab(), restoredEntry.expandedPaths);
+        activeTab().history.updateCurrentExpandedPaths(activeTab().tree.expandedFolderPaths());
+    }
     refreshChromeState();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -3047,6 +3576,9 @@ void MainWindow::paint() {
                 1.0f);
         }
         drawDragFeedback();
+    }
+    if (quickPreviewVisible_) {
+        ui::drawQuickPreview(render_, quickPreviewContent_, settings_.themeMode, quickPreviewOffset_);
     }
     const bool targetLost = render_.endDraw();
 

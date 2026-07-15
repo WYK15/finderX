@@ -9,8 +9,10 @@ namespace finderx {
 
 inline constexpr float kDefaultFontSize = 13.0f;
 inline constexpr float kDefaultContextMenuFontSize = 12.0f;
+inline constexpr float kDefaultPreviewFontSize = kDefaultFontSize;
 inline constexpr float kDefaultIconSize = 14.0f;
 inline constexpr float kDefaultItemPadding = 8.0f;
+inline constexpr float kDefaultWheelScrollPixels = 24.0f;
 inline constexpr wchar_t kDefaultFontFamily[] = L"Segoe UI";
 inline constexpr wchar_t kDefaultLanguage[] = L"zh-CN";
 inline constexpr wchar_t kFinderXVersion[] = L"0.2.0";
@@ -18,10 +20,14 @@ inline constexpr float kMinFontSize = 11.0f;
 inline constexpr float kMaxFontSize = 18.0f;
 inline constexpr float kMinContextMenuFontSize = 10.0f;
 inline constexpr float kMaxContextMenuFontSize = 16.0f;
+inline constexpr float kMinPreviewFontSize = 10.0f;
+inline constexpr float kMaxPreviewFontSize = 28.0f;
 inline constexpr float kMinIconSize = 12.0f;
 inline constexpr float kMaxIconSize = 24.0f;
 inline constexpr float kMinItemPadding = 4.0f;
 inline constexpr float kMaxItemPadding = 18.0f;
+inline constexpr float kMinWheelScrollPixels = 1.0f;
+inline constexpr float kMaxWheelScrollPixels = 80.0f;
 inline constexpr float kDefaultModifiedColumnWidth = 150.0f;
 inline constexpr float kDefaultSizeColumnWidth = 80.0f;
 inline constexpr float kDefaultKindColumnWidth = 120.0f;
@@ -88,10 +94,13 @@ struct ContextMenuTool {
 struct AppSettings {
     float fontSize = kDefaultFontSize;
     std::wstring fontFamily = kDefaultFontFamily;
+    std::wstring previewFontFamily = kDefaultFontFamily;
+    float previewFontSize = kDefaultPreviewFontSize;
     LanguageMode languageMode = LanguageMode::Chinese;
     float contextMenuFontSize = kDefaultContextMenuFontSize;
     float iconSize = kDefaultIconSize;
     float itemPadding = kDefaultItemPadding;
+    float wheelScrollPixels = kDefaultWheelScrollPixels;
     float modifiedColumnWidth = kDefaultModifiedColumnWidth;
     float sizeColumnWidth = kDefaultSizeColumnWidth;
     float kindColumnWidth = kDefaultKindColumnWidth;

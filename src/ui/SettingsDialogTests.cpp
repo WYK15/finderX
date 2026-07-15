@@ -68,6 +68,18 @@ int main() {
 
     {
         AppSettings settings;
+        SettingsDialogValues values;
+        values.previewFontFamilyText = L"Cascadia Mono";
+        values.previewFontSizeText = L"18";
+        values.wheelScrollPixelsText = L"32";
+        applySettingsDialogValues(values, settings);
+        require(settings.previewFontFamily == L"Cascadia Mono", "preview font family text should apply preview font family");
+        require(nearlyEqual(settings.previewFontSize, 18.0f), "preview font size text should apply preview font size");
+        require(nearlyEqual(settings.wheelScrollPixels, 32.0f), "wheel scroll speed text should apply wheel scroll speed");
+    }
+
+    {
+        AppSettings settings;
         settings.themeMode = ThemeMode::Dark;
         applySettingsDialogValues(SettingsDialogValues{L"", L"", L"", L"light"}, settings);
         require(settings.themeMode == ThemeMode::Light, "theme text light should apply light theme");
@@ -125,6 +137,9 @@ int main() {
         settings.windowHeight = 720;
         settings.startupFolder = L"D:\\Keep";
         settings.fontFamily = L"Segoe UI";
+        settings.previewFontFamily = L"Cascadia Mono";
+        settings.previewFontSize = 17.0f;
+        settings.wheelScrollPixels = 24.0f;
         applySettingsDialogValues(SettingsDialogValues{L"large", L"19", L"wide", L"", L"", L"tiny", false, L"wide", L"tall", false, L""}, settings);
         require(nearlyEqual(settings.fontSize, 15.0f), "invalid font text should keep previous font size");
         require(nearlyEqual(settings.contextMenuFontSize, 12.0f), "invalid context menu font text should keep previous font size");
@@ -134,6 +149,9 @@ int main() {
         require(settings.windowHeight == 720, "invalid window height should keep previous height");
         require(settings.startupFolder.empty(), "empty startup folder should clear startup override");
         require(settings.fontFamily == L"Segoe UI", "empty font family text should keep previous font family");
+        require(settings.previewFontFamily == L"Cascadia Mono", "empty preview font family text should keep previous preview font family");
+        require(nearlyEqual(settings.previewFontSize, 17.0f), "empty preview font size text should keep previous preview font size");
+        require(nearlyEqual(settings.wheelScrollPixels, 24.0f), "empty wheel scroll speed text should keep previous wheel scroll speed");
     }
 
     {
@@ -167,6 +185,9 @@ int main() {
         AppSettings right = left;
         right.toolbarCommands = {ToolbarCommand::NewFolder, ToolbarCommand::NewFile, ToolbarCommand::Settings, ToolbarCommand::PowerShell, ToolbarCommand::Search};
         require(!settingsDialogSettingsEqual(left, right), "settings equality should detect toolbar command changes");
+        right = left;
+        right.wheelScrollPixels = 36.0f;
+        require(!settingsDialogSettingsEqual(left, right), "settings equality should detect wheel scroll speed changes");
     }
 
     std::cout << "SettingsDialogTests passed\n";

@@ -127,6 +127,24 @@ static void runTests() {
         require(!history.canGoBack(), "same-path navigation should not add extra back entry");
     }
 
+    {
+        NavigationHistory history;
+        history.setInitialPath(L"C:\\Root", {L"C:\\Root", L"C:\\Root\\A", L"C:\\Root\\A\\B"});
+        history.navigateTo(L"C:\\Root\\A\\B\\C", {L"C:\\Root", L"C:\\Root\\A", L"C:\\Root\\A\\B"});
+        history.updateCurrentExpandedPaths({L"C:\\Root\\A\\B\\C"});
+
+        const NavigationHistoryEntry restored = history.goBack({L"C:\\Root\\A\\B\\C"});
+        require(restored.path == L"C:\\Root", "stateful goBack should restore previous path");
+        require(restored.expandedPaths.size() == 3, "stateful goBack should restore previous expansion count");
+        require(restored.expandedPaths[2] == L"C:\\Root\\A\\B", "stateful goBack should restore deep expansion");
+        require(history.canGoForward(), "stateful goBack should preserve forward entry");
+
+        const NavigationHistoryEntry forward = history.goForward({L"C:\\Root", L"C:\\Root\\A"});
+        require(forward.path == L"C:\\Root\\A\\B\\C", "stateful goForward should restore forward path");
+        require(forward.expandedPaths.size() == 1, "stateful goForward should restore forward expansion count");
+        require(forward.expandedPaths[0] == L"C:\\Root\\A\\B\\C", "stateful goForward should restore forward expansion");
+    }
+
     testSidebarModel();
 }
 

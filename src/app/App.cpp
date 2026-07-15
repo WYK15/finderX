@@ -2,21 +2,21 @@
 
 #include "ui/MainWindow.h"
 
-#include <objbase.h>
+#include <ole2.h>
 
 namespace finderx {
 
 int App::run(HINSTANCE instance, int showCommand) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-    const HRESULT comResult = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    if (FAILED(comResult)) {
+    const HRESULT oleResult = OleInitialize(nullptr);
+    if (FAILED(oleResult)) {
         return 1;
     }
 
     MainWindow window;
     if (!window.create(instance, showCommand)) {
-        CoUninitialize();
+        OleUninitialize();
         return 1;
     }
 
@@ -26,7 +26,7 @@ int App::run(HINSTANCE instance, int showCommand) {
         DispatchMessageW(&message);
     }
 
-    CoUninitialize();
+    OleUninitialize();
     return static_cast<int>(message.wParam);
 }
 

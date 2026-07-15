@@ -55,6 +55,9 @@ constexpr int kStartupFolderEditId = 109;
 constexpr int kUseCurrentFolderId = 110;
 constexpr int kContextMenuFontEditId = 111;
 constexpr int kItemPaddingEditId = 112;
+constexpr int kPreviewFontFamilyComboId = 113;
+constexpr int kPreviewFontSizeEditId = 114;
+constexpr int kWheelScrollEditId = 115;
 constexpr int kFavoritesListId = 201;
 constexpr int kFavoriteLabelEditId = 202;
 constexpr int kFavoritePathEditId = 203;
@@ -96,6 +99,7 @@ constexpr int kDialogTop = 78;
 constexpr int kDialogSidebarWidth = 180;
 constexpr int kDialogGap = 20;
 constexpr int kDialogActionHeight = 58;
+constexpr DWORD kEditDisableNoScroll = 0x2000;
 constexpr wchar_t kOriginalComboProcProp[] = L"FinderXOriginalComboProc";
 
 bool hasStyle(DWORD style, DWORD flag) {
@@ -149,8 +153,10 @@ bool isInputControl(HWND control) {
     const int id = GetDlgCtrlID(control);
     return id == kFontEditId
         || id == kContextMenuFontEditId
+        || id == kPreviewFontSizeEditId
         || id == kIconEditId
         || id == kItemPaddingEditId
+        || id == kWheelScrollEditId
         || id == kWindowWidthEditId
         || id == kWindowHeightEditId
         || id == kStartupFolderEditId
@@ -165,7 +171,8 @@ bool isInputControl(HWND control) {
         || id == kToolbarListId
         || id == kThemeComboId
         || id == kLanguageComboId
-        || id == kFontFamilyComboId;
+        || id == kFontFamilyComboId
+        || id == kPreviewFontFamilyComboId;
 }
 
 bool isOwnerDrawButtonId(int id) {
@@ -269,22 +276,40 @@ std::wstring shortcutHelpText(LanguageMode languageMode) {
                L"Ctrl+W  Close tab\r\n"
                L"Ctrl+F  Search\r\n"
                L"F5 / Ctrl+R  Refresh\r\n"
+               L"Space  Quick preview\r\n"
                L"F2  Rename\r\n"
                L"Delete  Move to Trash\r\n"
+               L"Enter  Open selected item\r\n"
+               L"Backspace  Go back\r\n"
+               L"Ctrl+A  Select all visible items\r\n"
                L"Ctrl+C  Copy\r\n"
+               L"Ctrl+Alt+C  Copy path\r\n"
                L"Ctrl+X  Cut\r\n"
-               L"Ctrl+V  Paste";
+               L"Ctrl+V  Paste\r\n"
+               L"Ctrl+Z  Undo\r\n"
+               L"Up / Down  Move selection\r\n"
+               L"Shift+Up / Shift+Down  Extend selection\r\n"
+               L"Left / Right  Collapse or expand folder";
     }
     return L"键盘快捷键:\r\n"
            L"Ctrl+T  新建标签页\r\n"
            L"Ctrl+W  关闭标签页\r\n"
            L"Ctrl+F  搜索\r\n"
            L"F5 / Ctrl+R  刷新\r\n"
+           L"Space  快速预览\r\n"
            L"F2  重命名\r\n"
            L"Delete  移到回收站\r\n"
+           L"Enter  打开选中项目\r\n"
+           L"Backspace  返回\r\n"
+           L"Ctrl+A  全选可见项目\r\n"
            L"Ctrl+C  复制\r\n"
+           L"Ctrl+Alt+C  复制路径\r\n"
            L"Ctrl+X  剪切\r\n"
-           L"Ctrl+V  粘贴";
+           L"Ctrl+V  粘贴\r\n"
+           L"Ctrl+Z  撤销\r\n"
+           L"Up / Down  移动选择\r\n"
+           L"Shift+Up / Shift+Down  扩展选择\r\n"
+           L"Left / Right  折叠或展开文件夹";
 }
 
 void setControlFont(HWND control, HWND parent) {
@@ -570,22 +595,28 @@ void layoutSettingsDialog(HWND hwnd, SettingsDialogState& state) {
         moveHandle(state.panelControls[7], panelX, panelY, panelW, panelH);
     }
 
-    if (state.appearanceControls.size() >= 15) {
+    if (state.appearanceControls.size() >= 21) {
         const int y0 = panelY + sc(38);
         moveHandle(state.appearanceControls[1], innerX, y0 + sc(3), labelW, labelH);
         moveComboControl(hwnd, kFontFamilyComboId, inputX, y0, (std::min)(inputW, sc(320)), rowH + sc(4), 16);
         moveHandle(state.appearanceControls[3], innerX, y0 + rowGap + sc(3), labelW, labelH);
-        moveControl(hwnd, kFontEditId, inputX, y0 + rowGap, sc(130), rowH);
+        moveComboControl(hwnd, kPreviewFontFamilyComboId, inputX, y0 + rowGap, (std::min)(inputW, sc(320)), rowH + sc(4), 16);
         moveHandle(state.appearanceControls[5], innerX, y0 + rowGap * 2 + sc(3), labelW, labelH);
-        moveControl(hwnd, kContextMenuFontEditId, inputX, y0 + rowGap * 2, sc(130), rowH);
+        moveControl(hwnd, kPreviewFontSizeEditId, inputX, y0 + rowGap * 2, sc(130), rowH);
         moveHandle(state.appearanceControls[7], innerX, y0 + rowGap * 3 + sc(3), labelW, labelH);
-        moveControl(hwnd, kIconEditId, inputX, y0 + rowGap * 3, sc(130), rowH);
+        moveControl(hwnd, kFontEditId, inputX, y0 + rowGap * 3, sc(130), rowH);
         moveHandle(state.appearanceControls[9], innerX, y0 + rowGap * 4 + sc(3), labelW, labelH);
-        moveControl(hwnd, kItemPaddingEditId, inputX, y0 + rowGap * 4, sc(130), rowH);
+        moveControl(hwnd, kContextMenuFontEditId, inputX, y0 + rowGap * 4, sc(130), rowH);
         moveHandle(state.appearanceControls[11], innerX, y0 + rowGap * 5 + sc(3), labelW, labelH);
-        moveComboControl(hwnd, kThemeComboId, inputX, y0 + rowGap * 5, sc(160), rowH + sc(4), 4);
+        moveControl(hwnd, kIconEditId, inputX, y0 + rowGap * 5, sc(130), rowH);
         moveHandle(state.appearanceControls[13], innerX, y0 + rowGap * 6 + sc(3), labelW, labelH);
-        moveComboControl(hwnd, kLanguageComboId, inputX, y0 + rowGap * 6, sc(160), rowH + sc(4), 4);
+        moveControl(hwnd, kItemPaddingEditId, inputX, y0 + rowGap * 6, sc(130), rowH);
+        moveHandle(state.appearanceControls[15], innerX, y0 + rowGap * 7 + sc(3), labelW, labelH);
+        moveControl(hwnd, kWheelScrollEditId, inputX, y0 + rowGap * 7, sc(130), rowH);
+        moveHandle(state.appearanceControls[17], innerX, y0 + rowGap * 8 + sc(3), labelW, labelH);
+        moveComboControl(hwnd, kThemeComboId, inputX, y0 + rowGap * 8, sc(160), rowH + sc(4), 4);
+        moveHandle(state.appearanceControls[19], innerX, y0 + rowGap * 9 + sc(3), labelW, labelH);
+        moveComboControl(hwnd, kLanguageComboId, inputX, y0 + rowGap * 9, sc(160), rowH + sc(4), 4);
     }
 
     if (state.startupControls.size() >= 9) {
@@ -822,8 +853,10 @@ bool tryParseFloat(const std::wstring& text, float& value) {
 
 bool settingsEqualInternal(const AppSettings& left, const AppSettings& right) {
     if (left.fontSize != right.fontSize || left.fontFamily != right.fontFamily
+        || left.previewFontFamily != right.previewFontFamily
+        || left.previewFontSize != right.previewFontSize
         || left.contextMenuFontSize != right.contextMenuFontSize || left.iconSize != right.iconSize
-        || left.itemPadding != right.itemPadding
+        || left.itemPadding != right.itemPadding || left.wheelScrollPixels != right.wheelScrollPixels
         || left.windowWidth != right.windowWidth || left.windowHeight != right.windowHeight
         || left.rememberWindowSize != right.rememberWindowSize
         || left.startupFolder != right.startupFolder
@@ -1242,12 +1275,55 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         if (fontFamilyCombo) {
             populateFontFamilyCombo(fontFamilyCombo, state->initialSettings.fontFamily);
         }
+        HWND previewFontFamilyLabel = createDialogControl(0,
+                                                          L"STATIC",
+                                                          tr(StringId::PreviewFont, state->initialSettings.languageMode).data(),
+                                                          WS_CHILD | WS_VISIBLE,
+                                                          214,
+                                                          146,
+                                                          164,
+                                                          22,
+                                                          hwnd,
+                                                          0);
+        HWND previewFontFamilyCombo = createDialogControl(0,
+                                                          L"COMBOBOX",
+                                                          L"",
+                                                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
+                                                          392,
+                                                          142,
+                                                          240,
+                                                          160,
+                                                          hwnd,
+                                                          kPreviewFontFamilyComboId);
+        if (previewFontFamilyCombo) {
+            populateFontFamilyCombo(previewFontFamilyCombo, state->initialSettings.previewFontFamily);
+        }
+        HWND previewFontSizeLabel = createDialogControl(0,
+                                                        L"STATIC",
+                                                        tr(StringId::PreviewFontSize, state->initialSettings.languageMode).data(),
+                                                        WS_CHILD | WS_VISIBLE,
+                                                        214,
+                                                        182,
+                                                        164,
+                                                        22,
+                                                        hwnd,
+                                                        0);
+        HWND previewFontSizeEdit = createDialogControl(WS_EX_CLIENTEDGE,
+                                                       L"EDIT",
+                                                       formatSettingValue(state->initialSettings.previewFontSize).c_str(),
+                                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                                       392,
+                                                       178,
+                                                       164,
+                                                       24,
+                                                       hwnd,
+                                                       kPreviewFontSizeEditId);
         HWND fontLabel = createDialogControl(0,
                                              L"STATIC",
                                              tr(StringId::TextSize, state->initialSettings.languageMode).data(),
                                              WS_CHILD | WS_VISIBLE,
                                              214,
-                                             146,
+                                             218,
                                              164,
                                              22,
                                              hwnd,
@@ -1257,7 +1333,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             formatSettingValue(state->initialSettings.fontSize).c_str(),
                                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                             392,
-                                            142,
+                                            214,
                                             164,
                                             24,
                                             hwnd,
@@ -1267,7 +1343,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                         tr(StringId::MenuTextSize, state->initialSettings.languageMode).data(),
                                                         WS_CHILD | WS_VISIBLE,
                                                         214,
-                                                        182,
+                                                        254,
                                                         164,
                                                         22,
                                                         hwnd,
@@ -1277,7 +1353,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                        formatSettingValue(state->initialSettings.contextMenuFontSize).c_str(),
                                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                                        392,
-                                                       178,
+                                                       250,
                                                        164,
                                                        24,
                                                        hwnd,
@@ -1287,7 +1363,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                              tr(StringId::IconSize, state->initialSettings.languageMode).data(),
                                              WS_CHILD | WS_VISIBLE,
                                              214,
-                                             218,
+                                             290,
                                              164,
                                              22,
                                              hwnd,
@@ -1297,7 +1373,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                             formatSettingValue(state->initialSettings.iconSize).c_str(),
                                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                             392,
-                                            214,
+                                            286,
                                             164,
                                             24,
                                             hwnd,
@@ -1307,7 +1383,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                     tr(StringId::ItemPadding, state->initialSettings.languageMode).data(),
                                                     WS_CHILD | WS_VISIBLE,
                                                     214,
-                                                    250,
+                                                    326,
                                                     164,
                                                     22,
                                                     hwnd,
@@ -1317,17 +1393,37 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                    formatSettingValue(state->initialSettings.itemPadding).c_str(),
                                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                                    392,
-                                                   246,
+                                                   322,
                                                    164,
                                                    24,
                                                    hwnd,
                                                    kItemPaddingEditId);
+        HWND wheelScrollLabel = createDialogControl(0,
+                                                    L"STATIC",
+                                                    tr(StringId::WheelScrollSpeed, state->initialSettings.languageMode).data(),
+                                                    WS_CHILD | WS_VISIBLE,
+                                                    214,
+                                                    362,
+                                                    164,
+                                                    22,
+                                                    hwnd,
+                                                    0);
+        HWND wheelScrollEdit = createDialogControl(WS_EX_CLIENTEDGE,
+                                                   L"EDIT",
+                                                   formatSettingValue(state->initialSettings.wheelScrollPixels).c_str(),
+                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                                                   392,
+                                                   358,
+                                                   164,
+                                                   24,
+                                                   hwnd,
+                                                   kWheelScrollEditId);
         HWND themeLabel = createDialogControl(0,
                                               L"STATIC",
                                               tr(StringId::Theme, state->initialSettings.languageMode).data(),
                                               WS_CHILD | WS_VISIBLE,
                                               214,
-                                              286,
+                                              398,
                                               164,
                                               22,
                                               hwnd,
@@ -1337,7 +1433,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                               L"",
                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
                                               392,
-                                              282,
+                                              394,
                                               164,
                                               120,
                                               hwnd,
@@ -1352,7 +1448,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                  tr(StringId::Language, state->initialSettings.languageMode).data(),
                                                  WS_CHILD | WS_VISIBLE,
                                                  214,
-                                                 322,
+                                                 434,
                                                  164,
                                                  22,
                                                  hwnd,
@@ -1362,7 +1458,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                                  L"",
                                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
                                                  392,
-                                                 318,
+                                                 430,
                                                  164,
                                                  120,
                                                  hwnd,
@@ -1610,7 +1706,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         HWND shortcuts = createDialogControl(WS_EX_CLIENTEDGE,
                                              L"EDIT",
                                              shortcutHelpText(state->initialSettings.languageMode).c_str(),
-                                             WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL,
+                                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | ES_WANTRETURN | kEditDisableNoScroll | WS_VSCROLL,
                                              214,
                                              112,
                                              592,
@@ -1754,7 +1850,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
                                           28,
                                           hwnd,
                                           kCancelId);
-        if (!title || !subtitle || !categoryList || !appearanceGroup || !fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !contextMenuFontLabel || !contextMenuFontEdit || !iconLabel || !iconEdit || !itemPaddingLabel || !itemPaddingEdit || !themeLabel || !themeCombo || !languageLabel || !languageCombo
+        if (!title || !subtitle || !categoryList || !appearanceGroup || !fontLabel || !fontEdit || !fontFamilyLabel || !fontFamilyCombo || !previewFontFamilyLabel || !previewFontFamilyCombo || !previewFontSizeLabel || !previewFontSizeEdit || !contextMenuFontLabel || !contextMenuFontEdit || !iconLabel || !iconEdit || !itemPaddingLabel || !itemPaddingEdit || !wheelScrollLabel || !wheelScrollEdit || !themeLabel || !themeCombo || !languageLabel || !languageCombo
             || !behaviorGroup || !showHiddenAndSystem || !windowGroup
             || !windowWidthLabel || !windowWidthEdit || !windowHeightLabel || !windowHeightEdit || !rememberWindowSize
             || !startupFolderLabel || !startupFolderEdit || !useCurrentFolder
@@ -1769,7 +1865,7 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             return -1;
         }
 
-        state->appearanceControls = {appearanceGroup, fontFamilyLabel, fontFamilyCombo, fontLabel, fontEdit, contextMenuFontLabel, contextMenuFontEdit, iconLabel, iconEdit, itemPaddingLabel, itemPaddingEdit, themeLabel, themeCombo, languageLabel, languageCombo};
+        state->appearanceControls = {appearanceGroup, fontFamilyLabel, fontFamilyCombo, previewFontFamilyLabel, previewFontFamilyCombo, previewFontSizeLabel, previewFontSizeEdit, fontLabel, fontEdit, contextMenuFontLabel, contextMenuFontEdit, iconLabel, iconEdit, itemPaddingLabel, itemPaddingEdit, wheelScrollLabel, wheelScrollEdit, themeLabel, themeCombo, languageLabel, languageCombo};
         state->startupControls = {windowGroup, windowWidthLabel, windowWidthEdit, windowHeightLabel, windowHeightEdit, rememberWindowSize, startupFolderLabel, startupFolderEdit, useCurrentFolder};
         state->filesControls = {behaviorGroup, showHiddenAndSystem, favoritesGroup, favoritesLabel, favoritesList, favoriteNameLabel, favoriteLabelEdit, favoritePathLabel, favoritePathEdit, favoriteUp, favoriteDown, favoriteRemove};
         state->shortcutsControls = {shortcutsGroup, shortcuts};
@@ -1780,10 +1876,13 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         state->framedControls = {
             categoryList,
             fontFamilyCombo,
+            previewFontFamilyCombo,
+            previewFontSizeEdit,
             fontEdit,
             contextMenuFontEdit,
             iconEdit,
             itemPaddingEdit,
+            wheelScrollEdit,
             themeCombo,
             languageCombo,
             windowWidthEdit,
@@ -2113,9 +2212,12 @@ LRESULT CALLBACK settingsDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             state->values.fontSizeText = getEditText(GetDlgItem(hwnd, kFontEditId));
             state->values.iconSizeText = getEditText(GetDlgItem(hwnd, kIconEditId));
             state->values.itemPaddingText = getEditText(GetDlgItem(hwnd, kItemPaddingEditId));
+            state->values.wheelScrollPixelsText = getEditText(GetDlgItem(hwnd, kWheelScrollEditId));
             state->values.themeModeText = comboSelectedText(GetDlgItem(hwnd, kThemeComboId));
             state->values.languageModeText = comboSelectedText(GetDlgItem(hwnd, kLanguageComboId));
             state->values.fontFamilyText = comboSelectedText(GetDlgItem(hwnd, kFontFamilyComboId));
+            state->values.previewFontFamilyText = comboSelectedText(GetDlgItem(hwnd, kPreviewFontFamilyComboId));
+            state->values.previewFontSizeText = getEditText(GetDlgItem(hwnd, kPreviewFontSizeEditId));
             state->values.contextMenuFontSizeText = getEditText(GetDlgItem(hwnd, kContextMenuFontEditId));
             state->values.showHiddenAndSystemItems = SendMessageW(GetDlgItem(hwnd, kShowHiddenAndSystemId), BM_GETCHECK, 0, 0) == BST_CHECKED;
             state->values.windowWidthText = getEditText(GetDlgItem(hwnd, kWindowWidthEditId));
@@ -2185,6 +2287,12 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
     if (!values.fontFamilyText.empty()) {
         settings.fontFamily = values.fontFamilyText;
     }
+    if (!values.previewFontFamilyText.empty()) {
+        settings.previewFontFamily = values.previewFontFamilyText;
+    }
+    if (tryParseFloat(values.previewFontSizeText, parsed)) {
+        settings.previewFontSize = parsed;
+    }
     if (tryParseFloat(values.contextMenuFontSizeText, parsed)) {
         settings.contextMenuFontSize = parsed;
     }
@@ -2194,6 +2302,9 @@ void applySettingsDialogValues(const SettingsDialogValues& values, AppSettings& 
     }
     if (tryParseFloat(values.itemPaddingText, parsed)) {
         settings.itemPadding = parsed;
+    }
+    if (tryParseFloat(values.wheelScrollPixelsText, parsed)) {
+        settings.wheelScrollPixels = parsed;
     }
     if (tryParseFloat(values.windowWidthText, parsed)) {
         settings.windowWidth = static_cast<int>(parsed);

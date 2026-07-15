@@ -8,6 +8,7 @@
 #include <span>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace finderx::shell {
 namespace {
@@ -94,6 +95,22 @@ FileOperationResult runShellOperation(
     return result;
 }
 
+std::vector<std::wstring> pathsInDirectory(std::span<const std::wstring> sourcePaths, const std::wstring& directory) {
+    std::vector<std::wstring> paths;
+    paths.reserve(sourcePaths.size());
+    const std::filesystem::path destinationDirectory(directory);
+    for (const std::wstring& sourcePath : sourcePaths) {
+        const std::filesystem::path source(sourcePath);
+        const std::filesystem::path filename = source.filename();
+        if (destinationDirectory.empty() || filename.empty()) {
+            paths.push_back(L"");
+        } else {
+            paths.push_back((destinationDirectory / filename).wstring());
+        }
+    }
+    return paths;
+}
+
 } // namespace
 
 FileOperationResult renamePath(HWND, const std::wstring& oldPath, const std::wstring& newName) {
@@ -115,6 +132,7 @@ FileOperationResult renamePath(HWND, const std::wstring& oldPath, const std::wst
     FileOperationResult result;
     result.success = true;
     result.resultingPath = targetPath.wstring();
+    result.resultingPaths.push_back(result.resultingPath);
     return result;
 }
 
@@ -155,7 +173,14 @@ FileOperationResult copyToDirectory(
         return failed(L"Cannot copy items");
     }
 
-    return runShellOperation(owner, FO_COPY, sourcePaths, destinationDirectory, L"Cannot copy items");
+    FileOperationResult result = runShellOperation(owner, FO_COPY, sourcePaths, destinationDirectory, L"Cannot copy items");
+    if (result.success) {
+        result.resultingPaths = pathsInDirectory(sourcePaths, destinationDirectory);
+        if (result.resultingPaths.size() == 1) {
+            result.resultingPath = result.resultingPaths.front();
+        }
+    }
+    return result;
 }
 
 FileOperationResult moveToDirectory(
@@ -183,7 +208,14 @@ FileOperationResult moveToDirectory(
         return failed(L"Cannot move items");
     }
 
-    return runShellOperation(owner, FO_MOVE, sourcePaths, destinationDirectory, L"Cannot move items");
+    FileOperationResult result = runShellOperation(owner, FO_MOVE, sourcePaths, destinationDirectory, L"Cannot move items");
+    if (result.success) {
+        result.resultingPaths = pathsInDirectory(sourcePaths, destinationDirectory);
+        if (result.resultingPaths.size() == 1) {
+            result.resultingPath = result.resultingPaths.front();
+        }
+    }
+    return result;
 }
 
 } // namespace finderx::shell

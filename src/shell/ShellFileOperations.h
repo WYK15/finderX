@@ -4,6 +4,7 @@
 
 #include <span>
 #include <string>
+#include <vector>
 
 namespace finderx::shell {
 
@@ -11,6 +12,7 @@ struct FileOperationResult {
     bool success = false;
     std::wstring message;
     std::wstring resultingPath;
+    std::vector<std::wstring> resultingPaths;
 };
 
 FileOperationResult renamePath(HWND owner, const std::wstring& oldPath, const std::wstring& newName);

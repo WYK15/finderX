@@ -21,7 +21,6 @@ constexpr float kIndentPerDepth = 18.0f;
 constexpr float kNameStartOffset = 32.0f;
 constexpr float kBaseIconSize = 14.0f;
 constexpr float kIconTextGap = 5.0f;
-constexpr float kWheelPixelsPerDelta = 40.0f;
 constexpr float kListMinFontSize = 11.0f;
 constexpr float kListMaxFontSize = 18.0f;
 constexpr float kListMinIconSize = 12.0f;
@@ -241,6 +240,14 @@ D2D1_RECT_F listRowTextRect(float left, float rowTop, float right, float rowHeig
     return D2D1::RectF(left, top, right, top + textHeight);
 }
 
+bool shouldStartListRubberBand(NodeId nodeAtPoint) {
+    return nodeAtPoint == kInvalidNodeId;
+}
+
+bool canStartFileDrag(NodeId nodeAtPoint, bool fileDragHotspot) {
+    return nodeAtPoint != kInvalidNodeId && fileDragHotspot;
+}
+
 FinderListView::FinderListView(FileTree* tree) : tree_(tree) {
     rebuildRows();
     if (!rows_.empty()) {
@@ -252,6 +259,7 @@ void FinderListView::setStyle(ListViewStyle style) {
     style.fontSize = (std::clamp)(style.fontSize, kListMinFontSize, kListMaxFontSize);
     style.iconSize = (std::clamp)(style.iconSize, kListMinIconSize, kListMaxIconSize);
     style.itemPadding = (std::clamp)(style.itemPadding, kMinItemPadding, kMaxItemPadding);
+    style.wheelScrollPixels = (std::clamp)(style.wheelScrollPixels, kMinWheelScrollPixels, kMaxWheelScrollPixels);
     style.modifiedColumnWidth = (std::clamp)(style.modifiedColumnWidth, kMinModifiedColumnWidth, kMaxModifiedColumnWidth);
     style.sizeColumnWidth = (std::clamp)(style.sizeColumnWidth, kMinSizeColumnWidth, kMaxSizeColumnWidth);
     style.kindColumnWidth = (std::clamp)(style.kindColumnWidth, kMinKindColumnWidth, kMaxKindColumnWidth);
@@ -535,6 +543,15 @@ const std::wstring& FinderListView::filterText() const {
 
 bool FinderListView::hasFilter() const {
     return !filterText_.empty();
+}
+
+float FinderListView::scrollOffset() const {
+    return scrollY_;
+}
+
+void FinderListView::setScrollOffset(float offset) {
+    scrollY_ = offset;
+    clampScroll();
 }
 
 void FinderListView::rebuildRows() {
@@ -921,7 +938,7 @@ bool FinderListView::onWheel(int wheelDelta) {
     rebuildRows();
     ensureSelection();
     const float oldScroll = scrollY_;
-    scrollY_ -= static_cast<float>(wheelDelta) / static_cast<float>(WHEEL_DELTA) * kWheelPixelsPerDelta;
+    scrollY_ -= static_cast<float>(wheelDelta) / static_cast<float>(WHEEL_DELTA) * style_.wheelScrollPixels;
     clampScroll();
     return oldScroll != scrollY_;
 }
